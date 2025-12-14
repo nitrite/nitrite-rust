@@ -1,0 +1,5 @@
+[env]
+# Limit test threads to prevent resource exhaustion
+# Each test creates a database with its own flush/compaction workers
+# With low_memory_preset, each DB uses ~2 workers, so 4 tests = ~8 DB threads
+RUST_TEST_THREADS = "4"

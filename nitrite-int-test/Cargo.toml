@@ -1,0 +1,30 @@
+[package]
+name = "nitrite_int_test"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+
+[dependencies]
+nitrite = { path = "../nitrite" }
+nitrite_spatial = { path = "../nitrite-spatial" }
+nitrite_tantivy_fts = { path = "../nitrite-tantivy-fts" }
+uuid = { version = "1.15.1", features = ["v4"] }
+nitrite_derive = { path = "../nitrite-derive" }
+nitrite_fjall_adapter = { path = "../nitrite-fjall-adapter" }
+colog = "1.3.0"
+ctor = "0.6"
+chrono = { version = "0.4.40", features = ["serde"] }
+awaitility = "0.4.1"
+rand = "0.9.0"
+icu_collator = "2.0.0"
+icu = "2.0.0"
+fake = { version = "4.3.0" , features = ["chrono", "uuid"] }
+
+[features]
+default = ["fjall"]
+# Enable the `memory` feature to use the in-memory database
+memory = []
+# Enable the `fjall` feature to use the fjall-based database
+fjall = []
+

@@ -1,0 +1,32 @@
+[package]
+name = "nitrite_tantivy_fts"
+version = "0.1.0"
+edition = "2021"
+description = "Full-text search support for Nitrite database using Tantivy"
+license = "Apache-2.0"
+repository = "https://github.com/nitrite/nitrite-rust"
+readme = "README.md"
+keywords = ["database", "search", "full-text", "tantivy"]
+categories = ["database", "text-processing"]
+
+[dependencies]
+# Core nitrite dependency
+nitrite = { version = "0.1.0", path = "../nitrite" }
+
+# Full-text search engine
+tantivy = "0.25.0"
+
+# Serialization
+serde = { version = "1.0", features = ["derive"] }
+
+# Concurrency
+parking_lot = "0.12"
+
+# Utilities
+thiserror = "2.0"
+log = "0.4"
+
+[dev-dependencies]
+tempfile = "3.15"
+env_logger = "0.11"
+uuid = { version = "1.0", features = ["v4"] }

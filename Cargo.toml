@@ -1,0 +1,9 @@
+[workspace]
+resolver = "2"
+members = ["nitrite", "nitrite-derive", "nitrite-spatial", "nitrite-tantivy-fts", "nitrite-int-test", "nitrite-fjall-adapter", "nitrite-bench"]
+
+[profile.release]
+debug = true
+
+[workspace.dependencies]
+parking_lot = "0.12.3"

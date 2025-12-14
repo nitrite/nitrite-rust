@@ -1,0 +1,47 @@
+[package]
+name = "nitrite"
+version = "0.1.0"
+edition = "2021"
+description = "An embedded NoSQL document database for Rust with collections, repositories, indexing, and ACID transactions"
+license = "Apache-2.0"
+repository = "https://github.com/nitrite/nitrite-rust"
+readme = "README.md"
+keywords = ["database", "nosql", "embedded", "document", "storage"]
+categories = ["database", "data-structures"]
+
+[dependencies]
+uuid = { version = "1.10.0", features = ["v4"] }
+rand = { version = "=0.8.5" } # due to error Trait `CryptoRng` is not implemented for `OsRng`
+log = "0.4.22"
+parking_lot = { workspace = true }
+basu = { version = "0.1.5", default-features = false, features = ["sync"] }
+anyhow = "1.0.89"
+icu_collator = "2.0.0"
+argon2 = "0.5.3"
+serde = { version = "1.0.217", features = ["derive"], optional = true }
+regex = "1.11.1"
+secure-string = "0.3.0"
+aes-gcm = "0.10.3"
+dashmap = { version = "6.1.0", features = ["serde"] }
+crossbeam-skiplist = "0.1.3"
+timer = "0.2.0"
+chrono = "0.4.39"
+itertools = "0.14.0"
+backtrace = "0.3.75"
+once_cell = "1.20.2"
+smallvec = "1.15.1"
+lru = "0.16.0"
+im = { version = "15.1.0", features = ["serde"] }
+indexmap = "2.2.6"
+
+[dev-dependencies]
+colog = "1.3.0"
+ctor = "0.6"
+awaitility = "0.4.1"
+test_retry = "0.1.0"
+
+[features]
+default = ["serde"]
+custom_separator = []
+serde = ["dep:serde"]
+

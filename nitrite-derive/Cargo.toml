@@ -1,0 +1,20 @@
+[package]
+name = "nitrite_derive"
+description = "Derive macros for the nitrite crate"
+version = "0.1.0"
+edition = "2021"
+license = "Apache-2.0"
+repository = "https://github.com/nitrite/nitrite-rust"
+readme = "README.md"
+keywords = ["database", "nosql", "derive", "macro"]
+categories = ["database"]
+
+[lib]
+proc-macro = true
+
+[dependencies]
+quote = "1.0.38"
+proc-macro2 = "1.0.93"
+syn = { version = "2.0.96", features = ["full"] }
+log = "0.4.25"
+

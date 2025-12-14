@@ -1,0 +1,72 @@
+[package]
+name = "nitrite_bench"
+version = "0.1.0"
+edition = "2021"
+publish = false
+description = "Comprehensive benchmarks for Nitrite database"
+
+[features]
+default = []
+comparison = ["rusqlite", "redb", "sled"]
+
+[dependencies]
+# Nitrite dependencies
+nitrite = { path = "../nitrite" }
+nitrite_fjall_adapter = { path = "../nitrite-fjall-adapter" }
+nitrite_spatial = { path = "../nitrite-spatial" }
+nitrite_tantivy_fts = { path = "../nitrite-tantivy-fts" }
+
+# Data generation
+fake = { version = "4.3.0", features = ["chrono", "uuid"] }
+rand = "0.8"
+uuid = { version = "1.10", features = ["v4"] }
+
+# Serialization
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
+# Time
+chrono = { version = "0.4", features = ["serde"] }
+
+# Utilities
+tempfile = "3.12"
+log = "0.4"
+env_logger = "0.11"
+num_cpus = "1.16"
+
+# Comparison database dependencies (optional)
+rusqlite = { version = "0.37", features = ["bundled"], optional = true }
+redb = { version = "3.1", optional = true }
+sled = { version = "0.34", optional = true }
+
+[dev-dependencies]
+criterion = { version = "0.8", features = ["html_reports"] }
+
+[[bench]]
+name = "crud_bench"
+harness = false
+
+[[bench]]
+name = "index_bench"
+harness = false
+
+[[bench]]
+name = "spatial_bench"
+harness = false
+
+[[bench]]
+name = "fts_bench"
+harness = false
+
+[[bench]]
+name = "concurrency_bench"
+harness = false
+
+[[bench]]
+name = "transaction_bench"
+harness = false
+
+[[bench]]
+name = "comparison_bench"
+harness = false
+required-features = ["comparison"]
