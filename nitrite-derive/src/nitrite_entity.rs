@@ -2,7 +2,10 @@ use proc_macro::TokenStream;
 use quote::{quote, ToTokens};
 use syn::{DataStruct, DeriveInput, LitStr, Result};
 
-pub(crate) fn generate_entity_for_struct(ast: &DeriveInput, data: &DataStruct) -> Result<TokenStream> {
+pub(crate) fn generate_entity_for_struct(
+    ast: &DeriveInput,
+    data: &DataStruct,
+) -> Result<TokenStream> {
     let name = &ast.ident;
     let (impl_generics, ty_generics, where_clause) = ast.generics.split_for_impl();
 
@@ -21,12 +24,12 @@ pub(crate) fn generate_entity_for_struct(ast: &DeriveInput, data: &DataStruct) -
                     let value = meta.value()?;
                     let s: LitStr = value.parse()?;
                     entity_name = s.value();
-                    return Ok(());
+                    Ok(())
                 } else if meta.path.is_ident("id") {
                     if id_found {
                         return Err(meta.error("Multiple id attributes are not allowed"));
                     }
-                    
+
                     meta.parse_nested_meta(|meta| {
                         id_found = true;
                         if meta.path.is_ident("field") {
@@ -90,27 +93,37 @@ pub(crate) fn generate_entity_for_struct(ast: &DeriveInput, data: &DataStruct) -
             })?
         }
     }
-    
+
     // Find id field and check if it exists - cache the lookup result
     if let Some(ref id_field_name) = entity_id {
         if let Some(id_field) = data.fields.iter().find(|field| {
-            field.ident.as_ref().map_or(false, |ident| ident == id_field_name)
+            field
+                .ident
+                .as_ref()
+                .is_some_and(|ident| ident == id_field_name)
         }) {
             // Set id type and check if it's NitriteId
             id_type = Some(id_field.ty.to_token_stream());
-            
-            let no_embedded_fields = embedded_fields.is_none() || embedded_fields.as_ref().unwrap().is_empty();
-            if id_field.ty.to_token_stream().to_string().contains("NitriteId") && no_embedded_fields {
+
+            let no_embedded_fields =
+                embedded_fields.is_none() || embedded_fields.as_ref().unwrap().is_empty();
+            if id_field
+                .ty
+                .to_token_stream()
+                .to_string()
+                .contains("NitriteId")
+                && no_embedded_fields
+            {
                 is_nitrite_id = true;
             }
         } else {
             return Err(syn::Error::new_spanned(
-                &ast,
+                ast,
                 format!("Field {} not found in struct", id_field_name),
             ));
         }
     }
-    
+
     // Generate entity name code
     let entity_name_code = quote! {
         fn entity_name(&self) -> String {
@@ -176,7 +189,7 @@ pub(crate) fn generate_entity_for_struct(ast: &DeriveInput, data: &DataStruct) -
                 nitrite::repository::EntityIndex::new(vec![#(#fields_code),*], Some(#index_type))
             }
         }).collect();
-        
+
         quote! {
             fn entity_indexes(&self) -> Option<Vec<nitrite::repository::EntityIndex>> {
                 Some(vec![#(#indexes_code),*])

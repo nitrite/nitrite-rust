@@ -1,11 +1,4 @@
 use parking_lot::Mutex;
-/// Transaction-specific iterators for multi-map orchestration
-///
-/// These providers handle iteration over the transaction's three logical maps:
-/// - Backing map: New/modified entries
-/// - Primary map: Original entries (read-through)
-/// - Tombstones: Deleted entries (to exclude from results)
-
 use std::collections::HashSet;
 use std::sync::Arc;
 
@@ -18,7 +11,7 @@ use crate::store::{EntryIteratorProvider, KeyIteratorProvider, NitriteMap, Value
 /// Iteration order:
 /// 1. Backing map entries (modified/new)
 /// 2. Primary map entries not in backing or tombstones
-/// 
+///
 /// OPTIMIZED for performance:
 /// - Uses map navigation methods (higher_key, lower_key) for stateless iteration
 /// - Releases locks early to reduce contention
@@ -81,7 +74,7 @@ impl EntryIteratorProvider for TransactionEntryProvider {
                     match next_key_result {
                         Ok(Some(key)) => {
                             self.current_key = Some(key.clone());
-                            
+
                             // OPTIMIZATION: No tombstone check needed in backing phase
                             // Invariant: backing keys cannot be in tombstones
                             match self.backing_map.get(&key) {
@@ -109,7 +102,7 @@ impl EntryIteratorProvider for TransactionEntryProvider {
                     match next_key_result {
                         Ok(Some(key)) => {
                             self.current_key = Some(key.clone());
-                            
+
                             // Check if key is in backing or tombstones
                             let in_backing = self.backing_map.contains_key(&key).unwrap_or(false);
                             let is_tombstoned = {
@@ -167,7 +160,7 @@ impl EntryIteratorProvider for TransactionEntryProvider {
                     match prev_key_result {
                         Ok(Some(key)) => {
                             self.current_key = Some(key.clone());
-                            
+
                             // Check if key is in backing or tombstones
                             let in_backing = self.backing_map.contains_key(&key).unwrap_or(false);
                             let is_tombstoned = {
@@ -204,7 +197,7 @@ impl EntryIteratorProvider for TransactionEntryProvider {
                     match prev_key_result {
                         Ok(Some(key)) => {
                             self.current_key = Some(key.clone());
-                            
+
                             // OPTIMIZATION: No tombstone check needed in backing phase
                             // Invariant: backing keys cannot be in tombstones
                             match self.backing_map.get(&key) {
@@ -230,7 +223,7 @@ impl EntryIteratorProvider for TransactionEntryProvider {
 }
 
 /// Orchestrates key iteration over backing, primary, and tombstone maps
-/// 
+///
 /// OPTIMIZED: Uses map navigation methods (higher_key, lower_key) for stateless iteration
 pub struct TransactionKeyProvider {
     backing_map: NitriteMap,
@@ -281,7 +274,7 @@ impl KeyIteratorProvider for TransactionKeyProvider {
                     match next_key_result {
                         Ok(Some(key)) => {
                             self.current_key = Some(key.clone());
-                            
+
                             // OPTIMIZATION: No tombstone check needed in backing phase
                             // Invariant: backing keys cannot be in tombstones
                             return Some(Ok(key));
@@ -305,7 +298,7 @@ impl KeyIteratorProvider for TransactionKeyProvider {
                     match next_key_result {
                         Ok(Some(key)) => {
                             self.current_key = Some(key.clone());
-                            
+
                             // Check if key is in backing or tombstones
                             let in_backing = self.backing_map.contains_key(&key).unwrap_or(false);
                             let is_tombstoned = {
@@ -359,7 +352,7 @@ impl KeyIteratorProvider for TransactionKeyProvider {
                     match prev_key_result {
                         Ok(Some(key)) => {
                             self.current_key = Some(key.clone());
-                            
+
                             // Check if key is in backing or tombstones
                             let in_backing = self.backing_map.contains_key(&key).unwrap_or(false);
                             let is_tombstoned = {
@@ -392,7 +385,7 @@ impl KeyIteratorProvider for TransactionKeyProvider {
                     match prev_key_result {
                         Ok(Some(key)) => {
                             self.current_key = Some(key.clone());
-                            
+
                             // OPTIMIZATION: No tombstone check needed in backing phase
                             // Invariant: backing keys cannot be in tombstones
                             return Some(Ok(key));
@@ -414,7 +407,7 @@ impl KeyIteratorProvider for TransactionKeyProvider {
 }
 
 /// Orchestrates value iteration over backing, primary, and tombstone maps
-/// 
+///
 /// OPTIMIZED: Uses map navigation methods (higher_key, lower_key) for stateless iteration
 pub struct TransactionValueProvider {
     backing_map: NitriteMap,
@@ -465,7 +458,7 @@ impl ValueIteratorProvider for TransactionValueProvider {
                     match next_key_result {
                         Ok(Some(key)) => {
                             self.current_key = Some(key.clone());
-                            
+
                             // OPTIMIZATION: No tombstone check needed in backing phase
                             // Invariant: backing keys cannot be in tombstones
                             match self.backing_map.get(&key) {
@@ -493,7 +486,7 @@ impl ValueIteratorProvider for TransactionValueProvider {
                     match next_key_result {
                         Ok(Some(key)) => {
                             self.current_key = Some(key.clone());
-                            
+
                             // Check if key is in backing or tombstones
                             let in_backing = self.backing_map.contains_key(&key).unwrap_or(false);
                             let is_tombstoned = {
@@ -551,7 +544,7 @@ impl ValueIteratorProvider for TransactionValueProvider {
                     match prev_key_result {
                         Ok(Some(key)) => {
                             self.current_key = Some(key.clone());
-                            
+
                             // Check if key is in backing or tombstones
                             let in_backing = self.backing_map.contains_key(&key).unwrap_or(false);
                             let is_tombstoned = {
@@ -588,7 +581,7 @@ impl ValueIteratorProvider for TransactionValueProvider {
                     match prev_key_result {
                         Ok(Some(key)) => {
                             self.current_key = Some(key.clone());
-                            
+
                             // OPTIMIZATION: No tombstone check needed in backing phase
                             // Invariant: backing keys cannot be in tombstones
                             match self.backing_map.get(&key) {
@@ -617,9 +610,10 @@ impl ValueIteratorProvider for TransactionValueProvider {
 mod tests {
     use super::*;
     use crate::common::{AttributeAware, Attributes, Key, Value};
-    use crate::store::{EntryIterator, KeyIterator, NitriteMapProvider, NitriteStore, ValueIterator};
+    use crate::store::{
+        EntryIterator, KeyIterator, NitriteMapProvider, NitriteStore, ValueIterator,
+    };
     use std::sync::Arc as StdArc;
-
 
     struct MockNitriteMapData {
         entries: std::collections::BTreeMap<String, String>,
@@ -712,8 +706,10 @@ mod tests {
 
         fn put(&self, key: Key, value: Value) -> crate::errors::NitriteResult<()> {
             let mut data = self.data.lock();
-            data.entries
-                .insert(key.as_string().unwrap().to_string(), value.as_string().unwrap().to_string());
+            data.entries.insert(
+                key.as_string().unwrap().to_string(),
+                value.as_string().unwrap().to_string(),
+            );
             Ok(())
         }
 
@@ -751,7 +747,10 @@ mod tests {
             let key_name = key.as_string().unwrap().clone();
             Ok(data
                 .entries
-                .range((std::ops::Bound::Excluded(key_name), std::ops::Bound::Unbounded))
+                .range((
+                    std::ops::Bound::Excluded(key_name),
+                    std::ops::Bound::Unbounded,
+                ))
                 .next()
                 .map(|(k, _)| Key::from(k.as_str())))
         }
@@ -761,7 +760,10 @@ mod tests {
             let key_name = key.as_string().unwrap().clone();
             Ok(data
                 .entries
-                .range((std::ops::Bound::Included(key_name), std::ops::Bound::Unbounded))
+                .range((
+                    std::ops::Bound::Included(key_name),
+                    std::ops::Bound::Unbounded,
+                ))
                 .next()
                 .map(|(k, _)| Key::from(k.as_str())))
         }
@@ -771,7 +773,10 @@ mod tests {
             let key_name = key.as_string().unwrap().clone();
             Ok(data
                 .entries
-                .range((std::ops::Bound::Unbounded, std::ops::Bound::Excluded(key_name)))
+                .range((
+                    std::ops::Bound::Unbounded,
+                    std::ops::Bound::Excluded(key_name),
+                ))
                 .last()
                 .map(|(k, _)| Key::from(k.as_str())))
         }
@@ -781,7 +786,10 @@ mod tests {
             let key_name = key.as_string().unwrap().clone();
             Ok(data
                 .entries
-                .range((std::ops::Bound::Unbounded, std::ops::Bound::Included(key_name)))
+                .range((
+                    std::ops::Bound::Unbounded,
+                    std::ops::Bound::Included(key_name),
+                ))
                 .last()
                 .map(|(k, _)| Key::from(k.as_str())))
         }
@@ -825,8 +833,6 @@ mod tests {
         }
     }
 
-    
-
     #[test]
     fn test_entry_provider_creation() {
         let backing = crate::store::NitriteMap::new(MockNitriteMapImpl::empty());
@@ -845,21 +851,24 @@ mod tests {
         let tombstones = Arc::new(parking_lot::Mutex::new(HashSet::new()));
         let cleared = Arc::new(parking_lot::Mutex::new(false));
 
-        let mut provider = TransactionEntryProvider::new(backing, primary, tombstones, cleared).unwrap();
+        let mut provider =
+            TransactionEntryProvider::new(backing, primary, tombstones, cleared).unwrap();
         let result = provider.next_entry();
         assert!(result.is_none());
     }
 
     #[test]
     fn test_entry_provider_from_backing_map() {
-        let backing = crate::store::NitriteMap::new(MockNitriteMapImpl::new(vec![
-            ("key1".to_string(), "val1".to_string()),
-        ]));
+        let backing = crate::store::NitriteMap::new(MockNitriteMapImpl::new(vec![(
+            "key1".to_string(),
+            "val1".to_string(),
+        )]));
         let primary = crate::store::NitriteMap::new(MockNitriteMapImpl::empty());
         let tombstones = Arc::new(parking_lot::Mutex::new(HashSet::new()));
         let cleared = Arc::new(parking_lot::Mutex::new(false));
 
-        let mut provider = TransactionEntryProvider::new(backing, primary, tombstones, cleared).unwrap();
+        let mut provider =
+            TransactionEntryProvider::new(backing, primary, tombstones, cleared).unwrap();
         let entry = provider.next_entry();
 
         assert!(entry.is_some());
@@ -873,13 +882,15 @@ mod tests {
     #[test]
     fn test_entry_provider_from_primary_map() {
         let backing = crate::store::NitriteMap::new(MockNitriteMapImpl::empty());
-        let primary = crate::store::NitriteMap::new(MockNitriteMapImpl::new(vec![
-            ("key1".to_string(), "val1".to_string()),
-        ]));
+        let primary = crate::store::NitriteMap::new(MockNitriteMapImpl::new(vec![(
+            "key1".to_string(),
+            "val1".to_string(),
+        )]));
         let tombstones = Arc::new(parking_lot::Mutex::new(HashSet::new()));
         let cleared = Arc::new(parking_lot::Mutex::new(false));
 
-        let mut provider = TransactionEntryProvider::new(backing, primary, tombstones, cleared).unwrap();
+        let mut provider =
+            TransactionEntryProvider::new(backing, primary, tombstones, cleared).unwrap();
         let entry = provider.next_entry();
 
         assert!(entry.is_some());
@@ -902,8 +913,9 @@ mod tests {
         let tombstones = Arc::new(parking_lot::Mutex::new(tombstones));
         let cleared = Arc::new(parking_lot::Mutex::new(false));
 
-        let mut provider = TransactionEntryProvider::new(backing, primary, tombstones, cleared).unwrap();
-        
+        let mut provider =
+            TransactionEntryProvider::new(backing, primary, tombstones, cleared).unwrap();
+
         // Should skip key1 (tombstoned) and return key2
         let entry = provider.next_entry();
         assert!(entry.is_some());
@@ -913,9 +925,10 @@ mod tests {
 
     #[test]
     fn test_entry_provider_skips_keys_in_backing() {
-        let backing = crate::store::NitriteMap::new(MockNitriteMapImpl::new(vec![
-            ("key1".to_string(), "newval1".to_string()),
-        ]));
+        let backing = crate::store::NitriteMap::new(MockNitriteMapImpl::new(vec![(
+            "key1".to_string(),
+            "newval1".to_string(),
+        )]));
         let primary = crate::store::NitriteMap::new(MockNitriteMapImpl::new(vec![
             ("key1".to_string(), "val1".to_string()),
             ("key2".to_string(), "val2".to_string()),
@@ -923,8 +936,9 @@ mod tests {
         let tombstones = Arc::new(parking_lot::Mutex::new(HashSet::new()));
         let cleared = Arc::new(parking_lot::Mutex::new(false));
 
-        let mut provider = TransactionEntryProvider::new(backing, primary, tombstones, cleared).unwrap();
-        
+        let mut provider =
+            TransactionEntryProvider::new(backing, primary, tombstones, cleared).unwrap();
+
         // Should return both entries from backing, then key2 from primary
         let e1 = provider.next_entry().unwrap().unwrap();
         assert_eq!(e1.0.as_string().unwrap(), "key1");
@@ -936,28 +950,32 @@ mod tests {
 
     #[test]
     fn test_entry_provider_returns_none_when_cleared() {
-        let backing = crate::store::NitriteMap::new(MockNitriteMapImpl::new(vec![
-            ("key1".to_string(), "val1".to_string()),
-        ]));
+        let backing = crate::store::NitriteMap::new(MockNitriteMapImpl::new(vec![(
+            "key1".to_string(),
+            "val1".to_string(),
+        )]));
         let primary = crate::store::NitriteMap::new(MockNitriteMapImpl::empty());
         let tombstones = Arc::new(parking_lot::Mutex::new(HashSet::new()));
         let cleared = Arc::new(parking_lot::Mutex::new(true));
 
-        let mut provider = TransactionEntryProvider::new(backing, primary, tombstones, cleared).unwrap();
+        let mut provider =
+            TransactionEntryProvider::new(backing, primary, tombstones, cleared).unwrap();
         let result = provider.next_entry();
         assert!(result.is_none());
     }
 
     #[test]
     fn test_entry_provider_prev_entry_from_backing() {
-        let backing = crate::store::NitriteMap::new(MockNitriteMapImpl::new(vec![
-            ("key1".to_string(), "val1".to_string()),
-        ]));
+        let backing = crate::store::NitriteMap::new(MockNitriteMapImpl::new(vec![(
+            "key1".to_string(),
+            "val1".to_string(),
+        )]));
         let primary = crate::store::NitriteMap::new(MockNitriteMapImpl::empty());
         let tombstones = Arc::new(parking_lot::Mutex::new(HashSet::new()));
         let cleared = Arc::new(parking_lot::Mutex::new(false));
 
-        let mut provider = TransactionEntryProvider::new(backing, primary, tombstones, cleared).unwrap();
+        let mut provider =
+            TransactionEntryProvider::new(backing, primary, tombstones, cleared).unwrap();
         let entry = provider.prev_entry();
 
         assert!(entry.is_some());
@@ -971,13 +989,15 @@ mod tests {
     #[test]
     fn test_entry_provider_prev_entry_from_primary() {
         let backing = crate::store::NitriteMap::new(MockNitriteMapImpl::empty());
-        let primary = crate::store::NitriteMap::new(MockNitriteMapImpl::new(vec![
-            ("key1".to_string(), "val1".to_string()),
-        ]));
+        let primary = crate::store::NitriteMap::new(MockNitriteMapImpl::new(vec![(
+            "key1".to_string(),
+            "val1".to_string(),
+        )]));
         let tombstones = Arc::new(parking_lot::Mutex::new(HashSet::new()));
         let cleared = Arc::new(parking_lot::Mutex::new(false));
 
-        let mut provider = TransactionEntryProvider::new(backing, primary, tombstones, cleared).unwrap();
+        let mut provider =
+            TransactionEntryProvider::new(backing, primary, tombstones, cleared).unwrap();
         let entry = provider.prev_entry();
 
         assert!(entry.is_some());
@@ -997,8 +1017,9 @@ mod tests {
         let tombstones = Arc::new(parking_lot::Mutex::new(tombstones));
         let cleared = Arc::new(parking_lot::Mutex::new(false));
 
-        let mut provider = TransactionEntryProvider::new(backing, primary, tombstones, cleared).unwrap();
-        
+        let mut provider =
+            TransactionEntryProvider::new(backing, primary, tombstones, cleared).unwrap();
+
         // Should skip key2 (tombstoned) and return key1
         let entry = provider.prev_entry();
         assert!(entry.is_some());
@@ -1009,18 +1030,18 @@ mod tests {
     #[test]
     fn test_entry_provider_prev_returns_none_when_cleared() {
         let backing = crate::store::NitriteMap::new(MockNitriteMapImpl::empty());
-        let primary = crate::store::NitriteMap::new(MockNitriteMapImpl::new(vec![
-            ("key1".to_string(), "val1".to_string()),
-        ]));
+        let primary = crate::store::NitriteMap::new(MockNitriteMapImpl::new(vec![(
+            "key1".to_string(),
+            "val1".to_string(),
+        )]));
         let tombstones = Arc::new(parking_lot::Mutex::new(HashSet::new()));
         let cleared = Arc::new(parking_lot::Mutex::new(true));
 
-        let mut provider = TransactionEntryProvider::new(backing, primary, tombstones, cleared).unwrap();
+        let mut provider =
+            TransactionEntryProvider::new(backing, primary, tombstones, cleared).unwrap();
         let result = provider.prev_entry();
         assert!(result.is_none());
     }
-
-    
 
     #[test]
     fn test_key_provider_creation() {
@@ -1040,21 +1061,24 @@ mod tests {
         let tombstones = Arc::new(parking_lot::Mutex::new(HashSet::new()));
         let cleared = Arc::new(parking_lot::Mutex::new(false));
 
-        let mut provider = TransactionKeyProvider::new(backing, primary, tombstones, cleared).unwrap();
+        let mut provider =
+            TransactionKeyProvider::new(backing, primary, tombstones, cleared).unwrap();
         let result = provider.next_key();
         assert!(result.is_none());
     }
 
     #[test]
     fn test_key_provider_from_backing_map() {
-        let backing = crate::store::NitriteMap::new(MockNitriteMapImpl::new(vec![
-            ("key1".to_string(), "val1".to_string()),
-        ]));
+        let backing = crate::store::NitriteMap::new(MockNitriteMapImpl::new(vec![(
+            "key1".to_string(),
+            "val1".to_string(),
+        )]));
         let primary = crate::store::NitriteMap::new(MockNitriteMapImpl::empty());
         let tombstones = Arc::new(parking_lot::Mutex::new(HashSet::new()));
         let cleared = Arc::new(parking_lot::Mutex::new(false));
 
-        let mut provider = TransactionKeyProvider::new(backing, primary, tombstones, cleared).unwrap();
+        let mut provider =
+            TransactionKeyProvider::new(backing, primary, tombstones, cleared).unwrap();
         let key = provider.next_key();
 
         assert!(key.is_some());
@@ -1066,13 +1090,15 @@ mod tests {
     #[test]
     fn test_key_provider_from_primary_map() {
         let backing = crate::store::NitriteMap::new(MockNitriteMapImpl::empty());
-        let primary = crate::store::NitriteMap::new(MockNitriteMapImpl::new(vec![
-            ("key1".to_string(), "val1".to_string()),
-        ]));
+        let primary = crate::store::NitriteMap::new(MockNitriteMapImpl::new(vec![(
+            "key1".to_string(),
+            "val1".to_string(),
+        )]));
         let tombstones = Arc::new(parking_lot::Mutex::new(HashSet::new()));
         let cleared = Arc::new(parking_lot::Mutex::new(false));
 
-        let mut provider = TransactionKeyProvider::new(backing, primary, tombstones, cleared).unwrap();
+        let mut provider =
+            TransactionKeyProvider::new(backing, primary, tombstones, cleared).unwrap();
         let key = provider.next_key();
 
         assert!(key.is_some());
@@ -1091,22 +1117,25 @@ mod tests {
         let tombstones = Arc::new(parking_lot::Mutex::new(tombstones));
         let cleared = Arc::new(parking_lot::Mutex::new(false));
 
-        let mut provider = TransactionKeyProvider::new(backing, primary, tombstones, cleared).unwrap();
-        
+        let mut provider =
+            TransactionKeyProvider::new(backing, primary, tombstones, cleared).unwrap();
+
         let key = provider.next_key();
         assert_eq!(key.unwrap().unwrap().as_string().unwrap(), "key2");
     }
 
     #[test]
     fn test_key_provider_returns_none_when_cleared() {
-        let backing = crate::store::NitriteMap::new(MockNitriteMapImpl::new(vec![
-            ("key1".to_string(), "val1".to_string()),
-        ]));
+        let backing = crate::store::NitriteMap::new(MockNitriteMapImpl::new(vec![(
+            "key1".to_string(),
+            "val1".to_string(),
+        )]));
         let primary = crate::store::NitriteMap::new(MockNitriteMapImpl::empty());
         let tombstones = Arc::new(parking_lot::Mutex::new(HashSet::new()));
         let cleared = Arc::new(parking_lot::Mutex::new(true));
 
-        let mut provider = TransactionKeyProvider::new(backing, primary, tombstones, cleared).unwrap();
+        let mut provider =
+            TransactionKeyProvider::new(backing, primary, tombstones, cleared).unwrap();
         let result = provider.next_key();
         assert!(result.is_none());
     }
@@ -1114,13 +1143,15 @@ mod tests {
     #[test]
     fn test_key_provider_prev_key() {
         let backing = crate::store::NitriteMap::new(MockNitriteMapImpl::empty());
-        let primary = crate::store::NitriteMap::new(MockNitriteMapImpl::new(vec![
-            ("key1".to_string(), "val1".to_string()),
-        ]));
+        let primary = crate::store::NitriteMap::new(MockNitriteMapImpl::new(vec![(
+            "key1".to_string(),
+            "val1".to_string(),
+        )]));
         let tombstones = Arc::new(parking_lot::Mutex::new(HashSet::new()));
         let cleared = Arc::new(parking_lot::Mutex::new(false));
 
-        let mut provider = TransactionKeyProvider::new(backing, primary, tombstones, cleared).unwrap();
+        let mut provider =
+            TransactionKeyProvider::new(backing, primary, tombstones, cleared).unwrap();
         let key = provider.prev_key();
 
         assert!(key.is_some());
@@ -1139,13 +1170,12 @@ mod tests {
         let tombstones = Arc::new(parking_lot::Mutex::new(tombstones));
         let cleared = Arc::new(parking_lot::Mutex::new(false));
 
-        let mut provider = TransactionKeyProvider::new(backing, primary, tombstones, cleared).unwrap();
-        
+        let mut provider =
+            TransactionKeyProvider::new(backing, primary, tombstones, cleared).unwrap();
+
         let key = provider.prev_key();
         assert_eq!(key.unwrap().unwrap().as_string().unwrap(), "key1");
     }
-
-    
 
     #[test]
     fn test_value_provider_creation() {
@@ -1165,21 +1195,24 @@ mod tests {
         let tombstones = Arc::new(parking_lot::Mutex::new(HashSet::new()));
         let cleared = Arc::new(parking_lot::Mutex::new(false));
 
-        let mut provider = TransactionValueProvider::new(backing, primary, tombstones, cleared).unwrap();
+        let mut provider =
+            TransactionValueProvider::new(backing, primary, tombstones, cleared).unwrap();
         let result = provider.next_value();
         assert!(result.is_none());
     }
 
     #[test]
     fn test_value_provider_from_backing_map() {
-        let backing = crate::store::NitriteMap::new(MockNitriteMapImpl::new(vec![
-            ("key1".to_string(), "val1".to_string()),
-        ]));
+        let backing = crate::store::NitriteMap::new(MockNitriteMapImpl::new(vec![(
+            "key1".to_string(),
+            "val1".to_string(),
+        )]));
         let primary = crate::store::NitriteMap::new(MockNitriteMapImpl::empty());
         let tombstones = Arc::new(parking_lot::Mutex::new(HashSet::new()));
         let cleared = Arc::new(parking_lot::Mutex::new(false));
 
-        let mut provider = TransactionValueProvider::new(backing, primary, tombstones, cleared).unwrap();
+        let mut provider =
+            TransactionValueProvider::new(backing, primary, tombstones, cleared).unwrap();
         let value = provider.next_value();
 
         assert!(value.is_some());
@@ -1191,13 +1224,15 @@ mod tests {
     #[test]
     fn test_value_provider_from_primary_map() {
         let backing = crate::store::NitriteMap::new(MockNitriteMapImpl::empty());
-        let primary = crate::store::NitriteMap::new(MockNitriteMapImpl::new(vec![
-            ("key1".to_string(), "val1".to_string()),
-        ]));
+        let primary = crate::store::NitriteMap::new(MockNitriteMapImpl::new(vec![(
+            "key1".to_string(),
+            "val1".to_string(),
+        )]));
         let tombstones = Arc::new(parking_lot::Mutex::new(HashSet::new()));
         let cleared = Arc::new(parking_lot::Mutex::new(false));
 
-        let mut provider = TransactionValueProvider::new(backing, primary, tombstones, cleared).unwrap();
+        let mut provider =
+            TransactionValueProvider::new(backing, primary, tombstones, cleared).unwrap();
         let value = provider.next_value();
 
         assert!(value.is_some());
@@ -1216,22 +1251,25 @@ mod tests {
         let tombstones = Arc::new(parking_lot::Mutex::new(tombstones));
         let cleared = Arc::new(parking_lot::Mutex::new(false));
 
-        let mut provider = TransactionValueProvider::new(backing, primary, tombstones, cleared).unwrap();
-        
+        let mut provider =
+            TransactionValueProvider::new(backing, primary, tombstones, cleared).unwrap();
+
         let value = provider.next_value();
         assert_eq!(value.unwrap().unwrap().as_string().unwrap(), "val2");
     }
 
     #[test]
     fn test_value_provider_returns_none_when_cleared() {
-        let backing = crate::store::NitriteMap::new(MockNitriteMapImpl::new(vec![
-            ("key1".to_string(), "val1".to_string()),
-        ]));
+        let backing = crate::store::NitriteMap::new(MockNitriteMapImpl::new(vec![(
+            "key1".to_string(),
+            "val1".to_string(),
+        )]));
         let primary = crate::store::NitriteMap::new(MockNitriteMapImpl::empty());
         let tombstones = Arc::new(parking_lot::Mutex::new(HashSet::new()));
         let cleared = Arc::new(parking_lot::Mutex::new(true));
 
-        let mut provider = TransactionValueProvider::new(backing, primary, tombstones, cleared).unwrap();
+        let mut provider =
+            TransactionValueProvider::new(backing, primary, tombstones, cleared).unwrap();
         let result = provider.next_value();
         assert!(result.is_none());
     }
@@ -1239,13 +1277,15 @@ mod tests {
     #[test]
     fn test_value_provider_prev_value() {
         let backing = crate::store::NitriteMap::new(MockNitriteMapImpl::empty());
-        let primary = crate::store::NitriteMap::new(MockNitriteMapImpl::new(vec![
-            ("key1".to_string(), "val1".to_string()),
-        ]));
+        let primary = crate::store::NitriteMap::new(MockNitriteMapImpl::new(vec![(
+            "key1".to_string(),
+            "val1".to_string(),
+        )]));
         let tombstones = Arc::new(parking_lot::Mutex::new(HashSet::new()));
         let cleared = Arc::new(parking_lot::Mutex::new(false));
 
-        let mut provider = TransactionValueProvider::new(backing, primary, tombstones, cleared).unwrap();
+        let mut provider =
+            TransactionValueProvider::new(backing, primary, tombstones, cleared).unwrap();
         let value = provider.prev_value();
 
         assert!(value.is_some());
@@ -1264,13 +1304,12 @@ mod tests {
         let tombstones = Arc::new(parking_lot::Mutex::new(tombstones));
         let cleared = Arc::new(parking_lot::Mutex::new(false));
 
-        let mut provider = TransactionValueProvider::new(backing, primary, tombstones, cleared).unwrap();
-        
+        let mut provider =
+            TransactionValueProvider::new(backing, primary, tombstones, cleared).unwrap();
+
         let value = provider.prev_value();
         assert_eq!(value.unwrap().unwrap().as_string().unwrap(), "val1");
     }
-
-    
 
     #[test]
     fn test_entry_provider_multiple_entries_sequence() {
@@ -1285,7 +1324,8 @@ mod tests {
         let tombstones = Arc::new(parking_lot::Mutex::new(HashSet::new()));
         let cleared = Arc::new(parking_lot::Mutex::new(false));
 
-        let mut provider = TransactionEntryProvider::new(backing, primary, tombstones, cleared).unwrap();
+        let mut provider =
+            TransactionEntryProvider::new(backing, primary, tombstones, cleared).unwrap();
 
         let e1 = provider.next_entry().unwrap().unwrap();
         assert_eq!(e1.0.as_string().unwrap(), "a");
@@ -1305,9 +1345,10 @@ mod tests {
 
     #[test]
     fn test_key_provider_multiple_keys_sequence() {
-        let backing = crate::store::NitriteMap::new(MockNitriteMapImpl::new(vec![
-            ("a".to_string(), "val_a".to_string()),
-        ]));
+        let backing = crate::store::NitriteMap::new(MockNitriteMapImpl::new(vec![(
+            "a".to_string(),
+            "val_a".to_string(),
+        )]));
         let primary = crate::store::NitriteMap::new(MockNitriteMapImpl::new(vec![
             ("b".to_string(), "val_b".to_string()),
             ("c".to_string(), "val_c".to_string()),
@@ -1315,7 +1356,8 @@ mod tests {
         let tombstones = Arc::new(parking_lot::Mutex::new(HashSet::new()));
         let cleared = Arc::new(parking_lot::Mutex::new(false));
 
-        let mut provider = TransactionKeyProvider::new(backing, primary, tombstones, cleared).unwrap();
+        let mut provider =
+            TransactionKeyProvider::new(backing, primary, tombstones, cleared).unwrap();
 
         let k1 = provider.next_key().unwrap().unwrap();
         assert_eq!(k1.as_string().unwrap(), "a");
@@ -1332,9 +1374,10 @@ mod tests {
 
     #[test]
     fn test_value_provider_multiple_values_sequence() {
-        let backing = crate::store::NitriteMap::new(MockNitriteMapImpl::new(vec![
-            ("a".to_string(), "val_a".to_string()),
-        ]));
+        let backing = crate::store::NitriteMap::new(MockNitriteMapImpl::new(vec![(
+            "a".to_string(),
+            "val_a".to_string(),
+        )]));
         let primary = crate::store::NitriteMap::new(MockNitriteMapImpl::new(vec![
             ("b".to_string(), "val_b".to_string()),
             ("c".to_string(), "val_c".to_string()),
@@ -1342,7 +1385,8 @@ mod tests {
         let tombstones = Arc::new(parking_lot::Mutex::new(HashSet::new()));
         let cleared = Arc::new(parking_lot::Mutex::new(false));
 
-        let mut provider = TransactionValueProvider::new(backing, primary, tombstones, cleared).unwrap();
+        let mut provider =
+            TransactionValueProvider::new(backing, primary, tombstones, cleared).unwrap();
 
         let v1 = provider.next_value().unwrap().unwrap();
         assert_eq!(v1.as_string().unwrap(), "val_a");
@@ -1368,7 +1412,8 @@ mod tests {
         let tombstones = Arc::new(parking_lot::Mutex::new(HashSet::new()));
         let cleared = Arc::new(parking_lot::Mutex::new(false));
 
-        let mut provider = TransactionEntryProvider::new(backing, primary, tombstones, cleared).unwrap();
+        let mut provider =
+            TransactionEntryProvider::new(backing, primary, tombstones, cleared).unwrap();
 
         // Should start in Backing phase
         assert_eq!(provider.current_phase, IterationPhase::Backing);
@@ -1403,8 +1448,9 @@ mod tests {
         let tombstones = Arc::new(parking_lot::Mutex::new(tombstones));
         let cleared = Arc::new(parking_lot::Mutex::new(false));
 
-        let mut provider = TransactionEntryProvider::new(backing, primary, tombstones, cleared).unwrap();
-        
+        let mut provider =
+            TransactionEntryProvider::new(backing, primary, tombstones, cleared).unwrap();
+
         // Should only return key2
         let e1 = provider.next_entry().unwrap().unwrap();
         assert_eq!(e1.0.as_string().unwrap(), "key2");
@@ -1426,7 +1472,8 @@ mod tests {
         let tombstones = Arc::new(parking_lot::Mutex::new(HashSet::new()));
         let cleared = Arc::new(parking_lot::Mutex::new(false));
 
-        let mut provider = TransactionEntryProvider::new(backing, primary, tombstones, cleared).unwrap();
+        let mut provider =
+            TransactionEntryProvider::new(backing, primary, tombstones, cleared).unwrap();
 
         let e1 = provider.next_entry().unwrap().unwrap();
         assert_eq!(e1.0.as_string().unwrap(), "key1");

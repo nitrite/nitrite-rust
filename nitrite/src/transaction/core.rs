@@ -1,15 +1,5 @@
 use crate::errors::{ErrorKind, NitriteError, NitriteResult};
 use crate::store::NitriteMap;
-/// Core transaction data structures
-/// 
-/// Defines the fundamental types for transaction management:
-/// - TransactionState: Transaction lifecycle states
-/// - ChangeType: Type of operations performed
-/// - Command: Executable operations (commit/rollback)
-/// - JournalEntry: Record of a single operation
-/// - UndoEntry: Rollback information
-/// - TransactionContext: Per-collection transaction state
-
 use std::collections::VecDeque;
 use std::ops::Deref;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -583,11 +573,7 @@ mod tests {
         let commit_cmd: Command = Arc::new(|| Ok(()));
         let rollback_cmd: Command = Arc::new(|| Ok(()));
 
-        let entry = JournalEntry::new(
-            ChangeType::Insert,
-            Some(commit_cmd),
-            Some(rollback_cmd),
-        );
+        let entry = JournalEntry::new(ChangeType::Insert, Some(commit_cmd), Some(rollback_cmd));
 
         assert_eq!(entry.change_type, ChangeType::Insert);
         assert!(entry.commit.is_some());
@@ -628,11 +614,7 @@ mod tests {
     fn test_journal_entry_debug_with_commands() {
         let commit_cmd: Command = Arc::new(|| Ok(()));
         let rollback_cmd: Command = Arc::new(|| Ok(()));
-        let entry = JournalEntry::new(
-            ChangeType::Insert,
-            Some(commit_cmd),
-            Some(rollback_cmd),
-        );
+        let entry = JournalEntry::new(ChangeType::Insert, Some(commit_cmd), Some(rollback_cmd));
 
         let debug_str = format!("{:?}", entry);
         assert!(debug_str.contains("JournalEntry"));
@@ -781,19 +763,31 @@ mod tests {
             Ok(None)
         }
 
-        fn higher_key(&self, _key: &crate::common::Key) -> NitriteResult<Option<crate::common::Key>> {
+        fn higher_key(
+            &self,
+            _key: &crate::common::Key,
+        ) -> NitriteResult<Option<crate::common::Key>> {
             Ok(None)
         }
 
-        fn ceiling_key(&self, _key: &crate::common::Key) -> NitriteResult<Option<crate::common::Key>> {
+        fn ceiling_key(
+            &self,
+            _key: &crate::common::Key,
+        ) -> NitriteResult<Option<crate::common::Key>> {
             Ok(None)
         }
 
-        fn lower_key(&self, _key: &crate::common::Key) -> NitriteResult<Option<crate::common::Key>> {
+        fn lower_key(
+            &self,
+            _key: &crate::common::Key,
+        ) -> NitriteResult<Option<crate::common::Key>> {
             Ok(None)
         }
 
-        fn floor_key(&self, _key: &crate::common::Key) -> NitriteResult<Option<crate::common::Key>> {
+        fn floor_key(
+            &self,
+            _key: &crate::common::Key,
+        ) -> NitriteResult<Option<crate::common::Key>> {
             Ok(None)
         }
 
@@ -1047,9 +1041,8 @@ mod tests {
 
     #[test]
     fn test_command_type_execution_error() {
-        let cmd: Command = Arc::new(|| {
-            Err(NitriteError::new("Test error", ErrorKind::InvalidOperation))
-        });
+        let cmd: Command =
+            Arc::new(|| Err(NitriteError::new("Test error", ErrorKind::InvalidOperation)));
 
         let result = cmd();
         assert!(result.is_err());

@@ -3,11 +3,6 @@ use crate::common::LockRegistry;
 use crate::errors::{ErrorKind, NitriteError, NitriteResult};
 use crate::nitrite::Nitrite;
 use parking_lot::Mutex;
-/// Session management for transactions
-/// 
-/// A session represents a transactional context for a database connection,
-/// managing the lifecycle of multiple transactions.
-
 use std::collections::HashMap;
 use std::fmt::Debug;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -58,10 +53,7 @@ impl Session {
     ///
     /// The session is created in an active state and can immediately be used to
     /// begin transactions.
-    pub fn new(
-        db: Nitrite,
-        lock_registry: LockRegistry,
-    ) -> Self {
+    pub fn new(db: Nitrite, lock_registry: LockRegistry) -> Self {
         Session {
             inner: Arc::new(SessionInner::new(db, lock_registry)),
         }
@@ -207,11 +199,7 @@ impl SessionInner {
     /// Acquires lock on transaction map to read current state. Committed or rolled back
     /// transactions are automatically removed from this list.
     pub fn active_transactions(&self) -> Vec<String> {
-        self.transactions
-            .lock()
-            .keys()
-            .cloned()
-            .collect()
+        self.transactions.lock().keys().cloned().collect()
     }
 
     /// Closes the session and releases all resources.
@@ -225,7 +213,11 @@ impl SessionInner {
     ///
     /// If the session is already closed, the compare-exchange fails and returns early.
     pub fn close(&self) -> NitriteResult<()> {
-        if !self.active.compare_exchange(true, false, Ordering::SeqCst, Ordering::SeqCst).is_ok() {
+        if !self
+            .active
+            .compare_exchange(true, false, Ordering::SeqCst, Ordering::SeqCst)
+            .is_ok()
+        {
             // Already closed
             return Ok(());
         }
@@ -273,16 +265,14 @@ mod tests {
         Nitrite::builder().open_or_create(None, None).unwrap()
     }
 
-    
-
     /// Tests that a session can be created
     #[test]
     fn test_session_creation() {
         let db = create_test_db();
         let lock_registry = LockRegistry::new();
-        
+
         let session = Session::new(db, lock_registry);
-        
+
         assert!(!session.id().is_empty());
         assert!(session.is_active());
     }
@@ -292,10 +282,10 @@ mod tests {
     fn test_session_unique_ids() {
         let db = create_test_db();
         let lock_registry = LockRegistry::new();
-        
+
         let session1 = Session::new(db.clone(), lock_registry.clone());
         let session2 = Session::new(db, lock_registry);
-        
+
         assert_ne!(session1.id(), session2.id());
     }
 
@@ -304,10 +294,10 @@ mod tests {
     fn test_session_id() {
         let db = create_test_db();
         let lock_registry = LockRegistry::new();
-        
+
         let session = Session::new(db, lock_registry);
         let id = session.id();
-        
+
         assert!(!id.is_empty());
         assert_eq!(id.len(), 36); // UUID v4 string length
     }
@@ -317,10 +307,10 @@ mod tests {
     fn test_session_clone() {
         let db = create_test_db();
         let lock_registry = LockRegistry::new();
-        
+
         let session1 = Session::new(db, lock_registry);
         let session2 = session1.clone();
-        
+
         // Both clones should reference same session
         assert_eq!(session1.id(), session2.id());
         assert_eq!(session1.is_active(), session2.is_active());
@@ -331,13 +321,13 @@ mod tests {
     fn test_session_clone_shares_state() {
         let db = create_test_db();
         let lock_registry = LockRegistry::new();
-        
+
         let session1 = Session::new(db.clone(), lock_registry.clone());
         let session2 = session1.clone();
-        
+
         // Create transaction on session1
         let _tx1 = session1.begin_transaction().unwrap();
-        
+
         // Should be visible on session2
         let txs = session2.active_transactions();
         assert_eq!(txs.len(), 1);
@@ -348,24 +338,22 @@ mod tests {
     fn test_session_deref() {
         let db = create_test_db();
         let lock_registry = LockRegistry::new();
-        
+
         let session = Session::new(db, lock_registry);
-        
+
         // Should be able to call methods on deref target
         let id = session.id();
         assert!(!id.is_empty());
     }
-
-    
 
     /// Tests that new session is active
     #[test]
     fn test_session_initially_active() {
         let db = create_test_db();
         let lock_registry = LockRegistry::new();
-        
+
         let session = Session::new(db, lock_registry);
-        
+
         assert!(session.is_active());
     }
 
@@ -374,10 +362,10 @@ mod tests {
     fn test_session_close() {
         let db = create_test_db();
         let lock_registry = LockRegistry::new();
-        
+
         let session = Session::new(db, lock_registry);
         let result = session.close();
-        
+
         assert!(result.is_ok());
         assert!(!session.is_active());
     }
@@ -387,12 +375,12 @@ mod tests {
     fn test_session_close_idempotent() {
         let db = create_test_db();
         let lock_registry = LockRegistry::new();
-        
+
         let session = Session::new(db, lock_registry);
-        
+
         let result1 = session.close();
         let result2 = session.close();
-        
+
         assert!(result1.is_ok());
         assert!(result2.is_ok());
         assert!(!session.is_active());
@@ -403,29 +391,27 @@ mod tests {
     fn test_session_drop_calls_close() {
         let db = create_test_db();
         let lock_registry = LockRegistry::new();
-        
+
         let session = Session::new(db, lock_registry);
         let _id = session.id().to_string();
-        
+
         // Create a transaction
         let _tx = session.begin_transaction().unwrap();
         assert!(!session.active_transactions().is_empty());
-        
+
         drop(session);
         // After drop, session should be closed (can't directly test without reference)
     }
-
-    
 
     /// Tests that a transaction can be begun in an active session
     #[test]
     fn test_begin_transaction() {
         let db = create_test_db();
         let lock_registry = LockRegistry::new();
-        
+
         let session = Session::new(db, lock_registry);
         let tx = session.begin_transaction();
-        
+
         assert!(tx.is_ok());
         let _tx = tx.unwrap();
         // Transaction created successfully
@@ -437,12 +423,12 @@ mod tests {
     fn test_multiple_transactions() {
         let db = create_test_db();
         let lock_registry = LockRegistry::new();
-        
+
         let session = Session::new(db, lock_registry);
-        
+
         let tx1 = session.begin_transaction().unwrap();
         let tx2 = session.begin_transaction().unwrap();
-        
+
         assert_ne!(tx1.id(), tx2.id());
     }
 
@@ -451,14 +437,14 @@ mod tests {
     fn test_transactions_tracked() {
         let db = create_test_db();
         let lock_registry = LockRegistry::new();
-        
+
         let session = Session::new(db, lock_registry);
-        
+
         assert_eq!(session.active_transactions().len(), 0);
-        
+
         let _tx1 = session.begin_transaction().unwrap();
         assert_eq!(session.active_transactions().len(), 1);
-        
+
         let _tx2 = session.begin_transaction().unwrap();
         assert_eq!(session.active_transactions().len(), 2);
     }
@@ -468,30 +454,28 @@ mod tests {
     fn test_transaction_ids_match() {
         let db = create_test_db();
         let lock_registry = LockRegistry::new();
-        
+
         let session = Session::new(db, lock_registry);
-        
+
         let tx1 = session.begin_transaction().unwrap();
         let tx2 = session.begin_transaction().unwrap();
-        
+
         let active = session.active_transactions();
         assert!(active.contains(&tx1.id().to_string()));
         assert!(active.contains(&tx2.id().to_string()));
     }
-
-    
 
     /// Tests that begin_transaction fails on closed session
     #[test]
     fn test_begin_transaction_on_closed_session() {
         let db = create_test_db();
         let lock_registry = LockRegistry::new();
-        
+
         let session = Session::new(db, lock_registry);
         session.close().unwrap();
-        
+
         let result = session.begin_transaction();
-        
+
         assert!(result.is_err());
         let err = result.unwrap_err();
         assert_eq!(*err.kind(), ErrorKind::InvalidOperation);
@@ -503,27 +487,25 @@ mod tests {
     fn test_closed_session_error_message() {
         let db = create_test_db();
         let lock_registry = LockRegistry::new();
-        
+
         let session = Session::new(db, lock_registry);
         session.close().unwrap();
-        
+
         let result = session.begin_transaction();
-        
+
         assert!(result.is_err());
         let err = result.unwrap_err();
         assert!(err.message().contains("closed") || err.message().contains("Session"));
     }
-
-    
 
     /// Tests active_transactions with empty session
     #[test]
     fn test_active_transactions_empty() {
         let db = create_test_db();
         let lock_registry = LockRegistry::new();
-        
+
         let session = Session::new(db, lock_registry);
-        
+
         let active = session.active_transactions();
         assert_eq!(active.len(), 0);
     }
@@ -533,13 +515,13 @@ mod tests {
     fn test_active_transactions_count() {
         let db = create_test_db();
         let lock_registry = LockRegistry::new();
-        
+
         let session = Session::new(db, lock_registry);
-        
+
         let _tx1 = session.begin_transaction().unwrap();
         let _tx2 = session.begin_transaction().unwrap();
         let _tx3 = session.begin_transaction().unwrap();
-        
+
         let active = session.active_transactions();
         assert_eq!(active.len(), 3);
     }
@@ -549,14 +531,14 @@ mod tests {
     fn test_active_transactions_ids() {
         let db = create_test_db();
         let lock_registry = LockRegistry::new();
-        
+
         let session = Session::new(db, lock_registry);
-        
+
         let tx1 = session.begin_transaction().unwrap();
         let tx2 = session.begin_transaction().unwrap();
-        
+
         let active = session.active_transactions();
-        
+
         assert!(active.contains(&tx1.id().to_string()));
         assert!(active.contains(&tx2.id().to_string()));
         assert_eq!(active.len(), 2);
@@ -567,33 +549,31 @@ mod tests {
     fn test_active_transactions_on_closed_session() {
         let db = create_test_db();
         let lock_registry = LockRegistry::new();
-        
+
         let session = Session::new(db, lock_registry);
         let _tx = session.begin_transaction().unwrap();
-        
+
         session.close().unwrap();
-        
+
         let active = session.active_transactions();
         // After close, transactions are rolled back and removed
         assert_eq!(active.len(), 0);
     }
-
-    
 
     /// Tests that close rolls back active transactions
     #[test]
     fn test_close_with_active_transactions() {
         let db = create_test_db();
         let lock_registry = LockRegistry::new();
-        
+
         let session = Session::new(db, lock_registry);
         let _tx = session.begin_transaction().unwrap();
-        
+
         assert_eq!(session.active_transactions().len(), 1);
-        
+
         let result = session.close();
         assert!(result.is_ok());
-        
+
         // After close, transactions should be cleared
         assert_eq!(session.active_transactions().len(), 0);
     }
@@ -603,14 +583,14 @@ mod tests {
     fn test_close_with_multiple_transactions() {
         let db = create_test_db();
         let lock_registry = LockRegistry::new();
-        
+
         let session = Session::new(db, lock_registry);
         let _tx1 = session.begin_transaction().unwrap();
         let _tx2 = session.begin_transaction().unwrap();
         let _tx3 = session.begin_transaction().unwrap();
-        
+
         let result = session.close();
-        
+
         assert!(result.is_ok());
         assert_eq!(session.active_transactions().len(), 0);
     }
@@ -620,29 +600,27 @@ mod tests {
     fn test_close_clears_transactions() {
         let db = create_test_db();
         let lock_registry = LockRegistry::new();
-        
+
         let session = Session::new(db, lock_registry);
-        
+
         let _tx1 = session.begin_transaction().unwrap();
         let _tx2 = session.begin_transaction().unwrap();
-        
+
         assert_eq!(session.active_transactions().len(), 2);
-        
+
         session.close().unwrap();
-        
+
         assert_eq!(session.active_transactions().len(), 0);
     }
-
-    
 
     /// Tests that is_active uses SeqCst ordering
     #[test]
     fn test_atomic_active_flag() {
         let db = create_test_db();
         let lock_registry = LockRegistry::new();
-        
+
         let session = Session::new(db, lock_registry);
-        
+
         assert!(session.is_active());
         session.close().unwrap();
         assert!(!session.is_active());
@@ -653,16 +631,16 @@ mod tests {
     fn test_transaction_map_protected() {
         let db = create_test_db();
         let lock_registry = LockRegistry::new();
-        
+
         let session = Session::new(db, lock_registry);
-        
+
         let _tx1 = session.begin_transaction().unwrap();
         let _tx2 = session.begin_transaction().unwrap();
-        
+
         // If not properly locked, this could race
         let count1 = session.active_transactions().len();
         let count2 = session.active_transactions().len();
-        
+
         assert_eq!(count1, count2);
         assert_eq!(count1, 2);
     }
@@ -672,30 +650,28 @@ mod tests {
     fn test_arc_shared_state() {
         let db = create_test_db();
         let lock_registry = LockRegistry::new();
-        
+
         let session1 = Session::new(db, lock_registry);
         let session2 = session1.clone();
         let session3 = session1.clone();
-        
+
         session1.begin_transaction().unwrap();
-        
+
         assert_eq!(session2.active_transactions().len(), 1);
         assert_eq!(session3.active_transactions().len(), 1);
     }
-
-    
 
     /// Tests that session ID is stable
     #[test]
     fn test_session_id_stable() {
         let db = create_test_db();
         let lock_registry = LockRegistry::new();
-        
+
         let session = Session::new(db, lock_registry);
         let id1 = session.id();
         let id2 = session.id();
         let id3 = session.id();
-        
+
         assert_eq!(id1, id2);
         assert_eq!(id2, id3);
     }
@@ -705,13 +681,13 @@ mod tests {
     fn test_state_never_reactivates() {
         let db = create_test_db();
         let lock_registry = LockRegistry::new();
-        
+
         let session = Session::new(db, lock_registry);
         assert!(session.is_active());
-        
+
         session.close().unwrap();
         assert!(!session.is_active());
-        
+
         // Even after close, cannot reactivate
         assert!(!session.is_active());
     }
@@ -721,13 +697,13 @@ mod tests {
     fn test_lock_registry_preserved() {
         let db = create_test_db();
         let lock_registry = LockRegistry::new();
-        
+
         let session = Session::new(db.clone(), lock_registry.clone());
-        
+
         // Both transactions should use same lock registry
         let tx1 = session.begin_transaction().unwrap();
         let tx2 = session.begin_transaction().unwrap();
-        
+
         // If they use the same lock registry, their operations coordinate
         assert_ne!(tx1.id(), tx2.id());
     }
@@ -737,29 +713,27 @@ mod tests {
     fn test_database_reference_preserved() {
         let db = create_test_db();
         let lock_registry = LockRegistry::new();
-        
+
         let session = Session::new(db.clone(), lock_registry);
-        
+
         // Multiple transactions share same database
         let _tx1 = session.begin_transaction().unwrap();
         let _tx2 = session.begin_transaction().unwrap();
-        
+
         assert!(session.is_active());
     }
-
-    
 
     /// Tests that transactions are independent
     #[test]
     fn test_transaction_independence() {
         let db = create_test_db();
         let lock_registry = LockRegistry::new();
-        
+
         let session = Session::new(db, lock_registry);
-        
+
         let tx1 = session.begin_transaction().unwrap();
         let tx2 = session.begin_transaction().unwrap();
-        
+
         assert_ne!(tx1.id(), tx2.id());
         // Both transactions created and are independent
         assert!(true);
@@ -770,30 +744,28 @@ mod tests {
     fn test_begin_transaction_returns_correct_tx() {
         let db = create_test_db();
         let lock_registry = LockRegistry::new();
-        
+
         let session = Session::new(db, lock_registry);
-        
+
         let tx = session.begin_transaction().unwrap();
         let tx_id = tx.id().to_string();
-        
+
         let active = session.active_transactions();
         assert!(active.contains(&tx_id));
     }
-
-    
 
     /// Tests creating many transactions
     #[test]
     fn test_many_transactions() {
         let db = create_test_db();
         let lock_registry = LockRegistry::new();
-        
+
         let session = Session::new(db, lock_registry);
-        
+
         for _ in 0..10 {
             session.begin_transaction().unwrap();
         }
-        
+
         assert_eq!(session.active_transactions().len(), 10);
     }
 
@@ -802,15 +774,15 @@ mod tests {
     fn test_session_after_transaction_lifecycle() {
         let db = create_test_db();
         let lock_registry = LockRegistry::new();
-        
+
         let session = Session::new(db, lock_registry);
-        
+
         let tx = session.begin_transaction().unwrap();
         assert_eq!(session.active_transactions().len(), 1);
-        
+
         // Close transaction
         tx.close();
-        
+
         // Session should still be active (transactions are tracked separately)
         assert!(session.is_active());
     }
@@ -820,15 +792,15 @@ mod tests {
     fn test_session_state_after_close() {
         let db = create_test_db();
         let lock_registry = LockRegistry::new();
-        
+
         let session = Session::new(db, lock_registry);
-        
+
         let _tx = session.begin_transaction().unwrap();
         session.close().unwrap();
-        
+
         // Session is now closed
         assert!(!session.is_active());
-        
+
         // Cannot create new transactions
         assert!(session.begin_transaction().is_err());
     }
@@ -838,40 +810,42 @@ mod tests {
     fn test_check_active_validation() {
         let db = create_test_db();
         let lock_registry = LockRegistry::new();
-        
+
         let session = Session::new(db, lock_registry);
-        
+
         // Should succeed on active session
         assert!(session.begin_transaction().is_ok());
-        
+
         // Close session
         session.close().unwrap();
-        
+
         // Should fail on closed session
         assert!(session.begin_transaction().is_err());
     }
-
-    
 
     /// Tests complete session lifecycle
     #[test]
     fn test_complete_session_lifecycle() {
         let db = create_test_db();
         let lock_registry = LockRegistry::new();
-        
+
         // Create session
         let session = Session::new(db, lock_registry);
         assert!(session.is_active());
-        
+
         // Create transactions
         let tx1 = session.begin_transaction().unwrap();
         let tx2 = session.begin_transaction().unwrap();
         assert_eq!(session.active_transactions().len(), 2);
-        
+
         // Query state
-        assert!(session.active_transactions().contains(&tx1.id().to_string()));
-        assert!(session.active_transactions().contains(&tx2.id().to_string()));
-        
+        assert!(session
+            .active_transactions()
+            .contains(&tx1.id().to_string()));
+        assert!(session
+            .active_transactions()
+            .contains(&tx2.id().to_string()));
+
         // Close session
         session.close().unwrap();
         assert!(!session.is_active());
@@ -883,31 +857,31 @@ mod tests {
     fn test_session_with_clones() {
         let db = create_test_db();
         let lock_registry = LockRegistry::new();
-        
+
         let session1 = Session::new(db, lock_registry);
         let session2 = session1.clone();
         let session3 = session1.clone();
-        
+
         // All should have same ID
         assert_eq!(session1.id(), session2.id());
         assert_eq!(session2.id(), session3.id());
-        
+
         // All should be active
         assert!(session1.is_active());
         assert!(session2.is_active());
         assert!(session3.is_active());
-        
+
         // Create transaction on any clone
         let _tx = session1.begin_transaction().unwrap();
-        
+
         // Should be visible from all
         assert_eq!(session1.active_transactions().len(), 1);
         assert_eq!(session2.active_transactions().len(), 1);
         assert_eq!(session3.active_transactions().len(), 1);
-        
+
         // Close from any clone
         session2.close().unwrap();
-        
+
         // All should be closed
         assert!(!session1.is_active());
         assert!(!session3.is_active());
