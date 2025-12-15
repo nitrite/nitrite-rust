@@ -13,7 +13,7 @@ pub struct TestEntity {
 #[test]
 fn test_repository_creation() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let repo: ObjectRepository<TestEntity> = ctx.db().repository()?;
 
@@ -22,14 +22,14 @@ fn test_repository_creation() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_repository_with_key() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let repo1: ObjectRepository<TestEntity> = ctx.db().keyed_repository("test1")?;
             let repo2: ObjectRepository<TestEntity> = ctx.db().keyed_repository("test2")?;
@@ -42,14 +42,14 @@ fn test_repository_with_key() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_multiple_repository_instances() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let repo1: ObjectRepository<TestEntity> = ctx.db().repository()?;
             let repo2: ObjectRepository<TestEntity> = ctx.db().repository()?;
@@ -62,14 +62,14 @@ fn test_multiple_repository_instances() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_repository_name() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let repo: ObjectRepository<TestEntity> = ctx.db().repository()?;
 
@@ -79,6 +79,6 @@ fn test_repository_name() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }

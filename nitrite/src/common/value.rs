@@ -1721,7 +1721,7 @@ mod tests {
     #[test]
     fn value_from_nitrite_id() {
         let id = NitriteId::create_id(1234567890123456789).unwrap();
-        assert_eq!(Value::from(id.clone()), Value::NitriteId(id));
+        assert_eq!(Value::from(id), Value::NitriteId(id));
     }
 
     #[test]
@@ -1747,134 +1747,134 @@ mod tests {
 
     #[test]
     fn value_is_null() {
-        assert_eq!(Value::Null.is_null(), true);
+        assert!(Value::Null.is_null());
     }
 
     #[test]
     fn value_is_bool() {
-        assert_eq!(Value::Bool(true).is_bool(), true);
+        assert!(Value::Bool(true).is_bool());
     }
 
     #[test]
     fn value_is_byte() {
-        assert_eq!(Value::I8(42).is_i8(), true);
+        assert!(Value::I8(42).is_i8());
     }
 
     #[test]
     fn value_is_unsigned_byte() {
-        assert_eq!(Value::U8(42).is_u8(), true);
+        assert!(Value::U8(42).is_u8());
     }
 
     #[test]
     fn value_is_short() {
-        assert_eq!(Value::I16(42).is_i16(), true);
+        assert!(Value::I16(42).is_i16());
     }
 
     #[test]
     fn value_is_unsigned_short() {
-        assert_eq!(Value::U16(42).is_u16(), true);
+        assert!(Value::U16(42).is_u16());
     }
 
     #[test]
     fn value_is_int() {
-        assert_eq!(Value::I32(42).is_i32(), true);
+        assert!(Value::I32(42).is_i32());
     }
 
     #[test]
     fn value_is_unsigned_int() {
-        assert_eq!(Value::U32(42).is_u32(), true);
+        assert!(Value::U32(42).is_u32());
     }
 
     #[test]
     fn value_is_long() {
-        assert_eq!(Value::I64(42).is_i64(), true);
+        assert!(Value::I64(42).is_i64());
     }
 
     #[test]
     fn value_is_unsigned_long() {
-        assert_eq!(Value::U64(42).is_u64(), true);
+        assert!(Value::U64(42).is_u64());
     }
 
     #[test]
     fn value_is_big_int() {
-        assert_eq!(Value::I128(42).is_i128(), true);
+        assert!(Value::I128(42).is_i128());
     }
 
     #[test]
     fn value_is_unsigned_big_int() {
-        assert_eq!(Value::U128(42).is_u128(), true);
+        assert!(Value::U128(42).is_u128());
     }
 
     #[test]
     fn value_is_size() {
-        assert_eq!(Value::ISize(42).is_isize(), true);
+        assert!(Value::ISize(42).is_isize());
     }
 
     #[test]
     fn value_is_unsigned_size() {
-        assert_eq!(Value::USize(42).is_usize(), true);
+        assert!(Value::USize(42).is_usize());
     }
 
     #[test]
     fn value_is_float() {
-        assert_eq!(Value::F32(42.0).is_f32(), true);
+        assert!(Value::F32(42.0).is_f32());
     }
 
     #[test]
     fn value_is_double() {
-        assert_eq!(Value::F64(42.0).is_f64(), true);
+        assert!(Value::F64(42.0).is_f64());
     }
 
     #[test]
     fn value_is_string() {
-        assert_eq!(Value::String("value".to_string()).is_string(), true);
+        assert!(Value::String("value".to_string()).is_string());
     }
 
     #[test]
     fn value_is_object() {
         let map = create_test_objet();
-        assert_eq!(Value::Document(map).is_document(), true);
+        assert!(Value::Document(map).is_document());
     }
 
     #[test]
     fn value_is_array() {
         let array = create_test_array();
-        assert_eq!(Value::Array(array).is_array(), true);
+        assert!(Value::Array(array).is_array());
     }
 
     #[test]
     fn value_is_nitrite_id() {
         let id = NitriteId::new();
-        assert_eq!(Value::NitriteId(id).is_nitrite_id(), true);
+        assert!(Value::NitriteId(id).is_nitrite_id());
     }
 
     #[test]
     fn value_is_bytes() {
         let bytes = vec![1, 2, 3];
-        assert_eq!(Value::Bytes(bytes).is_bytes(), true);
+        assert!(Value::Bytes(bytes).is_bytes());
     }
 
     #[test]
     fn value_is_unknown() {
-        assert_eq!(Value::Unknown.is_unknown(), true);
+        assert!(Value::Unknown.is_unknown());
     }
 
     #[test]
     fn value_is_number() {
-        assert_eq!(Value::I32(42).is_number(), true);
-        assert_eq!(Value::F32(42.0).is_integer(), false);
+        assert!(Value::I32(42).is_number());
+        assert!(!Value::F32(42.0).is_integer());
     }
 
     #[test]
     fn value_is_integer() {
-        assert_eq!(Value::I32(42).is_integer(), true);
-        assert_eq!(Value::I64(42).is_integer(), true);
+        assert!(Value::I32(42).is_integer());
+        assert!(Value::I64(42).is_integer());
     }
 
     #[test]
     fn value_is_decimal() {
-        assert_eq!(Value::F32(42.0).is_decimal(), true);
-        assert_eq!(Value::F64(42.0).is_decimal(), true);
+        assert!(Value::F32(42.0).is_decimal());
+        assert!(Value::F64(42.0).is_decimal());
     }
 
     #[test]
@@ -2018,7 +2018,7 @@ mod tests {
     #[test]
     fn value_as_nitrite_id() {
         let id = NitriteId::new();
-        assert_eq!(Value::NitriteId(id.clone()).as_nitrite_id(), Some(&id));
+        assert_eq!(Value::NitriteId(id).as_nitrite_id(), Some(&id));
         assert_eq!(Value::I32(42).as_nitrite_id(), None);
     }
 
@@ -2181,7 +2181,7 @@ mod tests {
     #[test]
     fn test_val_macro_with_nitrite_id() {
         let id = NitriteId::new();
-        let value = val!(id.clone());
+        let value = val!(id);
         assert_eq!(value, Value::NitriteId(id));
     }
 
@@ -2200,15 +2200,15 @@ mod tests {
 
     #[test]
     fn test_is_comparable() {
-        assert_eq!(Value::I32(42).is_comparable(), true);
-        assert_eq!(Value::F32(42.0).is_comparable(), true);
-        assert_eq!(Value::Char('c').is_comparable(), true);
-        assert_eq!(Value::String("value".to_string()).is_comparable(), true);
-        assert_eq!(Value::NitriteId(NitriteId::new()).is_comparable(), true);
-        assert_eq!(Value::Bool(true).is_comparable(), true);
-        assert_eq!(Value::Array(vec![]).is_comparable(), false);
-        assert_eq!(Value::Document(Document::new()).is_comparable(), false);
-        assert_eq!(Value::Map(BTreeMap::new()).is_comparable(), false);
+        assert!(Value::I32(42).is_comparable());
+        assert!(Value::F32(42.0).is_comparable());
+        assert!(Value::Char('c').is_comparable());
+        assert!(Value::String("value".to_string()).is_comparable());
+        assert!(Value::NitriteId(NitriteId::new()).is_comparable());
+        assert!(Value::Bool(true).is_comparable());
+        assert!(!Value::Array(vec![]).is_comparable());
+        assert!(!Value::Document(Document::new()).is_comparable());
+        assert!(!Value::Map(BTreeMap::new()).is_comparable());
     }
 
     #[test]
@@ -2418,7 +2418,7 @@ mod tests {
     #[test]
     fn bench_value_conversions() {
         for i in 0..500 {
-            let _ = Value::from(i as i32);
+            let _ = Value::from(i);
             let _ = Value::from(i as f64);
             let _ = Value::from(i % 2 == 0);
             let _ = Value::from(format!("value_{}", i));

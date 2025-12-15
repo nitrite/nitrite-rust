@@ -71,7 +71,7 @@ mod tests {
 
         let entity_id = book.entity_id();
         assert_eq!(entity_id.clone().unwrap().field_name(), "id");
-        assert_eq!(entity_id.clone().unwrap().is_nitrite_id(), false);
+        assert!(!entity_id.clone().unwrap().is_nitrite_id());
         assert!(entity_id.clone().unwrap().embedded_fields().is_empty());
 
         let entity_indexes = book.entity_indexes();
@@ -102,7 +102,7 @@ mod tests {
 
         let entity_id = book.entity_id();
         assert_eq!(entity_id.clone().unwrap().field_name(), "id");
-        assert_eq!(entity_id.clone().unwrap().is_nitrite_id(), false);
+        assert!(!entity_id.clone().unwrap().is_nitrite_id());
         assert!(!entity_id.clone().unwrap().embedded_fields().is_empty());
 
         let entity_indexes = book.entity_indexes();
@@ -127,7 +127,7 @@ mod tests {
         assert_eq!(entity_name, "Book1");
 
         let entity_id = book.entity_id();
-        assert_eq!(entity_id.clone().unwrap().is_nitrite_id(), true);
+        assert!(entity_id.clone().unwrap().is_nitrite_id());
 
         #[derive(NitriteEntity, Default)]
         #[entity(id(field = "id"))]
@@ -145,7 +145,7 @@ mod tests {
         assert_eq!(entity_name, "Book2");
 
         let entity_id = book.entity_id();
-        assert_eq!(entity_id.clone().unwrap().is_nitrite_id(), true);
+        assert!(entity_id.clone().unwrap().is_nitrite_id());
 
         #[derive(NitriteEntity, Default)]
         #[entity(id(field = "id"))]
@@ -163,7 +163,7 @@ mod tests {
         assert_eq!(entity_name, "Book3");
 
         let entity_id = book.entity_id();
-        assert_eq!(entity_id.clone().unwrap().is_nitrite_id(), true);
+        assert!(entity_id.clone().unwrap().is_nitrite_id());
 
         #[derive(NitriteEntity, Default)]
         #[entity(id(field = "id"))]
@@ -181,7 +181,7 @@ mod tests {
         assert_eq!(entity_name, "Book4");
 
         let entity_id = book.entity_id();
-        assert_eq!(entity_id.clone().unwrap().is_nitrite_id(), true);
+        assert!(entity_id.clone().unwrap().is_nitrite_id());
     }
 
     #[test]
@@ -212,7 +212,7 @@ mod tests {
 
         let entity_id = book.entity_id();
         assert_eq!(entity_id.clone().unwrap().field_name(), "book_id");
-        assert_eq!(entity_id.clone().unwrap().is_nitrite_id(), false);
+        assert!(!entity_id.clone().unwrap().is_nitrite_id());
         assert_eq!(
             entity_id.clone().unwrap().embedded_fields(),
             &vec!["author".to_string(), "isbn".to_string()]
@@ -303,7 +303,7 @@ mod tests {
         assert_eq!(entity_indexes.clone().unwrap().len(), 2);
 
         let index = entity_indexes.clone().unwrap();
-        let index1 = index.get(0).unwrap();
+        let index1 = index.first().unwrap();
         assert_eq!(index1.field_names(), &vec!["name".to_string()]);
         assert_eq!(index1.index_type(), "unique");
 

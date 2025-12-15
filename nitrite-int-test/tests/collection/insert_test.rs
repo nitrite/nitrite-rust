@@ -7,7 +7,7 @@ use nitrite_int_test::test_util::{cleanup, create_test_context, create_test_docs
 #[test]
 fn test_insert() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let collection = ctx.db().collection("test")?;
 
@@ -35,14 +35,14 @@ fn test_insert() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_insert_batch() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let collection = ctx.db().collection("test")?;
 
@@ -64,14 +64,14 @@ fn test_insert_batch() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_insert_batch_hetero_docs() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let collection = ctx.db().collection("test")?;
 
@@ -86,14 +86,14 @@ fn test_insert_batch_hetero_docs() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_insert_duplicate_documents() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let collection = ctx.db().collection("test")?;
 
@@ -111,14 +111,14 @@ fn test_insert_duplicate_documents() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_insert_with_null_values() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let collection = ctx.db().collection("test")?;
 
@@ -147,14 +147,14 @@ fn test_insert_with_null_values() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_insert_nested_documents() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let collection = ctx.db().collection("test")?;
 
@@ -191,14 +191,14 @@ fn test_insert_nested_documents() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_insert_array_documents() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let collection = ctx.db().collection("test")?;
 
@@ -234,14 +234,14 @@ fn test_insert_array_documents() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_insert_batch_performance() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let collection = ctx.db().collection("performance")?;
 
@@ -273,7 +273,7 @@ fn test_insert_batch_performance() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
@@ -281,7 +281,7 @@ fn test_insert_batch_performance() {
 #[should_panic]
 fn test_insert_with_custom_id() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let _ = ctx.db().collection("custom_id")?;
 
@@ -293,6 +293,6 @@ fn test_insert_with_custom_id() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }

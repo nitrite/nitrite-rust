@@ -7,7 +7,7 @@ use nitrite_int_test::test_util::{cleanup, create_test_context, insert_test_docu
 #[test]
 fn test_update() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let collection = ctx.db().collection("test")?;
             insert_test_documents(&collection)?;
@@ -32,14 +32,14 @@ fn test_update() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_upsert_without_id() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let collection = ctx.db().collection("test")?;
             insert_test_documents(&collection)?;
@@ -51,14 +51,14 @@ fn test_upsert_without_id() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_upsert() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let collection = ctx.db().collection("test")?;
             insert_test_documents(&collection)?;
@@ -74,14 +74,14 @@ fn test_upsert() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_option_upsert() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let collection = ctx.db().collection("test")?;
             let cursor = collection.find(field("first_name").eq("fn1"))?;
@@ -108,14 +108,14 @@ fn test_option_upsert() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_update_multiple() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let collection = ctx.db().collection("test")?;
             let cursor = collection.find(field("first_name").eq("fn1"))?;
@@ -132,14 +132,14 @@ fn test_update_multiple() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_update_with_options_upsert_false() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let collection = ctx.db().collection("test")?;
             let cursor = collection.find(field("first_name").eq("fn1"))?;
@@ -167,14 +167,14 @@ fn test_update_with_options_upsert_false() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_update_multiple_with_just_once_false() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let collection = ctx.db().collection("test")?;
             let cursor = collection.find(field("first_name").eq("fn1"))?;
@@ -197,14 +197,14 @@ fn test_update_multiple_with_just_once_false() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_update_multiple_with_just_once_true() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let collection = ctx.db().collection("test")?;
             let cursor = collection.find(field("first_name").eq("fn1"))?;
@@ -221,14 +221,14 @@ fn test_update_multiple_with_just_once_true() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_update_with_new_field() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let collection = ctx.db().collection("test")?;
             insert_test_documents(&collection)?;
@@ -253,14 +253,14 @@ fn test_update_with_new_field() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_update_invalid_filter() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let collection = ctx.db().collection("test")?;
             insert_test_documents(&collection)?;
@@ -276,14 +276,14 @@ fn test_update_invalid_filter() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn update_after_attribute_removal() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let collection = ctx.db().collection("test_updateAfterAttributeRemoval")?;
             collection.remove(all(), false)?;
@@ -302,14 +302,14 @@ fn update_after_attribute_removal() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn update_nested_document() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let collection = ctx.db().collection("test_updateNestedDocument")?;
             collection.remove(all(), false)?;
@@ -335,7 +335,7 @@ fn update_nested_document() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
@@ -345,14 +345,14 @@ fn update_nested_document() {
 #[should_panic]
 fn test_update_without_id() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let collection = ctx.db().collection("test")?;
             let doc = doc!{ "test": "test123" };
             let _ = collection.update_one(&doc, false)?;
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
@@ -360,14 +360,14 @@ fn test_update_without_id() {
 #[should_panic]
 fn test_remove_without_id() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let collection = ctx.db().collection("test")?;
             let doc = doc!{ "test": "test123" };
             let _ = collection.remove_one(&doc)?;
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
@@ -375,14 +375,14 @@ fn test_remove_without_id() {
 #[should_panic]
 fn test_register_listener_after_drop() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let collection = ctx.db().collection("test")?;
             collection.dispose()?;
             let _ = collection.subscribe(CollectionEventListener::new(|_| panic!("should not happen")))?;
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
@@ -390,14 +390,14 @@ fn test_register_listener_after_drop() {
 #[should_panic]
 fn test_register_listener_after_close() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let collection = ctx.db().collection("test")?;
             collection.close()?;
             let _ = collection.subscribe(CollectionEventListener::new(|_| panic!("should not happen")))?;
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
@@ -405,7 +405,7 @@ fn test_register_listener_after_close() {
 #[should_panic]
 fn test_issue151() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let collection = ctx.db().collection("test")?;
             let doc1 = doc!{ "id": "test-1", "fruit": "Apple" };
@@ -424,6 +424,6 @@ fn test_issue151() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }

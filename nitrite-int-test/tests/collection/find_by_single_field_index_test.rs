@@ -9,7 +9,7 @@ use nitrite_int_test::test_util::{
 #[test]
 fn test_find_by_unique_index() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let coll = ctx.db().collection("test")?;
             insert_test_documents(&coll)?;
@@ -70,14 +70,14 @@ fn test_find_by_unique_index() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_find_by_non_unique_index() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let coll = ctx.db().collection("test")?;
             insert_test_documents(&coll)?;
@@ -109,14 +109,14 @@ fn test_find_by_non_unique_index() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_find_by_full_text_index_after_insert() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let coll = ctx.db().collection("test")?;
             insert_test_documents(&coll)?;
@@ -136,14 +136,14 @@ fn test_find_by_full_text_index_after_insert() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_find_by_index_sort_ascending() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let coll = ctx.db().collection("test")?;
             insert_test_documents(&coll)?;
@@ -165,14 +165,14 @@ fn test_find_by_index_sort_ascending() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_find_by_index_sort_descending() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let coll = ctx.db().collection("test")?;
             insert_test_documents(&coll)?;
@@ -194,14 +194,14 @@ fn test_find_by_index_sort_descending() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_find_after_dropped_index() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let coll = ctx.db().collection("test")?;
             insert_test_documents(&coll)?;
@@ -216,14 +216,14 @@ fn test_find_after_dropped_index() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_find_text_with_wild_card() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let coll = ctx.db().collection("test")?;
             insert_test_documents(&coll)?;
@@ -241,14 +241,14 @@ fn test_find_text_with_wild_card() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_find_text_with_empty_string() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let coll = ctx.db().collection("test")?;
             insert_test_documents(&coll)?;
@@ -259,7 +259,7 @@ fn test_find_text_with_empty_string() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
@@ -268,7 +268,7 @@ fn test_find_text_with_empty_string() {
 #[should_panic]
 fn test_find_text_with_wild_card_multiple_word() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let coll = ctx.db().collection("test")?;
             insert_test_documents(&coll)?;
@@ -281,7 +281,7 @@ fn test_find_text_with_wild_card_multiple_word() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
@@ -289,7 +289,7 @@ fn test_find_text_with_wild_card_multiple_word() {
 #[should_panic]
 fn test_find_text_with_only_wild_card() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let coll = ctx.db().collection("test")?;
             insert_test_documents(&coll)?;
@@ -302,6 +302,6 @@ fn test_find_text_with_only_wild_card() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }

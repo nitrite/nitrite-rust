@@ -933,11 +933,11 @@ mod tests {
         }
         
         let index_map = IndexMap::new(None, Some(sub_map));
-        let mut entries = index_map.entries().unwrap();
+        let entries = index_map.entries().unwrap();
         
         // Iterate all entries
         let mut count = 0;
-        while let Some(result) = entries.next() {
+        for result in entries {
             assert!(result.is_ok());
             count += 1;
         }
@@ -957,11 +957,11 @@ mod tests {
         
         let index_map = IndexMap::new(None, Some(sub_map));
         index_map.set_reverse_scan(true);
-        let mut entries = index_map.entries().unwrap();
+        let entries = index_map.entries().unwrap();
         
         // Iterate all entries in reverse
         let mut count = 0;
-        while let Some(result) = entries.next() {
+        for result in entries {
             assert!(result.is_ok());
             count += 1;
         }
@@ -1010,7 +1010,7 @@ mod tests {
         let result = index_map.terminal_nitrite_ids().unwrap();
         
         // Should collect all IDs efficiently
-        assert!(result.len() > 0);
+        assert!(!result.is_empty());
     }
 
     #[test]

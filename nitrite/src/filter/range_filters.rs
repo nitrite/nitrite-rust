@@ -785,7 +785,7 @@ mod tests {
         let filter = BetweenFilter::new("field".to_string(), bound);
         let mut doc = Document::new();
         doc.put("field", Value::I32(15)).unwrap();
-        assert_eq!(filter.apply(&doc).unwrap(), true);
+        assert!(filter.apply(&doc).unwrap());
     }
 
     #[test]
@@ -794,7 +794,7 @@ mod tests {
         let filter = BetweenFilter::new("field".to_string(), bound);
         let mut doc = Document::new();
         doc.put("field", Value::I32(25)).unwrap();
-        assert_eq!(filter.apply(&doc).unwrap(), false);
+        assert!(!filter.apply(&doc).unwrap());
     }
 
     #[test]
@@ -805,7 +805,7 @@ mod tests {
         );
         let mut doc = Document::new();
         doc.put("field", Value::I32(2)).unwrap();
-        assert_eq!(filter.apply(&doc).unwrap(), true);
+        assert!(filter.apply(&doc).unwrap());
     }
 
     #[test]
@@ -816,7 +816,7 @@ mod tests {
         );
         let mut doc = Document::new();
         doc.put("field", Value::I32(4)).unwrap();
-        assert_eq!(filter.apply(&doc).unwrap(), false);
+        assert!(!filter.apply(&doc).unwrap());
     }
 
     #[test]
@@ -827,7 +827,7 @@ mod tests {
         );
         let mut doc = Document::new();
         doc.put("field", Value::I32(4)).unwrap();
-        assert_eq!(filter.apply(&doc).unwrap(), true);
+        assert!(filter.apply(&doc).unwrap());
     }
 
     #[test]
@@ -838,7 +838,7 @@ mod tests {
         );
         let mut doc = Document::new();
         doc.put("field", Value::I32(2)).unwrap();
-        assert_eq!(filter.apply(&doc).unwrap(), false);
+        assert!(!filter.apply(&doc).unwrap());
     }
 
 
@@ -848,7 +848,7 @@ mod tests {
             SortingAwareFilter::new("field".to_string(), Value::I32(42), ComparisonMode::Greater);
         let mut doc = Document::new();
         doc.put("field", Value::I32(43)).unwrap();
-        assert_eq!(filter.apply(&doc).unwrap(), true);
+        assert!(filter.apply(&doc).unwrap());
     }
 
     // Tests: Range Filter Unwraps - Verify error messages
@@ -892,25 +892,25 @@ mod tests {
         let greater_filter = SortingAwareFilter::new("val".to_string(), test_value.clone(), ComparisonMode::Greater);
         let mut doc = Document::new();
         doc.put("val", Value::I32(51)).unwrap();
-        assert_eq!(greater_filter.apply(&doc).unwrap(), true);
+        assert!(greater_filter.apply(&doc).unwrap());
         
         // Test GreaterEqual
         let ge_filter = SortingAwareFilter::new("val".to_string(), test_value.clone(), ComparisonMode::GreaterEqual);
         let mut doc2 = Document::new();
         doc2.put("val", Value::I32(50)).unwrap();
-        assert_eq!(ge_filter.apply(&doc2).unwrap(), true);
+        assert!(ge_filter.apply(&doc2).unwrap());
         
         // Test Lesser
         let less_filter = SortingAwareFilter::new("val".to_string(), test_value.clone(), ComparisonMode::Lesser);
         let mut doc3 = Document::new();
         doc3.put("val", Value::I32(49)).unwrap();
-        assert_eq!(less_filter.apply(&doc3).unwrap(), true);
+        assert!(less_filter.apply(&doc3).unwrap());
         
         // Test LesserEqual
         let le_filter = SortingAwareFilter::new("val".to_string(), test_value.clone(), ComparisonMode::LesserEqual);
         let mut doc4 = Document::new();
         doc4.put("val", Value::I32(50)).unwrap();
-        assert_eq!(le_filter.apply(&doc4).unwrap(), true);
+        assert!(le_filter.apply(&doc4).unwrap());
     }
 
     #[test]
@@ -947,7 +947,7 @@ mod tests {
         let filter = BetweenFilter::new("range".to_string(), bound_exclusive);
         let mut doc = Document::new();
         doc.put("range", Value::I32(10)).unwrap();
-        assert_eq!(filter.apply(&doc).unwrap(), false);
+        assert!(!filter.apply(&doc).unwrap());
     }
     
     #[test]

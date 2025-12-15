@@ -62,8 +62,7 @@ impl From<NitriteError> for SpatialError {
             | ErrorKind::PermissionDenied
             | ErrorKind::DiskFull
             | ErrorKind::FileCorrupted
-            | ErrorKind::FileAccessError => SpatialError::Io(io::Error::new(
-                io::ErrorKind::Other,
+            | ErrorKind::FileAccessError => SpatialError::Io(io::Error::other(
                 err.message().to_string(),
             )),
             ErrorKind::EncodingError | ErrorKind::ObjectMappingError => {
@@ -148,7 +147,7 @@ impl FragmentationMetrics {
         // Assuming ideal utilization would be 75% fill factor
         let ideal_entries_per_page = 50; // approximate based on geometry size
         let optimal_pages =
-            ((entries + ideal_entries_per_page - 1) / ideal_entries_per_page) as f64;
+            entries.div_ceil(ideal_entries_per_page) as f64;
         let actual_pages = stats.cached_pages as f64;
         let wasted_space_percent = if actual_pages > 0.0 {
             ((actual_pages - optimal_pages) / actual_pages * 100.0).max(0.0)

@@ -285,7 +285,7 @@ mod tests {
         }
 
         fn as_plugin(&self) -> NitritePlugin {
-            NitritePlugin::new(self.clone())
+            NitritePlugin::new(*self)
         }
     }
 
@@ -444,7 +444,7 @@ mod tests {
             }
 
             fn as_plugin(&self) -> NitritePlugin {
-                NitritePlugin::new(self.clone())
+                NitritePlugin::new(*self)
             }
         }
 
@@ -515,7 +515,7 @@ mod tests {
         impl NitritePluginProvider for MinimalErrorMockIndexer {
             fn initialize(&self, _config: NitriteConfig) -> NitriteResult<()> { Ok(()) }
             fn close(&self) -> NitriteResult<()> { Ok(()) }
-            fn as_plugin(&self) -> NitritePlugin { NitritePlugin::new(self.clone()) }
+            fn as_plugin(&self) -> NitritePlugin { NitritePlugin::new(*self) }
         }
 
         let indexer = NitriteIndexer::new(MinimalErrorMockIndexer);

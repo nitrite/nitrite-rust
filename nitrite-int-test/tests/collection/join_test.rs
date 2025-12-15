@@ -7,7 +7,7 @@ use nitrite_int_test::test_util::{cleanup, create_test_context, insert_test_docu
 #[test]
 fn test_join_all() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let collection = ctx.db().collection("test")?;
             let foreign_collection = ctx.db().collection("foreign")?;
@@ -54,7 +54,7 @@ fn test_join_all() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 

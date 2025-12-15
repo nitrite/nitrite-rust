@@ -197,7 +197,7 @@ mod tests {
             Filter::new(AllFilter),
         ]);
         let doc = Document::new();
-        assert_eq!(filter.apply(&doc).unwrap(), true);
+        assert!(filter.apply(&doc).unwrap());
     }
 
     #[test]
@@ -210,7 +210,7 @@ mod tests {
             )),
         ]);
         let doc = Document::new();
-        assert_eq!(filter.apply(&doc).unwrap(), false);
+        assert!(!filter.apply(&doc).unwrap());
     }
 
     #[test]
@@ -223,7 +223,7 @@ mod tests {
             )),
         ]);
         let doc = Document::new();
-        assert_eq!(filter.apply(&doc).unwrap(), true);
+        assert!(filter.apply(&doc).unwrap());
     }
 
     #[test]
@@ -240,14 +240,14 @@ mod tests {
         ]);
         let mut doc = Document::new();
         doc.put("field", Value::I32(43)).unwrap();
-        assert_eq!(filter.apply(&doc).unwrap(), false);
+        assert!(!filter.apply(&doc).unwrap());
     }
 
     #[test]
     fn test_not_filter_apply() {
         let filter = NotFilter::new(Filter::new(AllFilter));
         let doc = Document::new();
-        assert_eq!(filter.apply(&doc).unwrap(), false);
+        assert!(!filter.apply(&doc).unwrap());
     }
 
     #[test]
@@ -258,7 +258,7 @@ mod tests {
         )));
         let mut doc = Document::new();
         doc.put("field", Value::I32(43)).unwrap();
-        assert_eq!(filter.apply(&doc).unwrap(), true);
+        assert!(filter.apply(&doc).unwrap());
     }
 
     // Performance optimization tests
@@ -270,7 +270,7 @@ mod tests {
             Filter::new(AllFilter), // Should not be evaluated
         ]);
         let doc = Document::new();
-        assert_eq!(filter.apply(&doc).unwrap(), false);
+        assert!(!filter.apply(&doc).unwrap());
     }
 
     #[test]
@@ -281,7 +281,7 @@ mod tests {
             Filter::new(EqualsFilter::new("field".to_string(), Value::I32(99))), // Should not be evaluated
         ]);
         let doc = Document::new();
-        assert_eq!(filter.apply(&doc).unwrap(), true);
+        assert!(filter.apply(&doc).unwrap());
     }
 
     #[test]
@@ -295,7 +295,7 @@ mod tests {
                 Filter::new(EqualsFilter::new("a".to_string(), Value::I32(1))),
                 Filter::new(EqualsFilter::new("b".to_string(), Value::I32(2))),
             ]);
-            assert_eq!(filter.apply(&doc).unwrap(), true);
+            assert!(filter.apply(&doc).unwrap());
         }
     }
 
@@ -309,7 +309,7 @@ mod tests {
                 Filter::new(EqualsFilter::new("x".to_string(), Value::I32(1))),
                 Filter::new(EqualsFilter::new("x".to_string(), Value::I32(5))),
             ]);
-            assert_eq!(filter.apply(&doc).unwrap(), true);
+            assert!(filter.apply(&doc).unwrap());
         }
     }
 

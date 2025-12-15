@@ -9,7 +9,7 @@ use std::time::Duration;
 #[test]
 fn test_create_index() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let collection = ctx.db().collection("test")?;
             // Create unique index on first_name
@@ -29,14 +29,14 @@ fn test_create_index() {
             insert_test_documents(&collection)?;
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_list_indexes() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let collection = ctx.db().collection("test")?;
             assert_eq!(collection.list_indexes()?.len(), 0);
@@ -53,14 +53,14 @@ fn test_list_indexes() {
             assert_eq!(collection.list_indexes()?.len(), 3);
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_drop_index() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let collection = ctx.db().collection("test")?;
             collection.create_index(vec!["first_name"], &non_unique_index())?;
@@ -70,14 +70,14 @@ fn test_drop_index() {
             assert!(!collection.has_index(vec!["first_name"])?);
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_drop_all_indexes() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let collection = ctx.db().collection("test")?;
             collection.drop_all_indexes()?;
@@ -92,14 +92,14 @@ fn test_drop_all_indexes() {
             assert_eq!(collection.list_indexes()?.len(), 0);
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_has_index() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let collection = ctx.db().collection("test")?;
             assert!(!collection.has_index(vec!["last_name"])?
@@ -115,14 +115,14 @@ fn test_has_index() {
                    );
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_delete_with_index() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let collection = ctx.db().collection("test")?;
             collection.create_index(vec!["first_name"], &unique_index())?;
@@ -143,14 +143,14 @@ fn test_delete_with_index() {
             assert_eq!(cursor.count(), 1);
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_rebuild_index() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let collection = ctx.db().collection("test")?;
             collection.create_index(vec!["body"], &full_text_index())?;
@@ -164,14 +164,14 @@ fn test_rebuild_index() {
             }
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_rebuild_index_on_running_index() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let collection = ctx.db().collection("test")?;
             collection.create_index(vec!["body"], &full_text_index())?;
@@ -187,14 +187,14 @@ fn test_rebuild_index_on_running_index() {
             assert!(result.is_ok());
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_null_value_in_indexed_field() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let collection = ctx.db().collection("test")?;
             collection.create_index(vec!["first_name"], &unique_index())?;
@@ -211,14 +211,14 @@ fn test_null_value_in_indexed_field() {
             collection.insert(doc)?;
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_drop_all_and_create_index() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let mut collection = ctx.db().collection("test")?;
             collection.create_index(vec!["first_name"], &non_unique_index())?;
@@ -235,14 +235,14 @@ fn test_drop_all_and_create_index() {
             assert!(collection.has_index(vec!["first_name"])?);
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_numeric_field_index_query_returns_single_result() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let collection = ctx.db().collection("test")?;
             collection.drop_all_indexes()?;
@@ -265,14 +265,14 @@ fn test_numeric_field_index_query_returns_single_result() {
             assert_eq!(cursor.count(), 1);
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_index_event() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             use rand::Rng;
             let collection = ctx.db().collection("index-test")?;
@@ -313,14 +313,14 @@ fn test_index_event() {
             assert!(count > 0);
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_index_and_search_on_null_values() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let collection = ctx.db().collection("index-on-null")?;
             collection.insert(doc!{
@@ -346,14 +346,14 @@ fn test_index_and_search_on_null_values() {
             assert_eq!(collection.find(field("third").eq(Value::Null))?.count(), 2);
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_create_compound_and_single_field_index_on_same_field() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let collection = ctx.db().collection("test")?;
             // Create non-unique index on last_name then unique index on first_name.
@@ -363,14 +363,14 @@ fn test_create_compound_and_single_field_index_on_same_field() {
             collection.create_index(vec!["last_name", "first_name"], &non_unique_index())?;
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_create_invalid_unique_index() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let collection = ctx.db().collection("test")?;
             // Create a unique index on "lastName"
@@ -381,14 +381,14 @@ fn test_create_invalid_unique_index() {
             assert!(result.is_err());
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_create_index_on_array() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let collection = ctx.db().collection("test")?;
             // Create a unique index on "arr" where the field is an array with duplicates.
@@ -398,14 +398,14 @@ fn test_create_index_on_array() {
             assert!(result.is_err());
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_create_on_invalid_field() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let collection = ctx.db().collection("test")?;
             // Insert documents first; multiple null values will be created for a non-existent field.
@@ -414,14 +414,14 @@ fn test_create_on_invalid_field() {
             assert!(result.is_err());
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_create_full_text_on_non_text_field() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let collection = ctx.db().collection("test")?;
             // Insert documents so the field exists.
@@ -431,14 +431,14 @@ fn test_create_full_text_on_non_text_field() {
             assert!(result.is_err());
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_drop_index_on_non_indexed_field() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let collection = ctx.db().collection("test")?;
             // Attempting to drop an index on a field that was never indexed should return an error.
@@ -446,14 +446,14 @@ fn test_drop_index_on_non_indexed_field() {
             assert!(result.is_ok());
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_rebuild_index_invalid() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let collection = ctx.db().collection("test")?;
             // Rebuilding an index on an unknown field should cause an error.
@@ -461,14 +461,14 @@ fn test_rebuild_index_invalid() {
             assert!(result.is_err());
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_create_multiple_index_type_on_same_field() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let collection = ctx.db().collection("test")?;
             // Creating a unique index on "lastName"
@@ -478,6 +478,6 @@ fn test_create_multiple_index_type_on_same_field() {
             assert!(result.is_err());
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }

@@ -86,10 +86,10 @@ mod tests {
 
     impl Drop for Context {
         fn drop(&mut self) {
-            let keyspace = mem::replace(&mut self.keyspace, None);
-            let partition_handle = mem::replace(&mut self.partition_handle, None);
-            let fjall_store = mem::replace(&mut self.fjall_store, None);
-            let fjall_map = mem::replace(&mut self.fjall_map, None);
+            let keyspace = self.keyspace.take();
+            let partition_handle = self.partition_handle.take();
+            let fjall_store = self.fjall_store.take();
+            let fjall_map = self.fjall_map.take();
 
             // Close fjall_map if available, log on failure but don't panic
             if let Some(map) = fjall_map {
@@ -127,11 +127,11 @@ mod tests {
         }
     }
 
-    pub fn run_test<T, B, A>(before: B, test: T, after: A) -> ()
+    pub fn run_test<T, B, A>(before: B, test: T, after: A)
     where
-        T: FnOnce(Context) -> () + std::panic::UnwindSafe,
+        T: FnOnce(Context) + std::panic::UnwindSafe,
         B: FnOnce() -> Context + std::panic::UnwindSafe,
-        A: FnOnce(Context) -> () + std::panic::UnwindSafe,
+        A: FnOnce(Context) + std::panic::UnwindSafe,
     {
         let result = std::panic::catch_unwind(|| {
             let ctx = before();

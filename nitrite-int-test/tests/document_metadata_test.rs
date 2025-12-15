@@ -7,7 +7,7 @@ use nitrite_int_test::test_util::{cleanup, create_test_context, run_test};
 #[test]
 fn test_insert_document() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let collection = ctx.db().collection("test")?;
 
@@ -30,14 +30,14 @@ fn test_insert_document() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_update_document() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let collection = ctx.db().collection("test")?;
 
@@ -49,7 +49,7 @@ fn test_update_document() {
                 field("data").eq("value1"),
                 &doc!{"data": "value2"},
             )?;
-            assert!(result.affected_nitrite_ids().len() > 0);
+            assert!(!result.affected_nitrite_ids().is_empty());
 
             // Verify update
             let mut cursor = collection.find(field("data").eq("value2"))?;
@@ -63,14 +63,14 @@ fn test_update_document() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_remove_document() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let collection = ctx.db().collection("test")?;
 
@@ -91,14 +91,14 @@ fn test_remove_document() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_document_lifecycle() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let collection = ctx.db().collection("test")?;
 
@@ -128,6 +128,6 @@ fn test_document_lifecycle() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }

@@ -11,7 +11,7 @@ use nitrite_int_test::test_util::{cleanup, create_test_context, insert_test_docu
 #[test]
 fn test_create_index_on_valid_field() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let collection = ctx.db().collection("test")?;
             insert_test_documents(&collection)?;
@@ -26,14 +26,14 @@ fn test_create_index_on_valid_field() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_drop_non_existent_index() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let collection = ctx.db().collection("test")?;
             insert_test_documents(&collection)?;
@@ -48,14 +48,14 @@ fn test_drop_non_existent_index() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_rebuild_non_existent_index() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let collection = ctx.db().collection("test")?;
 
@@ -65,7 +65,7 @@ fn test_rebuild_non_existent_index() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
@@ -76,7 +76,7 @@ fn test_rebuild_non_existent_index() {
 #[test]
 fn test_index_on_various_field_types() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let collection = ctx.db().collection("test")?;
 
@@ -93,14 +93,14 @@ fn test_index_on_various_field_types() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_create_index_on_multiple_types() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let collection = ctx.db().collection("test")?;
 
@@ -118,14 +118,14 @@ fn test_create_index_on_multiple_types() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_has_index_with_non_existent_field() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let collection = ctx.db().collection("test")?;
             insert_test_documents(&collection)?;
@@ -136,14 +136,14 @@ fn test_has_index_with_non_existent_field() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_drop_all_indexes() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let collection = ctx.db().collection("test")?;
             insert_test_documents(&collection)?;
@@ -166,14 +166,14 @@ fn test_drop_all_indexes() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_index_not_updated_after_drop() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let collection = ctx.db().collection("test")?;
 
@@ -195,14 +195,14 @@ fn test_index_not_updated_after_drop() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_create_duplicate_index() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let collection = ctx.db().collection("test")?;
 
@@ -216,6 +216,6 @@ fn test_create_duplicate_index() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }

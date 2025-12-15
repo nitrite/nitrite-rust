@@ -89,6 +89,12 @@ pub struct FjallModuleBuilder {
     store_config: FjallConfig,
 }
 
+impl Default for FjallModuleBuilder {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl FjallModuleBuilder {
     /// Creates a new builder with default configuration.
     ///

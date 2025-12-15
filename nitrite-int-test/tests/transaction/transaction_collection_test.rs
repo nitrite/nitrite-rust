@@ -16,7 +16,7 @@ use nitrite_int_test::test_util::{cleanup, create_test_context, run_test};
 #[test]
 fn test_commit_insert() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let db = ctx.db();
             let collection = db.collection("test")?;
@@ -41,14 +41,14 @@ fn test_commit_insert() {
             assert_eq!(collection.find(field("firstName").eq("John"))?.count(), 1);
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_commit_multiple_inserts() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let db = ctx.db();
             let collection = db.collection("test")?;
@@ -73,14 +73,14 @@ fn test_commit_multiple_inserts() {
             assert_eq!(collection.find(all())?.count(), 5);
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_rollback_insert() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let db = ctx.db();
             let collection = db.collection("test")?;
@@ -113,14 +113,14 @@ fn test_rollback_insert() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_commit_update() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let db = ctx.db();
             let collection = db.collection("test")?;
@@ -149,14 +149,14 @@ fn test_commit_update() {
             assert_eq!(collection.find(field("lastName").eq("Doe"))?.count(), 1);
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_rollback_update() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let db = ctx.db();
             let collection = db.collection("test")?;
@@ -195,14 +195,14 @@ fn test_rollback_update() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_commit_remove() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let db = ctx.db();
             let collection = db.collection("test")?;
@@ -229,14 +229,14 @@ fn test_commit_remove() {
             assert_eq!(collection.find(field("firstName").eq("John"))?.count(), 0);
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_rollback_remove() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let db = ctx.db();
             let collection = db.collection("test")?;
@@ -270,7 +270,7 @@ fn test_rollback_remove() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
@@ -279,7 +279,7 @@ fn test_rollback_remove() {
 #[test]
 fn test_commit_create_index() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let db = ctx.db();
             let collection = db.collection("test")?;
@@ -304,14 +304,14 @@ fn test_commit_create_index() {
             assert!(collection.has_index(vec!["firstName"])?);
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_commit_drop_index() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let db = ctx.db();
             let collection = db.collection("test")?;
@@ -337,14 +337,14 @@ fn test_commit_drop_index() {
             assert!(!collection.has_index(vec!["firstName"])?);
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_commit_drop_all_indices() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let db = ctx.db();
             let collection = db.collection("test")?;
@@ -374,7 +374,7 @@ fn test_commit_drop_all_indices() {
             assert!(!collection.has_index(vec!["lastName"])?);
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
@@ -383,7 +383,7 @@ fn test_commit_drop_all_indices() {
 #[test]
 fn test_commit_clear() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let db = ctx.db();
             let collection = db.collection("test")?;
@@ -408,7 +408,7 @@ fn test_commit_clear() {
             assert_eq!(collection.size()?, 0);
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
@@ -417,7 +417,7 @@ fn test_commit_clear() {
 #[test]
 fn test_commit_drop_collection() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let db = ctx.db();
             let collection = db.collection("test")?;
@@ -437,7 +437,7 @@ fn test_commit_drop_collection() {
             assert!(!db.has_collection("test")?);
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
@@ -446,7 +446,7 @@ fn test_commit_drop_collection() {
 #[test]
 fn test_commit_set_attribute() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let db = ctx.db();
             let collection = db.collection("test")?;
@@ -471,14 +471,14 @@ fn test_commit_set_attribute() {
             assert_eq!(attrs.get("key").unwrap(), &Value::from("value"));
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_rollback_set_attribute() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let db = ctx.db();
             let collection = db.collection("test")?;
@@ -517,7 +517,7 @@ fn test_rollback_set_attribute() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
@@ -526,7 +526,7 @@ fn test_rollback_set_attribute() {
 #[test]
 fn test_transaction_on_different_collections() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let db = ctx.db();
             let col1 = db.collection("test1")?;
@@ -621,7 +621,7 @@ fn test_transaction_on_different_collections() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
@@ -630,7 +630,7 @@ fn test_transaction_on_different_collections() {
 #[test]
 fn test_concurrent_insert() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let db = ctx.db();
             let _collection = db.collection("test")?;
@@ -702,14 +702,14 @@ fn test_concurrent_insert() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_concurrent_insert_and_remove() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let db = ctx.db();
             let collection = db.collection("test")?;
@@ -780,14 +780,14 @@ fn test_concurrent_insert_and_remove() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_concurrent_update() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let db = ctx.db();
             let collection = db.collection("test")?;
@@ -857,7 +857,7 @@ fn test_concurrent_update() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
@@ -866,7 +866,7 @@ fn test_concurrent_update() {
 #[test]
 fn test_failure_on_closed_transaction() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let db = ctx.db();
             db.with_session(|session| {
@@ -884,14 +884,14 @@ fn test_failure_on_closed_transaction() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_commit_after_commit_fails() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let db = ctx.db();
             db.with_session(|session| {
@@ -909,14 +909,14 @@ fn test_commit_after_commit_fails() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_rollback_after_commit_succeeds() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let db = ctx.db();
             db.with_session(|session| {
@@ -934,14 +934,14 @@ fn test_rollback_after_commit_succeeds() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_rollback_idempotent() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let db = ctx.db();
             db.with_session(|session| {
@@ -959,14 +959,14 @@ fn test_rollback_idempotent() {
             })?;
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_transaction_state_transitions() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let db = ctx.db();
             db.with_session(|session| {
@@ -987,14 +987,14 @@ fn test_transaction_state_transitions() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_session_close_rolls_back_transactions() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let db = ctx.db();
             let collection = db.collection("test")?;
@@ -1015,14 +1015,14 @@ fn test_session_close_rolls_back_transactions() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_empty_transaction_commit() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let db = ctx.db();
             db.with_session(|session| {
@@ -1037,14 +1037,14 @@ fn test_empty_transaction_commit() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_empty_transaction_rollback() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let db = ctx.db();
             db.with_session(|session| {
@@ -1059,14 +1059,14 @@ fn test_empty_transaction_rollback() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_transaction_collection_isolation() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let db = ctx.db();
             let collection = db.collection("test")?;
@@ -1096,14 +1096,14 @@ fn test_transaction_collection_isolation() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_transaction_find_with_filter() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let db = ctx.db();
             db.with_session(|session| {
@@ -1136,14 +1136,14 @@ fn test_transaction_find_with_filter() {
             })?;
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_transaction_get_by_id() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let db = ctx.db();
             db.with_session(|session| {
@@ -1163,14 +1163,14 @@ fn test_transaction_get_by_id() {
             })?;
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_transaction_size() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let db = ctx.db();
             db.with_session(|session| {
@@ -1193,14 +1193,14 @@ fn test_transaction_size() {
             })?;
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_transaction_collection_name() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let db = ctx.db();
             db.with_session(|session| {
@@ -1214,14 +1214,14 @@ fn test_transaction_collection_name() {
             })?;
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_transaction_multiple_sessions() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let db = ctx.db();
 
@@ -1251,14 +1251,14 @@ fn test_transaction_multiple_sessions() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_transaction_pending_operations() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let db = ctx.db();
             db.with_session(|session| {
@@ -1277,14 +1277,14 @@ fn test_transaction_pending_operations() {
             })?;
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_transaction_collection_names() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let db = ctx.db();
             db.with_session(|session| {
@@ -1307,14 +1307,14 @@ fn test_transaction_collection_names() {
             })?;
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_session_on_closed_fails() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let db = ctx.db();
             db.with_session(|session| {
@@ -1330,14 +1330,14 @@ fn test_session_on_closed_fails() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_session_active_transactions() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let db = ctx.db();
             db.with_session(|session| {
@@ -1362,14 +1362,14 @@ fn test_session_active_transactions() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_unique_transaction_ids() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let db = ctx.db();
             db.with_session(|session| {
@@ -1384,14 +1384,14 @@ fn test_unique_transaction_ids() {
             })?;
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_unique_session_ids() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let db = ctx.db();
             let mut session_ids = vec![];
@@ -1418,6 +1418,6 @@ fn test_unique_session_ids() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }

@@ -275,7 +275,7 @@ mod tests {
             if let Some(id) = self.id {
                 doc.put("id", id)?;
             }
-            Ok(doc.to_value()?)
+            doc.to_value()
         }
 
         fn from_value(value: &Value) -> NitriteResult<Self::Output> {
@@ -654,12 +654,10 @@ mod tests {
     fn test_to_documents_preserves_entity_order() {
         // Test that to_documents preserves entity order
         let operations = RepositoryOperations::new();
-        let entities = vec![
-            TestEntity { id: Some(5) },
+        let entities = [TestEntity { id: Some(5) },
             TestEntity { id: Some(1) },
             TestEntity { id: Some(9) },
-            TestEntity { id: Some(3) },
-        ];
+            TestEntity { id: Some(3) }];
         let entity_refs: Vec<&TestEntity> = entities.iter().collect();
         
         let result = operations.to_documents(entity_refs);

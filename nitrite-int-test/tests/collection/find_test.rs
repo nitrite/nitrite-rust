@@ -11,7 +11,7 @@ use nitrite_int_test::test_util::{cleanup, create_test_context, create_test_docs
 #[test]
 fn test_find_all() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let coll = ctx.db().collection("test")?;
             insert_test_documents(&coll)?;
@@ -21,14 +21,14 @@ fn test_find_all() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_find_with_filter() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let coll = ctx.db().collection("test")?;
             insert_test_documents(&coll)?;
@@ -86,14 +86,14 @@ fn test_find_with_filter() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_find_with_skip_limit() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let coll = ctx.db().collection("test")?;
             insert_test_documents(&coll)?;
@@ -116,14 +116,14 @@ fn test_find_with_skip_limit() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_find_with_skip() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let coll = ctx.db().collection("test")?;
             insert_test_documents(&coll)?;
@@ -146,14 +146,14 @@ fn test_find_with_skip() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_find_with_limit() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let coll = ctx.db().collection("test")?;
             insert_test_documents(&coll)?;
@@ -172,14 +172,14 @@ fn test_find_with_limit() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_find_sort_ascending() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let coll = ctx.db().collection("test")?;
             insert_test_documents(&coll)?;
@@ -202,14 +202,14 @@ fn test_find_sort_ascending() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_find_sort_descending() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let coll = ctx.db().collection("test")?;
             insert_test_documents(&coll)?;
@@ -232,14 +232,14 @@ fn test_find_sort_descending() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_find_limit_and_sort() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let coll = ctx.db().collection("test")?;
             insert_test_documents(&coll)?;
@@ -294,14 +294,14 @@ fn test_find_limit_and_sort() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_find_sort_on_non_existing_field() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let coll = ctx.db().collection("test")?;
             insert_test_documents(&coll)?;
@@ -312,14 +312,14 @@ fn test_find_sort_on_non_existing_field() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_find_invalid_field() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let coll = ctx.db().collection("test")?;
             insert_test_documents(&coll)?;
@@ -329,14 +329,14 @@ fn test_find_invalid_field() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_find_invalid_field_with_invalid_accessor() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let coll = ctx.db().collection("test")?;
             insert_test_documents(&coll)?;
@@ -346,14 +346,14 @@ fn test_find_invalid_field_with_invalid_accessor() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_find_limit_and_sort_invalid_field() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let coll = ctx.db().collection("test")?;
             insert_test_documents(&coll)?;
@@ -366,14 +366,14 @@ fn test_find_limit_and_sort_invalid_field() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_get_by_id() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let coll = ctx.db().collection("test")?;
             let doc1 = create_test_docs()[0].clone();
@@ -402,14 +402,14 @@ fn test_get_by_id() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_find_with_filter_and_option() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let coll = ctx.db().collection("test")?;
             insert_test_documents(&coll)?;
@@ -423,14 +423,14 @@ fn test_find_with_filter_and_option() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_find_text_with_regex() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let coll = ctx.db().collection("test")?;
             insert_test_documents(&coll)?;
@@ -449,14 +449,14 @@ fn test_find_text_with_regex() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_project() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let coll = ctx.db().collection("test")?;
             insert_test_documents(&coll)?;
@@ -490,14 +490,14 @@ fn test_project() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_find_with_array_equal() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let coll = ctx.db().collection("test")?;
             insert_test_documents(&coll)?;
@@ -508,14 +508,14 @@ fn test_find_with_array_equal() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_find_with_array_equal_fail_for_wrong_cardinality() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let coll = ctx.db().collection("test")?;
             insert_test_documents(&coll)?;
@@ -526,14 +526,14 @@ fn test_find_with_array_equal_fail_for_wrong_cardinality() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_find_with_iterable_equal() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let coll = ctx.db().collection("test")?;
             insert_test_documents(&coll)?;
@@ -549,14 +549,14 @@ fn test_find_with_iterable_equal() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_find_with_iterable_equal_fail_for_wrong_cardinality() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let coll = ctx.db().collection("test")?;
             insert_test_documents(&coll)?;
@@ -572,14 +572,14 @@ fn test_find_with_iterable_equal_fail_for_wrong_cardinality() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_find_in_array() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let coll = ctx.db().collection("test")?;
             insert_test_documents(&coll)?;
@@ -595,14 +595,14 @@ fn test_find_in_array() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_find_in_list() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let coll = ctx.db().collection("test")?;
             insert_test_documents(&coll)?;
@@ -618,14 +618,14 @@ fn test_find_in_list() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_elem_match_filter() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let coll = ctx.db().collection("prod_score")?;
             
@@ -771,14 +771,14 @@ fn test_elem_match_filter() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_not_equal_filter() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let coll = ctx.db().collection("test")?;
             
@@ -825,14 +825,14 @@ fn test_not_equal_filter() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_filter_all() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let coll = ctx.db().collection("test")?;
             
@@ -846,14 +846,14 @@ fn test_filter_all() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_sort_with_null_values() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let coll = ctx.db().collection("test")?;
             coll.create_index(vec!["id"], &unique_index())?;
@@ -895,14 +895,14 @@ fn test_sort_with_null_values() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_order_by_non_existent_field() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let coll = ctx.db().collection("order_by_on_nullable_column2")?;
 
@@ -926,14 +926,14 @@ fn test_order_by_non_existent_field() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_null_order_with_all_null() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let coll = ctx.db().collection("test")?;
 
@@ -957,14 +957,14 @@ fn test_null_order_with_all_null() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_default_null_order() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let coll = ctx.db().collection("test")?;
             
@@ -1019,14 +1019,14 @@ fn test_default_null_order() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_find_filter_invalid_accessor() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let coll = ctx.db().collection("test")?;
             insert_test_documents(&coll)?;
@@ -1036,14 +1036,14 @@ fn test_find_filter_invalid_accessor() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_collation_with_diacritics() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let coll = ctx.db().collection("test")?;
             
@@ -1078,14 +1078,14 @@ fn test_collation_with_diacritics() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_id_set() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let coll = ctx.db().collection("test")?;
             insert_test_documents(&coll)?;
@@ -1097,19 +1097,19 @@ fn test_id_set() {
             let docs = cursor.map(|x| x.unwrap()).collect::<Vec<_>>();
             assert_eq!(docs.len(), 1);
 
-            let doc = docs.iter().next().unwrap();
+            let doc = docs.first().unwrap();
             assert_eq!(doc.get("last_name")?, Value::String("ln1".to_string()));
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_collection_field() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let example = ctx.db().collection("example")?;
 
@@ -1162,14 +1162,14 @@ fn test_collection_field() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_between_filter() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let collection = ctx.db().collection("tag")?;
             
@@ -1209,14 +1209,14 @@ fn test_between_filter() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_by_id_filter() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let collection = ctx.db().collection("tag")?;
             
@@ -1238,13 +1238,13 @@ fn test_by_id_filter() {
             let nitrite_id = document.id()?;
 
             // Find by ID
-            let result = collection.find(by_id(nitrite_id.clone()))?.first();
+            let result = collection.find(by_id(nitrite_id))?.first();
             assert!(result.is_some());
             assert_eq!(result.unwrap()?.id()?, nitrite_id.clone());
 
             // Find with AND condition
             let result = collection.find(and(vec![
-                by_id(nitrite_id.clone()),
+                by_id(nitrite_id),
                 field("age").ne(Value::Null)
             ]))?.first();
             assert!(result.is_some());
@@ -1259,14 +1259,14 @@ fn test_by_id_filter() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_by_non_existing_id() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let collection = ctx.db().collection("tag")?;
 
@@ -1286,41 +1286,41 @@ fn test_by_non_existing_id() {
             let nitrite_id = NitriteId::new();
 
             // Find by non-existing ID
-            let result = collection.find(by_id(nitrite_id.clone()));
+            let result = collection.find(by_id(nitrite_id));
             assert!(result.is_ok());
             let result = result?.first();
             assert!(result.is_none());
 
             // Find with AND condition
             let result = collection.find(and(vec![
-                by_id(nitrite_id.clone()),
+                by_id(nitrite_id),
                 field("age").ne(Value::Null)
             ]))?.first();
             assert!(result.is_none());
 
             // Find with OR condition
             let result = collection.find(or(vec![
-                by_id(nitrite_id.clone()),
+                by_id(nitrite_id),
                 field("tag").eq("one")
             ]))?.first();
             assert!(result.is_some());
             assert_eq!(result.unwrap()?.get("tag")?, Value::String("one".to_string()));
 
             // Find by _id field directly
-            let cursor = collection.find(field("_id").eq(Value::NitriteId(nitrite_id.clone())))?.first();
+            let cursor = collection.find(field("_id").eq(Value::NitriteId(nitrite_id)))?.first();
             let mut iter = cursor.into_iter();
             assert!(iter.next().is_none());
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_find_with_project_custom_document() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let coll = ctx.db().collection("test")?;
             insert_test_documents(&coll)?;
@@ -1380,14 +1380,14 @@ fn test_find_with_project_custom_document() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_project_with_inaccessible_fields() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let coll = ctx.db().collection("test")?;
             insert_test_documents(&coll)?;
@@ -1417,14 +1417,14 @@ fn test_project_with_inaccessible_fields() {
             
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_nested_projection() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let nested_coll = ctx.db().collection("nested_test")?;
             
@@ -1490,14 +1490,14 @@ fn test_nested_projection() {
             
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_find_with_invalid_filter() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let coll = ctx.db().collection("test")?;
             insert_test_documents(&coll)?;
@@ -1516,14 +1516,14 @@ fn test_find_with_invalid_filter() {
             
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_find_with_regex_special_characters() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let regex_coll = ctx.db().collection("regex_test")?;
             
@@ -1564,14 +1564,14 @@ fn test_find_with_regex_special_characters() {
             
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_find_with_empty_collection() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let empty_coll = ctx.db().collection("empty")?;
             
@@ -1596,14 +1596,14 @@ fn test_find_with_empty_collection() {
             
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_filter_non_existent_long_path() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let coll = ctx.db().collection("test")?;
             insert_test_documents(&coll)?;
@@ -1622,14 +1622,14 @@ fn test_filter_non_existent_long_path() {
             
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_find_with_binary_data() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let binary_coll = ctx.db().collection("binary")?;
             
@@ -1665,14 +1665,14 @@ fn test_find_with_binary_data() {
             
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_find_with_boolean_values() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let bool_coll = ctx.db().collection("boolean")?;
             
@@ -1717,14 +1717,14 @@ fn test_find_with_boolean_values() {
             
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_find_with_numeric_comparisons() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let num_coll = ctx.db().collection("numeric")?;
             
@@ -1766,7 +1766,7 @@ fn test_find_with_numeric_comparisons() {
             
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
@@ -1774,7 +1774,7 @@ fn test_find_with_numeric_comparisons() {
 #[test]
 fn test_find_plan_add_sub_plan_single() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let collection = ctx.db().collection("test_find_plan_add_sub_plan_single")?;
 
@@ -1796,14 +1796,14 @@ fn test_find_plan_add_sub_plan_single() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     );
 }
 
 #[test]
 fn test_find_plan_add_multiple_sub_plans() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let collection = ctx.db().collection("test_find_plan_add_multiple_sub_plans")?;
 
@@ -1833,14 +1833,14 @@ fn test_find_plan_add_multiple_sub_plans() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     );
 }
 
 #[test]
 fn test_find_plan_add_sub_plan_large_dataset() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let collection = ctx.db().collection("test_find_plan_add_sub_plan_large_dataset")?;
 
@@ -1870,14 +1870,14 @@ fn test_find_plan_add_sub_plan_large_dataset() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     );
 }
 
 #[test]
 fn test_find_plan_concurrent_safety() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let collection = ctx.db().collection("test_find_plan_concurrent_safety")?;
 
@@ -1909,14 +1909,14 @@ fn test_find_plan_concurrent_safety() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     );
 }
 
 #[test]
 fn test_find_plan_with_nested_filters() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let collection = ctx.db().collection("test_find_plan_with_nested_filters")?;
 
@@ -1948,7 +1948,7 @@ fn test_find_plan_with_nested_filters() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     );
 }
 
@@ -1959,7 +1959,7 @@ fn test_find_plan_with_nested_filters() {
 #[test]
 fn test_iter_with_id_basic() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let collection = ctx.db().collection("test_iter_with_id_basic")?;
             insert_test_documents(&collection)?;
@@ -1976,20 +1976,20 @@ fn test_iter_with_id_basic() {
             }
             
             // All IDs should be unique
-            let ids: Vec<_> = items.iter().map(|(id, _)| id.clone()).collect();
+            let ids: Vec<_> = items.iter().map(|(id, _)| *id).collect();
             let unique_ids: std::collections::HashSet<_> = ids.iter().collect();
             assert_eq!(ids.len(), unique_ids.len());
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     );
 }
 
 #[test]
 fn test_iter_with_id_update_workflow() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let collection = ctx.db().collection("test_iter_with_id_update")?;
             
@@ -2019,14 +2019,14 @@ fn test_iter_with_id_update_workflow() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     );
 }
 
 #[test]
 fn test_iter_with_id_with_filter() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let collection = ctx.db().collection("test_iter_with_id_filter")?;
             
@@ -2049,14 +2049,14 @@ fn test_iter_with_id_with_filter() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     );
 }
 
 #[test]
 fn test_iter_with_id_empty_result() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let collection = ctx.db().collection("test_iter_with_id_empty")?;
             insert_test_documents(&collection)?;
@@ -2069,14 +2069,14 @@ fn test_iter_with_id_empty_result() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     );
 }
 
 #[test]
 fn test_iter_with_id_with_index() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let collection = ctx.db().collection("test_iter_with_id_index")?;
             
@@ -2099,14 +2099,14 @@ fn test_iter_with_id_with_index() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     );
 }
 
 #[test]
 fn test_iter_with_id_large_dataset() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let collection = ctx.db().collection("test_iter_with_id_large")?;
             
@@ -2126,19 +2126,19 @@ fn test_iter_with_id_large_dataset() {
             assert_eq!(items.len(), 500);
             
             // All IDs should be unique
-            let ids: std::collections::HashSet<_> = items.iter().map(|(id, _)| id.clone()).collect();
+            let ids: std::collections::HashSet<_> = items.iter().map(|(id, _)| *id).collect();
             assert_eq!(ids.len(), 500);
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     );
 }
 
 #[test]
 fn test_iter_with_id_verify_same_id_as_get_by_id() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let collection = ctx.db().collection("test_iter_with_id_verify")?;
             
@@ -2159,7 +2159,7 @@ fn test_iter_with_id_verify_same_id_as_get_by_id() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     );
 }
 

@@ -334,7 +334,7 @@ mod tests {
         let filter = field("field").eq(42);
         let mut doc = Document::new();
         doc.put("field", Value::I32(42)).unwrap();
-        assert_eq!(filter.apply(&doc).unwrap(), true);
+        assert!(filter.apply(&doc).unwrap());
     }
 
     #[test]
@@ -342,7 +342,7 @@ mod tests {
         let filter = field("field").ne(42);
         let mut doc = Document::new();
         doc.put("field", Value::I32(43)).unwrap();
-        assert_eq!(filter.apply(&doc).unwrap(), true);
+        assert!(filter.apply(&doc).unwrap());
     }
 
     #[test]
@@ -350,7 +350,7 @@ mod tests {
         let filter = field("field").gt(42);
         let mut doc = Document::new();
         doc.put("field", Value::I32(43)).unwrap();
-        assert_eq!(filter.apply(&doc).unwrap(), true);
+        assert!(filter.apply(&doc).unwrap());
     }
 
     #[test]
@@ -358,7 +358,7 @@ mod tests {
         let filter = field("field").gte(42);
         let mut doc = Document::new();
         doc.put("field", Value::I32(42)).unwrap();
-        assert_eq!(filter.apply(&doc).unwrap(), true);
+        assert!(filter.apply(&doc).unwrap());
     }
 
     #[test]
@@ -366,7 +366,7 @@ mod tests {
         let filter = field("field").lt(42);
         let mut doc = Document::new();
         doc.put("field", Value::I32(41)).unwrap();
-        assert_eq!(filter.apply(&doc).unwrap(), true);
+        assert!(filter.apply(&doc).unwrap());
     }
 
     #[test]
@@ -374,7 +374,7 @@ mod tests {
         let filter = field("field").lte(42);
         let mut doc = Document::new();
         doc.put("field", Value::I32(42)).unwrap();
-        assert_eq!(filter.apply(&doc).unwrap(), true);
+        assert!(filter.apply(&doc).unwrap());
     }
 
     #[test]
@@ -382,7 +382,7 @@ mod tests {
         let filter = field("field").between_optional_inclusive(10, 20);
         let mut doc = Document::new();
         doc.put("field", Value::I32(15)).unwrap();
-        assert_eq!(filter.apply(&doc).unwrap(), true);
+        assert!(filter.apply(&doc).unwrap());
     }
 
     #[test]
@@ -390,7 +390,7 @@ mod tests {
         let filter = field("field").between_inclusive(10, 20, true);
         let mut doc = Document::new();
         doc.put("field", Value::I32(10)).unwrap();
-        assert_eq!(filter.apply(&doc).unwrap(), true);
+        assert!(filter.apply(&doc).unwrap());
     }
 
     #[test]
@@ -398,7 +398,7 @@ mod tests {
         let filter = field("field").between(10, 20, true, false);
         let mut doc = Document::new();
         doc.put("field", Value::I32(20)).unwrap();
-        assert_eq!(filter.apply(&doc).unwrap(), false);
+        assert!(!filter.apply(&doc).unwrap());
     }
 
     #[test]
@@ -407,7 +407,7 @@ mod tests {
         let mut doc = Document::new();
         doc.put("field", Value::String("this is a test".to_string()))
             .unwrap();
-        assert_eq!(filter.apply(&doc).unwrap(), true);
+        assert!(filter.apply(&doc).unwrap());
     }
 
     #[test]
@@ -416,7 +416,7 @@ mod tests {
         let mut doc = Document::new();
         doc.put("field", Value::String("This Is A Test".to_string()))
             .unwrap();
-        assert_eq!(filter.apply(&doc).unwrap(), true);
+        assert!(filter.apply(&doc).unwrap());
     }
 
     #[test]
@@ -425,7 +425,7 @@ mod tests {
         let mut doc = Document::new();
         doc.put("field", Value::String("test123".to_string()))
             .unwrap();
-        assert_eq!(filter.apply(&doc).unwrap(), true);
+        assert!(filter.apply(&doc).unwrap());
     }
 
     #[test]
@@ -433,7 +433,7 @@ mod tests {
         let filter = field("field").in_array(vec![1, 2, 3]);
         let mut doc = Document::new();
         doc.put("field", Value::I32(2)).unwrap();
-        assert_eq!(filter.apply(&doc).unwrap(), true);
+        assert!(filter.apply(&doc).unwrap());
     }
 
     #[test]
@@ -441,7 +441,7 @@ mod tests {
         let filter = field("field").not_in_array(vec![1, 2, 3]);
         let mut doc = Document::new();
         doc.put("field", Value::I32(4)).unwrap();
-        assert_eq!(filter.apply(&doc).unwrap(), true);
+        assert!(filter.apply(&doc).unwrap());
     }
 
     #[test]
@@ -453,7 +453,7 @@ mod tests {
         inner_doc.put("inner_field", Value::I32(42)).unwrap();
         doc.put("field", Value::Array(vec![Value::Document(inner_doc)]))
             .unwrap();
-        assert_eq!(filter.apply(&doc).unwrap(), true);
+        assert!(filter.apply(&doc).unwrap());
     }
 
     // Performance optimization tests
@@ -466,7 +466,7 @@ mod tests {
         
         // Multiple applications to test inlining effectiveness
         for _ in 0..500 {
-            assert_eq!(filter.apply(&doc).unwrap(), true);
+            assert!(filter.apply(&doc).unwrap());
         }
     }
 
@@ -478,7 +478,7 @@ mod tests {
         doc.put("field", Value::I32(43)).unwrap();
         
         for _ in 0..500 {
-            assert_eq!(filter.apply(&doc).unwrap(), true);
+            assert!(filter.apply(&doc).unwrap());
         }
     }
 
@@ -501,10 +501,10 @@ mod tests {
         
         // Test with values in tight loops
         for _ in 0..200 {
-            assert_eq!(gt_filter.apply(&doc_15).unwrap(), true);
-            assert_eq!(gte_filter.apply(&doc_10).unwrap(), true);
-            assert_eq!(lt_filter.apply(&doc_5).unwrap(), true);
-            assert_eq!(lte_filter.apply(&doc_10).unwrap(), true);
+            assert!(gt_filter.apply(&doc_15).unwrap());
+            assert!(gte_filter.apply(&doc_10).unwrap());
+            assert!(lt_filter.apply(&doc_5).unwrap());
+            assert!(lte_filter.apply(&doc_10).unwrap());
         }
     }
 
@@ -518,8 +518,8 @@ mod tests {
         doc.put("field", Value::String("this is a test".to_string())).unwrap();
         
         for _ in 0..100 {
-            assert_eq!(text_filter.apply(&doc).unwrap(), true);
-            assert_eq!(regex_filter.apply(&doc).unwrap(), true);
+            assert!(text_filter.apply(&doc).unwrap());
+            assert!(regex_filter.apply(&doc).unwrap());
         }
     }
 
@@ -535,7 +535,7 @@ mod tests {
         doc.put("arr", Value::Array(vec![Value::Document(inner)])).unwrap();
         
         for _ in 0..100 {
-            assert_eq!(filter.apply(&doc).unwrap(), true);
+            assert!(filter.apply(&doc).unwrap());
         }
     }
 }

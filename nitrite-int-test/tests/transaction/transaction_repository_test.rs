@@ -16,7 +16,7 @@ use crate::transaction::{SubEmployee, TxData};
 #[test]
 fn test_commit_insert_repository() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let db = ctx.db();
             let repository: ObjectRepository<TxData> = db.repository()?;
@@ -38,14 +38,14 @@ fn test_commit_insert_repository() {
             assert_eq!(repository.find(field("name").eq("John"))?.count(), 1);
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_rollback_insert_repository() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let db = ctx.db();
             let repository: ObjectRepository<TxData> = db.repository()?;
@@ -79,14 +79,14 @@ fn test_rollback_insert_repository() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_commit_update_repository() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let db = ctx.db();
             let repository: ObjectRepository<TxData> = db.repository()?;
@@ -109,14 +109,14 @@ fn test_commit_update_repository() {
             assert_eq!(repository.find(field("name").eq("Jane"))?.count(), 1);
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_rollback_update_repository() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let db = ctx.db();
             let repository: ObjectRepository<TxData> = db.keyed_repository("rollback")?;
@@ -169,14 +169,14 @@ fn test_rollback_update_repository() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_commit_remove_repository() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let db = ctx.db();
             let repository: ObjectRepository<TxData> = db.repository()?;
@@ -198,14 +198,14 @@ fn test_commit_remove_repository() {
             assert_eq!(repository.find(field("name").eq("John"))?.count(), 0);
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_rollback_remove_repository() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let db = ctx.db();
             let repository: ObjectRepository<TxData> = db.repository()?;
@@ -235,7 +235,7 @@ fn test_rollback_remove_repository() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
@@ -244,7 +244,7 @@ fn test_rollback_remove_repository() {
 #[test]
 fn test_commit_create_index_repository() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let db = ctx.db();
             let repository: ObjectRepository<TxData> = db.repository()?;
@@ -264,14 +264,14 @@ fn test_commit_create_index_repository() {
             })?;
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_commit_drop_index_repository() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let db = ctx.db();
             let repository: ObjectRepository<TxData> = db.repository()?;
@@ -295,14 +295,14 @@ fn test_commit_drop_index_repository() {
             assert!(!repository.has_index(vec!["name"])?);
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_commit_drop_all_indices_repository() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let db = ctx.db();
             let repository: ObjectRepository<TxData> = db.repository()?;
@@ -325,7 +325,7 @@ fn test_commit_drop_all_indices_repository() {
             assert!(!repository.has_index(vec!["name"])?);
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
@@ -334,7 +334,7 @@ fn test_commit_drop_all_indices_repository() {
 #[test]
 fn test_commit_clear_repository() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let db = ctx.db();
             let repository: ObjectRepository<TxData> = db.repository()?;
@@ -357,7 +357,7 @@ fn test_commit_clear_repository() {
             assert_eq!(repository.size()?, 0);
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
@@ -366,7 +366,7 @@ fn test_commit_clear_repository() {
 #[test]
 fn test_commit_drop_repository() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let db = ctx.db();
             let repository: ObjectRepository<TxData> = db.repository()?;
@@ -387,7 +387,7 @@ fn test_commit_drop_repository() {
             })?;
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
@@ -396,7 +396,7 @@ fn test_commit_drop_repository() {
 #[test]
 fn test_commit_set_attribute_repository() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let db = ctx.db();
             let repository: ObjectRepository<TxData> = db.repository()?;
@@ -419,14 +419,14 @@ fn test_commit_set_attribute_repository() {
             assert_eq!(attrs.get("key").unwrap(), &Value::from("value"));
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_rollback_set_attribute_repository() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let db = ctx.db();
             let repository: ObjectRepository<TxData> = db.repository()?;
@@ -463,7 +463,7 @@ fn test_rollback_set_attribute_repository() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
@@ -472,7 +472,7 @@ fn test_rollback_set_attribute_repository() {
 #[test]
 fn test_concurrent_insert_and_remove_repository() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let db = ctx.db();
             let repository: ObjectRepository<TxData> = db.repository()?;
@@ -525,14 +525,14 @@ fn test_concurrent_insert_and_remove_repository() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_concurrent_insert_repository() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let db = ctx.db();
             let _repository: ObjectRepository<TxData> = db.repository()?;
@@ -581,14 +581,14 @@ fn test_concurrent_insert_repository() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_concurrent_update_repository() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let db = ctx.db();
             let repository: ObjectRepository<TxData> = db.repository()?;
@@ -613,7 +613,7 @@ fn test_concurrent_update_repository() {
                         for j in 0..10 {
                             let name: String = FirstName().fake();
                             tx_repo.update_with_options(
-                                field("id").eq(j as i64),
+                                field("id").eq(j),
                                 TxData::new(j, &name),
                                 &nitrite::collection::UpdateOptions::default(),
                             ).ok();
@@ -644,7 +644,7 @@ fn test_concurrent_update_repository() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
@@ -653,7 +653,7 @@ fn test_concurrent_update_repository() {
 #[test]
 fn test_transaction_on_different_repositories_and_collections() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let db = ctx.db();
             let repo1: ObjectRepository<TxData> = db.repository()?;
@@ -672,7 +672,7 @@ fn test_transaction_on_different_repositories_and_collections() {
 
                 for i in 0..10 {
                     let name: String = FirstName().fake();
-                    let document = nitrite::doc!{"firstName": (name.clone()), "id": (i as i64)};
+                    let document = nitrite::doc!{"firstName": (name.clone()), "id": i};
                     test1.insert(document)?;
 
                     tx_repo1.insert(TxData::new(i, &name))?;
@@ -710,7 +710,7 @@ fn test_transaction_on_different_repositories_and_collections() {
 
                 for i in 0..10 {
                     let name: String = FirstName().fake();
-                    let document = nitrite::doc!{"firstName": (name.clone()), "id": ((i + 10) as i64)};
+                    let document = nitrite::doc!{"firstName": (name.clone()), "id": ((i + 10))};
                     test1_2.insert(document)?;
 
                     tx_repo1_2.insert(TxData::new(i + 10, &name))?;
@@ -744,7 +744,7 @@ fn test_transaction_on_different_repositories_and_collections() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
@@ -753,7 +753,7 @@ fn test_transaction_on_different_repositories_and_collections() {
 #[test]
 fn test_failure_on_closed_transaction_repository() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let db = ctx.db();
             let tx_repo_clone: std::sync::Arc<std::sync::Mutex<Option<ObjectRepository<TxData>>>> = std::sync::Arc::new(std::sync::Mutex::new(None));
@@ -775,14 +775,14 @@ fn test_failure_on_closed_transaction_repository() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_keyed_repository_in_transaction() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let db = ctx.db();
 
@@ -810,14 +810,14 @@ fn test_keyed_repository_in_transaction() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_repository_find_with_filter_in_transaction() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let db = ctx.db();
             db.with_session(|session| {
@@ -837,14 +837,14 @@ fn test_repository_find_with_filter_in_transaction() {
             })?;
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_repository_get_by_id_in_transaction() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let db = ctx.db();
             db.with_session(|session| {
@@ -862,14 +862,14 @@ fn test_repository_get_by_id_in_transaction() {
             })?;
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_repository_size_in_transaction() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let db = ctx.db();
             db.with_session(|session| {
@@ -892,14 +892,14 @@ fn test_repository_size_in_transaction() {
             })?;
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_repository_insert_many_in_transaction() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let db = ctx.db();
             db.with_session(|session| {
@@ -926,14 +926,14 @@ fn test_repository_insert_many_in_transaction() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_repository_update_with_filter_in_transaction() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let db = ctx.db();
             db.with_session(|session| {
@@ -958,14 +958,14 @@ fn test_repository_update_with_filter_in_transaction() {
             })?;
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_repository_isolation_in_transaction() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let db = ctx.db();
             let repository: ObjectRepository<TxData> = db.repository()?;
@@ -993,14 +993,14 @@ fn test_repository_isolation_in_transaction() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_repository_list_indexes_in_transaction() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let db = ctx.db();
             db.with_session(|session| {
@@ -1018,14 +1018,14 @@ fn test_repository_list_indexes_in_transaction() {
             })?;
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_empty_repository_transaction_commit() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let db = ctx.db();
             db.with_session(|session| {
@@ -1040,14 +1040,14 @@ fn test_empty_repository_transaction_commit() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_empty_repository_transaction_rollback() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let db = ctx.db();
             db.with_session(|session| {
@@ -1062,14 +1062,14 @@ fn test_empty_repository_transaction_rollback() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_repository_with_complex_entity() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let db = ctx.db();
             db.with_session(|session| {
@@ -1095,14 +1095,14 @@ fn test_repository_with_complex_entity() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_multiple_repository_types_in_transaction() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let db = ctx.db();
             db.with_session(|session| {
@@ -1133,6 +1133,6 @@ fn test_multiple_repository_types_in_transaction() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }

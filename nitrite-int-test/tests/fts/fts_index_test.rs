@@ -13,7 +13,7 @@ use nitrite_tantivy_fts::{fts_field, fts_index};
 #[test]
 fn test_create_fts_index() {
     run_test(
-        || create_fts_test_context(),
+        create_fts_test_context,
         |ctx| {
             let collection = ctx.db().collection("articles")?;
 
@@ -25,14 +25,14 @@ fn test_create_fts_index() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_drop_fts_index() {
     run_test(
-        || create_fts_test_context(),
+        create_fts_test_context,
         |ctx| {
             let collection = ctx.db().collection("test_drop")?;
             collection.create_index(vec!["content"], &fts_index())?;
@@ -52,7 +52,7 @@ fn test_drop_fts_index() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
@@ -61,7 +61,7 @@ fn test_drop_fts_index() {
 #[test]
 fn test_insert_and_search_single_term() {
     run_test(
-        || create_fts_test_context(),
+        create_fts_test_context,
         |ctx| {
             let collection = ctx.db().collection("articles")?;
             collection.create_index(vec!["content"], &fts_index())?;
@@ -81,14 +81,14 @@ fn test_insert_and_search_single_term() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_insert_and_search_multiple_terms() {
     run_test(
-        || create_fts_test_context(),
+        create_fts_test_context,
         |ctx| {
             let collection = ctx.db().collection("articles")?;
             collection.create_index(vec!["content"], &fts_index())?;
@@ -126,14 +126,14 @@ fn test_insert_and_search_multiple_terms() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_search_no_results() {
     run_test(
-        || create_fts_test_context(),
+        create_fts_test_context,
         |ctx| {
             let collection = ctx.db().collection("articles")?;
             collection.create_index(vec!["content"], &fts_index())?;
@@ -152,7 +152,7 @@ fn test_search_no_results() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
@@ -161,7 +161,7 @@ fn test_search_no_results() {
 #[test]
 fn test_phrase_search() {
     run_test(
-        || create_fts_test_context(),
+        create_fts_test_context,
         |ctx| {
             let collection = ctx.db().collection("articles")?;
             collection.create_index(vec!["content"], &fts_index())?;
@@ -194,14 +194,14 @@ fn test_phrase_search() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_phrase_search_case_insensitive() {
     run_test(
-        || create_fts_test_context(),
+        create_fts_test_context,
         |ctx| {
             let collection = ctx.db().collection("articles")?;
             collection.create_index(vec!["content"], &fts_index())?;
@@ -219,7 +219,7 @@ fn test_phrase_search_case_insensitive() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
@@ -228,7 +228,7 @@ fn test_phrase_search_case_insensitive() {
 #[test]
 fn test_update_document_updates_index() {
     run_test(
-        || create_fts_test_context(),
+        create_fts_test_context,
         |ctx| {
             let collection = ctx.db().collection("articles")?;
             collection.create_index(vec!["content"], &fts_index())?;
@@ -263,14 +263,14 @@ fn test_update_document_updates_index() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_delete_document_removes_from_index() {
     run_test(
-        || create_fts_test_context(),
+        create_fts_test_context,
         |ctx| {
             let collection = ctx.db().collection("articles")?;
             collection.create_index(vec!["content"], &fts_index())?;
@@ -306,7 +306,7 @@ fn test_delete_document_removes_from_index() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
@@ -315,7 +315,7 @@ fn test_delete_document_removes_from_index() {
 #[test]
 fn test_fts_on_different_fields() {
     run_test(
-        || create_fts_test_context(),
+        create_fts_test_context,
         |ctx| {
             // Create two separate collections with FTS on different field names
             let articles = ctx.db().collection("articles")?;
@@ -351,7 +351,7 @@ fn test_fts_on_different_fields() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
@@ -360,7 +360,7 @@ fn test_fts_on_different_fields() {
 #[test]
 fn test_fts_with_many_documents() {
     run_test(
-        || create_fts_test_context(),
+        create_fts_test_context,
         |ctx| {
             let collection = ctx.db().collection("articles")?;
             collection.create_index(vec!["content"], &fts_index())?;
@@ -397,7 +397,7 @@ fn test_fts_with_many_documents() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
@@ -406,7 +406,7 @@ fn test_fts_with_many_documents() {
 #[test]
 fn test_fts_with_unicode() {
     run_test(
-        || create_fts_test_context(),
+        create_fts_test_context,
         |ctx| {
             let collection = ctx.db().collection("articles")?;
             collection.create_index(vec!["content"], &fts_index())?;
@@ -423,14 +423,14 @@ fn test_fts_with_unicode() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_fts_with_special_characters() {
     run_test(
-        || create_fts_test_context(),
+        create_fts_test_context,
         |ctx| {
             let collection = ctx.db().collection("articles")?;
             collection.create_index(vec!["content"], &fts_index())?;
@@ -452,7 +452,7 @@ fn test_fts_with_special_characters() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
@@ -461,7 +461,7 @@ fn test_fts_with_special_characters() {
 #[test]
 fn test_fts_empty_content() {
     run_test(
-        || create_fts_test_context(),
+        create_fts_test_context,
         |ctx| {
             let collection = ctx.db().collection("articles")?;
             collection.create_index(vec!["content"], &fts_index())?;
@@ -479,14 +479,14 @@ fn test_fts_empty_content() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_fts_null_field() {
     run_test(
-        || create_fts_test_context(),
+        create_fts_test_context,
         |ctx| {
             let collection = ctx.db().collection("articles")?;
             collection.create_index(vec!["content"], &fts_index())?;
@@ -504,14 +504,14 @@ fn test_fts_null_field() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_fts_empty_collection() {
     run_test(
-        || create_fts_test_context(),
+        create_fts_test_context,
         |ctx| {
             let collection = ctx.db().collection("empty_collection")?;
             collection.create_index(vec!["content"], &fts_index())?;
@@ -524,7 +524,7 @@ fn test_fts_empty_collection() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
@@ -533,7 +533,7 @@ fn test_fts_empty_collection() {
 #[test]
 fn test_create_index_after_data_insertion() {
     run_test(
-        || create_fts_test_context(),
+        create_fts_test_context,
         |ctx| {
             let collection = ctx.db().collection("rebuild_test")?;
 
@@ -559,7 +559,7 @@ fn test_create_index_after_data_insertion() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
@@ -568,7 +568,7 @@ fn test_create_index_after_data_insertion() {
 #[test]
 fn test_fluent_api_contains() {
     run_test(
-        || create_fts_test_context(),
+        create_fts_test_context,
         |ctx| {
             let collection = ctx.db().collection("articles")?;
             collection.create_index(vec!["content"], &fts_index())?;
@@ -586,14 +586,14 @@ fn test_fluent_api_contains() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_fluent_api_text() {
     run_test(
-        || create_fts_test_context(),
+        create_fts_test_context,
         |ctx| {
             let collection = ctx.db().collection("articles")?;
             collection.create_index(vec!["content"], &fts_index())?;
@@ -611,6 +611,6 @@ fn test_fluent_api_text() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }

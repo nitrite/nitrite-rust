@@ -31,6 +31,12 @@ pub struct FjallConfig {
     inner: Arc<FjallConfigInner>,
 }
 
+impl Default for FjallConfig {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl FjallConfig {
     /// Creates a new Fjall configuration with default values.
     ///
@@ -591,7 +597,7 @@ impl FjallConfigInner {
 
     #[inline]
     pub fn compression_type(&self) -> CompressionType {
-        self.compression_type.read_with(|it| it.clone())
+        self.compression_type.read_with(|it| *it)
     }
 
     #[inline]
@@ -644,7 +650,7 @@ impl FjallConfigInner {
 
     #[inline]
     pub fn space_amp_factor(&self) -> f32 {
-        self.space_amp_factor.read_with(|it| it.clone())
+        self.space_amp_factor.read_with(|it| *it)
     }
 
     #[inline]
@@ -655,7 +661,7 @@ impl FjallConfigInner {
 
     #[inline]
     pub fn staleness_threshold(&self) -> f32 {
-        self.staleness_threshold.read_with(|it| it.clone())
+        self.staleness_threshold.read_with(|it| *it)
     }
 
     #[inline]
@@ -689,7 +695,7 @@ mod tests {
             .unwrap_or(4);
 
         assert_eq!(config.db_path(), "");
-        assert_eq!(config.manual_journal_persist(), false);
+        assert!(!config.manual_journal_persist());
         // New defaults: use all CPUs for flush, half for compaction
         assert_eq!(config.flush_workers(), cpus.max(1));
         assert_eq!(config.compaction_workers(), (cpus / 2).max(1));
@@ -700,14 +706,14 @@ mod tests {
         // New default: 128 MB write buffer
         assert_eq!(config.max_write_buffer_size(), 128 * 1_024 * 1_024);
         assert_eq!(config.fsync_frequency(), 0);
-        assert_eq!(config.commit_before_close(), true);
+        assert!(config.commit_before_close());
         // New default: bloom filter enabled with 10 bits
         assert_eq!(config.bloom_filter_bits(), 10);
         assert_eq!(config.compression_type(), CompressionType::Lz4);
         // New default: 32 MB memtable
         assert_eq!(config.max_memtable_size(), 32 * 1_024 * 1_024);
         assert_eq!(config.block_size(), 4 * 1_024);
-        assert_eq!(config.kv_separated(), false);
+        assert!(!config.kv_separated());
         assert_eq!(config.space_amp_factor(), 1.5);
         assert_eq!(config.staleness_threshold(), 0.8);
     }
@@ -719,7 +725,7 @@ mod tests {
         assert_eq!(config.db_path(), "test_path");
 
         config.set_manual_journal_persist(true);
-        assert_eq!(config.manual_journal_persist(), true);
+        assert!(config.manual_journal_persist());
 
         config.set_flush_workers(8);
         assert_eq!(config.flush_workers(), 8);
@@ -747,7 +753,7 @@ mod tests {
         assert_eq!(config.event_listeners().len(), 1);
 
         config.set_commit_before_close(false);
-        assert_eq!(config.commit_before_close(), false);
+        assert!(!config.commit_before_close());
 
         config.set_bloom_filter_bits(10);
         assert_eq!(config.bloom_filter_bits(), 10);
@@ -762,7 +768,7 @@ mod tests {
         assert_eq!(config.block_size(), 8 * 1_024);
 
         config.set_kv_separated(false);
-        assert_eq!(config.kv_separated(), false);
+        assert!(!config.kv_separated());
 
         config.set_space_amp_factor(2.0);
         assert_eq!(config.space_amp_factor(), 2.0);

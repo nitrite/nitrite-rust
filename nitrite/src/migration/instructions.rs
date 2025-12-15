@@ -1639,7 +1639,7 @@ mod tests {
     fn test_repository_builder_change_data_type() {
         let set = InstructionSet::new(vec![]);
         let mut builder = set.for_repository("UserRepo", Some("id"));
-        builder.change_data_type("age", |val| Ok(val));
+        builder.change_data_type("age", Ok);
 
         let steps = set.get_steps().unwrap();
         assert_eq!(steps.len(), 1);
@@ -1728,7 +1728,7 @@ mod tests {
             .add_field("createdAt", Some(Value::from("2024-01-01")), None::<fn(Document) -> NitriteResult<Value>>)
             .change_id_field(&["id"], &["userId"])
             .create_index("UNIQUE", &["email"])
-            .change_data_type("age", |val| Ok(val))
+            .change_data_type("age", Ok)
             .drop_index(&["oldIndex"]);
 
         let steps = set.get_steps().unwrap();

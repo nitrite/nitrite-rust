@@ -626,7 +626,7 @@ mod tests {
         let compound_index = CompoundIndex::new(index_descriptor, nitrite_store);
 
         let field_values = create_test_field_values();
-        let mut nitrite_ids = vec![field_values.nitrite_id().clone()];
+        let mut nitrite_ids = vec![*field_values.nitrite_id()];
 
         let result = compound_index.remove_nitrite_ids(&mut nitrite_ids, &field_values);
         assert!(result.is_ok());
@@ -772,7 +772,7 @@ mod tests {
         let compound_index = CompoundIndex::new(index_descriptor, nitrite_store);
 
         let field_values = create_test_field_values();
-        let target_id = field_values.nitrite_id().clone();
+        let target_id = *field_values.nitrite_id();
         
         // Create a vector with the target ID that should be removed
         let mut nitrite_ids = vec![Value::NitriteId(target_id)];

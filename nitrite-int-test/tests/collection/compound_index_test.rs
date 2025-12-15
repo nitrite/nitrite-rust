@@ -11,7 +11,7 @@ use nitrite_int_test::test_util::{
 #[test]
 fn test_create_check_index() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let coll = ctx.db().collection("test")?;
             coll.create_index(vec!["first_name", "last_name"], &unique_index())?;
@@ -34,14 +34,14 @@ fn test_create_check_index() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_create_multi_key_index_first_field() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let coll = ctx.db().collection("test")?;
             coll.create_index(vec!["arr", "last_name"], &non_unique_index())?;
@@ -55,14 +55,14 @@ fn test_create_multi_key_index_first_field() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_list_indexes() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let coll = ctx.db().collection("test")?;
             assert_eq!(coll.list_indexes()?.len(), 0);
@@ -75,14 +75,14 @@ fn test_list_indexes() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_drop_index() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let coll = ctx.db().collection("test")?;
             coll.create_index(vec!["first_name", "last_name"], &unique_index())?;
@@ -95,14 +95,14 @@ fn test_drop_index() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_has_index() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let coll = ctx.db().collection("test")?;
             coll.create_index(vec!["first_name", "last_name"], &unique_index())?;
@@ -117,14 +117,14 @@ fn test_has_index() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_drop_all_indexes() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let coll = ctx.db().collection("test")?;
             coll.create_index(vec!["first_name", "last_name"], &unique_index())?;
@@ -136,14 +136,14 @@ fn test_drop_all_indexes() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_rebuild_index() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let coll = ctx.db().collection("test")?;
             coll.create_index(vec!["first_name", "last_name"], &unique_index())?;
@@ -161,14 +161,14 @@ fn test_rebuild_index() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_delete_with_index() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let coll = ctx.db().collection("test")?;
             coll.create_index(vec!["first_name", "last_name"], &unique_index())?;
@@ -201,14 +201,14 @@ fn test_delete_with_index() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_rebuild_index_on_running_index() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let coll = ctx.db().collection("test")?;
             let result = coll.insert_many(create_test_docs())?;
@@ -222,14 +222,14 @@ fn test_rebuild_index_on_running_index() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_null_values_indexed_fields() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let coll = ctx.db().collection("test")?;
             coll.create_index(vec!["first_name", "last_name"], &unique_index())?;
@@ -273,14 +273,14 @@ fn test_null_values_indexed_fields() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_drop_all_indexes_and_create_index() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let coll = ctx.db().collection("test")?;
             coll.create_index(vec!["first_name", "last_name"], &unique_index())?;
@@ -294,14 +294,14 @@ fn test_drop_all_indexes_and_create_index() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_drop_all_and_create_index() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let coll = ctx.db().collection("test")?;
             coll.create_index(vec!["first_name", "last_name"], &unique_index())?;
@@ -335,14 +335,14 @@ fn test_drop_all_and_create_index() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_find_by_index_on_different_number_type() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let coll = ctx.db().collection("test")?;
             coll.drop_all_indexes()?;
@@ -389,7 +389,7 @@ fn test_find_by_index_on_different_number_type() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
@@ -401,7 +401,7 @@ fn test_index_event() {
     use std::time::Duration;
 
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let coll = ctx.db().collection("index-test")?;
             let mut rng = rand::rng();
@@ -443,14 +443,14 @@ fn test_index_event() {
             coll.unsubscribe(handle.unwrap())?;
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_index_and_search_on_null_values() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let coll = ctx.db().collection("index-on-null")?;
 
@@ -470,7 +470,7 @@ fn test_index_and_search_on_null_values() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
@@ -478,7 +478,7 @@ fn test_index_and_search_on_null_values() {
 #[should_panic]
 fn test_create_invalid_unique_index() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let coll = ctx.db().collection("test")?;
 
@@ -517,7 +517,7 @@ fn test_create_invalid_unique_index() {
             coll.insert_many(vec![doc1, doc2, doc3])?;
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
@@ -525,14 +525,14 @@ fn test_create_invalid_unique_index() {
 #[should_panic]
 fn test_create_unique_multi_key_index_on_array() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let coll = ctx.db().collection("test")?;
             coll.create_index(vec!["arr", "last_name"], &unique_index())?;
             coll.insert_many(create_test_docs())?;
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
@@ -540,7 +540,7 @@ fn test_create_unique_multi_key_index_on_array() {
 #[should_panic]
 fn test_create_on_invalid_field() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let coll = ctx.db().collection("test")?;
             coll.insert_many(create_test_docs())?;
@@ -548,20 +548,20 @@ fn test_create_on_invalid_field() {
             coll.create_index(vec!["my-value", "last_name"], &unique_index())?;
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_drop_index_on_non_indexed_field() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let coll = ctx.db().collection("test")?;
             coll.drop_index(vec!["data", "first_name"])?;
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
@@ -569,13 +569,13 @@ fn test_drop_index_on_non_indexed_field() {
 #[should_panic]
 fn test_rebuild_index_invalid() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let coll = ctx.db().collection("test")?;
             coll.rebuild_index(vec!["unknown", "first_name"])?;
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
@@ -583,14 +583,14 @@ fn test_rebuild_index_invalid() {
 #[should_panic]
 fn create_multiple_index_type_on_same_fields() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let coll = ctx.db().collection("test")?;
             coll.create_index(vec!["last_name", "first_name"], &unique_index())?;
             coll.create_index(vec!["last_name", "first_name"], &non_unique_index())?;
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
@@ -598,7 +598,7 @@ fn create_multiple_index_type_on_same_fields() {
 #[should_panic]
 fn test_index_already_exists() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let coll = ctx.db().collection("test")?;
             coll.create_index(vec!["first_name", "last_name"], &unique_index())?;
@@ -606,7 +606,7 @@ fn test_index_already_exists() {
             coll.create_index(vec!["first_name", "last_name"], &non_unique_index())?;
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
@@ -614,13 +614,13 @@ fn test_index_already_exists() {
 #[should_panic]
 fn test_create_compound_text_index() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let coll = ctx.db().collection("test")?;
             coll.create_index(vec!["body", "last_name"], &full_text_index())?;
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
@@ -628,7 +628,7 @@ fn test_create_compound_text_index() {
 #[should_panic]
 fn test_create_multi_key_index_second_field() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let coll = ctx.db().collection("test")?;
             coll.create_index(vec!["last_name", "data"], &non_unique_index())?;
@@ -636,6 +636,6 @@ fn test_create_multi_key_index_second_field() {
             coll.insert_many(create_test_docs())?;
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }

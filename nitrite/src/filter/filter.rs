@@ -471,7 +471,7 @@ mod tests {
     fn test_filter_apply() {
         let filter = Filter::new(MockFilter);
         let doc = Document::new();
-        assert_eq!(filter.apply(&doc).unwrap(), true);
+        assert!(filter.apply(&doc).unwrap());
     }
 
     #[test]
@@ -586,7 +586,7 @@ mod tests {
     #[test]
     fn test_by_id_filter() {
         let id = NitriteId::new();
-        let filter = by_id(id.clone());
+        let filter = by_id(id);
         let mut doc = Document::new();
         doc.put(DOC_ID, Value::NitriteId(id)).expect("Failed to put value");
         assert!(filter.apply(&doc).unwrap());

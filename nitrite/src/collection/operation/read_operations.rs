@@ -371,7 +371,7 @@ mod tests {
         nitrite_config.initialize().expect("Failed to initialize");
         let store = nitrite_config.nitrite_store().expect("Failed to get store");
         let nitrite_map = store
-            .open_map(&*collection_name.clone())
+            .open_map(&collection_name.clone())
             .expect("Failed to open map");
         let event_bus = NitriteEventBus::new();
         let find_optimizer = FindOptimizer::new();
@@ -428,7 +428,7 @@ mod tests {
         let store = &read_operations.inner.nitrite_map;
         use crate::store::NitriteMapProvider;
         store
-            .put(Value::from(id.clone()), Value::Document(document))
+            .put(Value::from(id), Value::Document(document))
             .unwrap();
 
         let result = read_operations.get_by_id(&id);
@@ -447,7 +447,7 @@ mod tests {
         let store = &read_operations.inner.nitrite_map;
         use crate::store::NitriteMapProvider;
         store
-            .put(Value::from(id.clone()), Value::from("not_a_document"))
+            .put(Value::from(id), Value::from("not_a_document"))
             .unwrap();
 
         let result = read_operations.get_by_id(&id);
@@ -470,19 +470,19 @@ mod tests {
         let mut valid_doc = Document::new();
         valid_doc.put("name", Value::from("test")).unwrap();
         store
-            .put(Value::from(id1.clone()), Value::Document(valid_doc))
+            .put(Value::from(id1), Value::Document(valid_doc))
             .unwrap();
 
         // id2: Non-document value (should fail gracefully)
         store
-            .put(Value::from(id2.clone()), Value::from(42))
+            .put(Value::from(id2), Value::from(42))
             .unwrap();
 
         // id3: Another valid document
         let mut another_doc = Document::new();
         another_doc.put("id", Value::from("id3")).unwrap();
         store
-            .put(Value::from(id3.clone()), Value::Document(another_doc))
+            .put(Value::from(id3), Value::Document(another_doc))
             .unwrap();
 
         // Valid retrieval
@@ -522,7 +522,7 @@ mod tests {
         );
         let find_plan = inner
             .find_optimizer
-            .create_find_plan(&filter, &find_options, &vec![index_descriptor])
+            .create_find_plan(&filter, &find_options, &[index_descriptor])
             .unwrap();
         let result = inner.create_cursor(&find_plan);
         assert!(result.is_ok());
@@ -541,7 +541,7 @@ mod tests {
         );
         let find_plan = inner
             .find_optimizer
-            .create_find_plan(&filter, &find_options, &vec![index_descriptor])
+            .create_find_plan(&filter, &find_options, &[index_descriptor])
             .unwrap();
         let result = inner.find_suitable_iter(&find_plan);
         assert!(result.is_ok());

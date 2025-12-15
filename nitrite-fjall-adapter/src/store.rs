@@ -167,7 +167,7 @@ impl NitriteStoreProvider for FjallStore {
 
     fn is_map_opened(&self, name: &str) -> NitriteResult<bool> {
         let name = FjallStore::encode_name(name);
-        self.inner.is_map_opened(&*name)
+        self.inner.is_map_opened(&name)
     }
 
     fn commit(&self) -> NitriteResult<()> {
@@ -184,22 +184,22 @@ impl NitriteStoreProvider for FjallStore {
 
     fn has_map(&self, name: &str) -> NitriteResult<bool> {
         let name = FjallStore::encode_name(name);
-        self.inner.has_map(&*name)
+        self.inner.has_map(&name)
     }
 
     fn open_map(&self, name: &str) -> NitriteResult<NitriteMap> {
         let name = FjallStore::encode_name(name);
-        self.inner.open_map(&*name, self.clone())
+        self.inner.open_map(&name, self.clone())
     }
 
     fn close_map(&self, name: &str) -> NitriteResult<()> {
         let name = FjallStore::encode_name(name);
-        self.inner.close_map(&*name)
+        self.inner.close_map(&name)
     }
 
     fn remove_map(&self, name: &str) -> NitriteResult<()> {
         let name = FjallStore::encode_name(name);
-        self.inner.remove_map(&*name)
+        self.inner.remove_map(&name)
     }
 
     fn subscribe(&self, listener: StoreEventListener) -> NitriteResult<Option<SubscriberRef>> {
@@ -436,10 +436,7 @@ impl FjallStoreInner {
     fn close_map(&self, name: &str) -> NitriteResult<()> {
         let result = self.map_registry.remove(name);
         if result.is_some() {
-            match result {
-                Some((_, map)) => drop(map),
-                None => {}
-            }
+            if let Some((_, map)) = result { drop(map) }
         }
         Ok(())
     }
@@ -502,7 +499,7 @@ impl FjallStoreInner {
     }
 
     fn alert(&self, event: StoreEvents) -> NitriteResult<()> {
-        let option = self.nitrite_config.get().clone();
+        let option = self.nitrite_config.get();
         if let Some(config) = option {
             let event_info = StoreEventInfo::new(event, config.clone());
             self.event_bus.publish(event_info)
@@ -547,7 +544,7 @@ mod tests {
     fn create_context() -> Context {
         let path = random_path();        
         let fjall_config = FjallConfig::new();
-        fjall_config.set_db_path(&*path);
+        fjall_config.set_db_path(&path);
         fjall_config.set_kv_separated(true);
 
         let store = FjallStore::new(fjall_config.clone());
@@ -1110,7 +1107,7 @@ mod tests {
         }, |ctx| {
             let result = ctx.fjall_store_unsafe().has_unsaved_changes();
             assert!(result.is_ok());
-            assert_eq!(result.unwrap(), false);
+            assert!(!result.unwrap());
         }, |ctx| {
             cleanup(ctx);
         });
@@ -1123,7 +1120,7 @@ mod tests {
         }, |ctx| {
             let result = ctx.fjall_store_unsafe().has_map("test_map");
             assert!(result.is_ok());
-            assert_eq!(result.unwrap(), false);
+            assert!(!result.unwrap());
         }, |ctx| {
             cleanup(ctx);
         });
@@ -1137,7 +1134,7 @@ mod tests {
             ctx.fjall_store_unsafe().open_or_create().unwrap();
             let result = ctx.fjall_store_unsafe().is_map_opened("non_existent_map");
             assert!(result.is_ok());
-            assert_eq!(result.unwrap(), false);
+            assert!(!result.unwrap());
         }, |ctx| {
             cleanup(ctx);
         });
@@ -1266,7 +1263,7 @@ mod tests {
         run_test(|| {
             let path = random_path();
             let fjall_config = FjallConfig::new();
-            fjall_config.set_db_path(&*path);
+            fjall_config.set_db_path(&path);
             let store = FjallStore::new(fjall_config);
             Context::new(path, None, None, Some(store), None)
         }, |ctx| {
@@ -1320,7 +1317,7 @@ mod tests {
         run_test(|| {
             let path = random_path();
             let fjall_config = FjallConfig::new();
-            fjall_config.set_db_path(&*path);
+            fjall_config.set_db_path(&path);
             fjall_config.set_commit_before_close(true);  // Enable commit on drop
             let store = FjallStore::new(fjall_config);
             Context::new(path, None, None, Some(store), None)
@@ -1350,7 +1347,7 @@ mod tests {
         run_test(|| {
             let path = random_path();
             let fjall_config = FjallConfig::new();
-            fjall_config.set_db_path(&*path);
+            fjall_config.set_db_path(&path);
             fjall_config.set_commit_before_close(false);  // Disable commit on drop
             let store = FjallStore::new(fjall_config);
             Context::new(path, None, None, Some(store), None)
@@ -1500,7 +1497,7 @@ mod tests {
         run_test(|| {
             let path = random_path();
             let fjall_config = FjallConfig::new();
-            fjall_config.set_db_path(&*path);
+            fjall_config.set_db_path(&path);
             let store = FjallStore::new(fjall_config);
             Context::new(path, None, None, Some(store), None)
         }, |ctx| {
@@ -1867,8 +1864,8 @@ mod tests {
             let store = ctx.fjall_store_unsafe();
             
             // All if-let patterns should work correctly
-            assert!(store.has_unsaved_changes().unwrap() == false);
-            assert!(store.has_map("test").unwrap() == false);
+            assert!(!store.has_unsaved_changes().unwrap());
+            assert!(!store.has_map("test").unwrap());
             assert!(store.commit().is_ok());
             assert!(store.compact().is_ok());
             

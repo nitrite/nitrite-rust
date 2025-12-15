@@ -10,7 +10,7 @@ use nitrite_spatial::{spatial_index, spatial_field, Geometry, Point};
 #[test]
 fn test_create_spatial_index() {
     run_test(
-        || create_spatial_test_context(),
+        create_spatial_test_context,
         |ctx| {
             let collection = ctx.db().collection("locations")?;
             
@@ -22,14 +22,14 @@ fn test_create_spatial_index() {
             
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_insert_and_query_point() {
     run_test(
-        || create_spatial_test_context(),
+        create_spatial_test_context,
         |ctx| {
             let collection = ctx.db().collection("places")?;
             collection.create_index(vec!["location"], &spatial_index())?;
@@ -64,14 +64,14 @@ fn test_insert_and_query_point() {
             
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_insert_multiple_points() {
     run_test(
-        || create_spatial_test_context(),
+        create_spatial_test_context,
         |ctx| {
             let collection = ctx.db().collection("cities")?;
             collection.create_index(vec!["coords"], &spatial_index())?;
@@ -113,14 +113,14 @@ fn test_insert_multiple_points() {
             
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_spatial_index_with_other_fields() {
     run_test(
-        || create_spatial_test_context(),
+        create_spatial_test_context,
         |ctx| {
             let collection = ctx.db().collection("restaurants")?;
             collection.create_index(vec!["location"], &spatial_index())?;
@@ -167,14 +167,14 @@ fn test_spatial_index_with_other_fields() {
             
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_drop_spatial_index() {
     run_test(
-        || create_spatial_test_context(),
+        create_spatial_test_context,
         |ctx| {
             let collection = ctx.db().collection("test_drop")?;
             collection.create_index(vec!["location"], &spatial_index())?;
@@ -197,14 +197,14 @@ fn test_drop_spatial_index() {
             
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_rebuild_spatial_index() {
     run_test(
-        || create_spatial_test_context(),
+        create_spatial_test_context,
         |ctx| {
             let collection = ctx.db().collection("rebuild_test")?;
             
@@ -236,14 +236,14 @@ fn test_rebuild_spatial_index() {
             
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_empty_spatial_query() {
     run_test(
-        || create_spatial_test_context(),
+        create_spatial_test_context,
         |ctx| {
             let collection = ctx.db().collection("empty_test")?;
             collection.create_index(vec!["location"], &spatial_index())?;
@@ -268,14 +268,14 @@ fn test_empty_spatial_query() {
             
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_intersects_query() {
     run_test(
-        || create_spatial_test_context(),
+        create_spatial_test_context,
         |ctx| {
             let collection = ctx.db().collection("intersects_test")?;
             collection.create_index(vec!["location"], &spatial_index())?;
@@ -307,14 +307,14 @@ fn test_intersects_query() {
             
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_near_query() {
     run_test(
-        || create_spatial_test_context(),
+        create_spatial_test_context,
         |ctx| {
             let collection = ctx.db().collection("near_test")?;
             collection.create_index(vec!["location"], &spatial_index())?;
@@ -344,14 +344,14 @@ fn test_near_query() {
             
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_knearest_query() {
     run_test(
-        || create_spatial_test_context(),
+        create_spatial_test_context,
         |ctx| {
             let collection = ctx.db().collection("knearest_test")?;
             collection.create_index(vec!["position"], &spatial_index())?;
@@ -381,6 +381,6 @@ fn test_knearest_query() {
             
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }

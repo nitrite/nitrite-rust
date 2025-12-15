@@ -375,7 +375,7 @@ mod tests {
     fn bench_attributes_access_and_put() {
         let mut attributes = Attributes::new_for_collection("test");
         for i in 0..100 {
-            attributes.put(&format!("key_{}", i), Value::I32(i as i32));
+            attributes.put(&format!("key_{}", i), Value::I32(i));
             let _ = attributes.get(&format!("key_{}", i));
         }
     }

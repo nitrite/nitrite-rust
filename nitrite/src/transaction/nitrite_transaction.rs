@@ -591,7 +591,7 @@ mod tests {
             let mut doc = Document::new();
             doc.put("id", Value::I64(self.id))?;
             doc.put("name", Value::String(self.name.clone()))?;
-            Ok(doc.to_value()?)
+            doc.to_value()
         }
 
         fn from_value(value: &Value) -> NitriteResult<Self::Output> {

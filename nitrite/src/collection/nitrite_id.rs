@@ -155,7 +155,7 @@ mod tests {
     #[test]
     fn test_new_id() {
         let id = NitriteId::new();
-        assert_eq!(id.id_value > 0, true);
+        assert!(id.id_value > 0);
         assert_eq!(id.id_value.to_string().len(), 19);
     }
 
@@ -163,37 +163,37 @@ mod tests {
     fn test_create_id() {
         let id_value = ID_GENERATOR.get_id();
         let id = NitriteId::create_id(id_value);
-        assert_eq!(id.is_ok(), true);
+        assert!(id.is_ok());
         assert_eq!(id.unwrap().id_value, id_value);
 
         let id = NitriteId::create_id(123);
-        assert_eq!(id.is_err(), true);
+        assert!(id.is_err());
         assert_eq!(id.err().unwrap().kind(), &ErrorKind::InvalidId);
     }
 
     #[test]
     fn test_create_id_with_empty_id() {
         let result = NitriteId::create_id(0);
-        assert_eq!(result.is_err(), true);
+        assert!(result.is_err());
     }
 
     #[test]
     fn test_valid_id() {
         let id = NitriteId::valid_id(1324567890123456789);
-        assert_eq!(id.is_ok(), true);
+        assert!(id.is_ok());
     }
 
     #[test]
     fn test_valid_id_with_empty_id() {
         let id = NitriteId::valid_id(0);
-        assert_eq!(id.is_err(), true);
+        assert!(id.is_err());
         assert_eq!(id.err().unwrap().kind(), &ErrorKind::InvalidId);
     }
 
     #[test]
     fn test_valid_id_with_invalid_id() {
         let id = NitriteId::valid_id(123);
-        assert_eq!(id.is_err(), true);
+        assert!(id.is_err());
         assert_eq!(id.err().unwrap().kind(), &ErrorKind::InvalidId);
     }
 
@@ -255,20 +255,20 @@ mod tests {
     fn ord_trait_works() {
         let one = NitriteId::create_id(1234567890123456780).unwrap();
         let two = NitriteId::create_id(1234567890123456789).unwrap();
-        assert_eq!(one < two, true);
+        assert!(one < two);
     }
 
     #[test]
     fn default_trait_works() {
         let id = NitriteId::default();
-        assert_eq!(id.id_value > 0, true);
+        assert!(id.id_value > 0);
         assert_eq!(id.id_value.to_string().len(), 19);
     }
 
     #[test]
     fn clone_trait_works() {
         let id = NitriteId::create_id(1234567890123456789).unwrap();
-        let cloned_id = id.clone();
+        let cloned_id = id;
         assert_eq!(id, cloned_id);
     }
 

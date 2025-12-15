@@ -601,7 +601,7 @@ fn parse_coordinate_list(s: &str) -> Result<Vec<Coordinate>, SpatialError> {
 
     let mut coords = vec![];
     for pair in s.split(',') {
-        let parts: Vec<&str> = pair.trim().split_whitespace().collect();
+        let parts: Vec<&str> = pair.split_whitespace().collect();
         if parts.len() != 2 {
             return Err(SpatialError::InvalidOperation(
                 format!("Invalid coordinate pair: {}", pair),

@@ -356,7 +356,7 @@ pub fn generate_employee() -> Employee {
             CountryCode().fake::<String>(),
             ZipCode().fake::<String>()
         )),
-        email_address: Some(format!("{}", FreeEmail().fake::<String>())),
+        email_address: Some(FreeEmail().fake::<String>().to_string()),
         company: None,
         blob: Some(vec![random::<u8>(); 10]),
         employee_note: Some(generate_note()),
@@ -366,17 +366,14 @@ pub fn generate_employee() -> Employee {
 pub fn generate_note() -> Note {
     Note {
         note_id: Some(rng().next_u64()),
-        text: Some(format!(
-            "{}",
-            Paragraphs(3..5).fake::<Vec<String>>().join(". ")
-        )),
+        text: Some(Paragraphs(3..5).fake::<Vec<String>>().join(". ").to_string()),
     }
 }
 
 pub fn generate_book() -> Book {
     let book_id = BookId {
-        isbn: Some(format!("{}", Isbn().fake::<String>())),
-        name: Some(format!("{}", Buzzword().fake::<String>())),
+        isbn: Some(Isbn().fake::<String>().to_string()),
+        name: Some(Buzzword().fake::<String>().to_string()),
         author: Some(format!(
             "{} {}",
             FirstName().fake::<String>(),
@@ -393,10 +390,7 @@ pub fn generate_book() -> Book {
             CatchPhrase().fake::<String>(),
             CatchPhrase().fake::<String>(),
         ]),
-        description: Some(format!(
-            "{}",
-            Paragraphs(1..3).fake::<Vec<String>>().join(". ")
-        )),
+        description: Some(Paragraphs(1..3).fake::<Vec<String>>().join(". ").to_string()),
     }
 }
 
@@ -416,7 +410,7 @@ pub fn generate_product() -> Product {
 pub fn generate_product_id() -> ProductId {
     ProductId {
         unique_id: Some(format!("{}", Uuid::new_v4())),
-        product_code: Some(format!("{}", Isbn().fake::<String>())),
+        product_code: Some(Isbn().fake::<String>().to_string()),
     }
 }
 

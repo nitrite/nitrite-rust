@@ -75,8 +75,8 @@ mod tests {
         config.auto_configure().expect("Failed to auto configure");
         config.initialize().expect("Failed to initialize");
         let store = config.nitrite_store().expect("Failed to get store");
-        let map = store.open_map("test").expect("Failed to open map");
-        map
+        
+        store.open_map("test").expect("Failed to open map")
     }
 
     fn create_document(id: &str) -> Document {
@@ -90,10 +90,10 @@ mod tests {
         let map = create_nitrite_map();
         let mut doc = create_document("1");
         let id = doc.id().expect("Failed to get id");
-        map.put(Value::NitriteId(id.clone()), Value::from(doc.clone()))
+        map.put(Value::NitriteId(id), Value::from(doc.clone()))
             .unwrap();
 
-        let id_set = vec![id.clone()];
+        let id_set = vec![id];
         let mut indexed_stream = IndexedStream::new(map.clone(), id_set);
 
         let result = indexed_stream.next().unwrap().unwrap();
@@ -117,9 +117,9 @@ mod tests {
         let id1 = doc1.id().expect("Failed to get id");
         let mut doc2 = create_document("2");
         let id2 = doc2.id().expect("Failed to get id");
-        map.put(Value::NitriteId(id1.clone()), Value::from(doc1.clone()))
+        map.put(Value::NitriteId(id1), Value::from(doc1.clone()))
             .unwrap();
-        map.put(Value::NitriteId(id2.clone()), Value::from(doc2.clone()))
+        map.put(Value::NitriteId(id2), Value::from(doc2.clone()))
             .unwrap();
 
         let id_set = vec![id1, id2];
@@ -149,7 +149,7 @@ mod tests {
         let id = NitriteId::new();
         
         // Insert a corrupted value (non-Document) into the map
-        map.put(Value::NitriteId(id.clone()), Value::String("not a document".to_string()))
+        map.put(Value::NitriteId(id), Value::String("not a document".to_string()))
             .unwrap();
 
         let id_set = vec![id];
@@ -166,11 +166,11 @@ mod tests {
         
         let mut doc = create_document("valid");
         let valid_id = doc.id().expect("Failed to get id");
-        map.put(Value::NitriteId(valid_id.clone()), Value::from(doc))
+        map.put(Value::NitriteId(valid_id), Value::from(doc))
             .unwrap();
         
         let invalid_id = NitriteId::new();
-        map.put(Value::NitriteId(invalid_id.clone()), Value::I32(42))
+        map.put(Value::NitriteId(invalid_id), Value::I32(42))
             .unwrap();
 
         let id_set = vec![valid_id, invalid_id];
@@ -195,7 +195,7 @@ mod tests {
         for i in 0..100 {
             let mut doc = create_document(&i.to_string());
             let id = doc.id().expect("Failed to get id");
-            map.put(Value::NitriteId(id.clone()), Value::from(doc))
+            map.put(Value::NitriteId(id), Value::from(doc))
                 .unwrap();
             id_set.push(id);
         }
@@ -222,7 +222,7 @@ mod tests {
         for i in 0..100 {
             let mut doc = create_document(&i.to_string());
             let id = doc.id().expect("Failed to get id");
-            map.put(Value::NitriteId(id.clone()), Value::from(doc))
+            map.put(Value::NitriteId(id), Value::from(doc))
                 .unwrap();
             id_set.push(id);
         }
@@ -248,12 +248,12 @@ mod tests {
         let map = create_nitrite_map();
         let mut doc = create_document("single");
         let id = doc.id().expect("Failed to get id");
-        map.put(Value::NitriteId(id.clone()), Value::from(doc))
+        map.put(Value::NitriteId(id), Value::from(doc))
             .unwrap();
 
         let start = std::time::Instant::now();
         for _ in 0..1000 {
-            let indexed_stream = IndexedStream::new(map.clone(), vec![id.clone()]);
+            let indexed_stream = IndexedStream::new(map.clone(), vec![id]);
             let count = indexed_stream.count();
             assert_eq!(count, 1);
         }

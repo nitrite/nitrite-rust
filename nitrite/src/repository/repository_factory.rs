@@ -202,7 +202,7 @@ mod tests {
         type Output = TestEntity;
 
         fn to_value(&self) -> NitriteResult<Value> {
-            Ok(Document::new().to_value()?)
+            Document::new().to_value()
         }
 
         fn from_value(_value: &Value) -> NitriteResult<Self::Output> {

@@ -13,7 +13,7 @@ use nitrite_int_test::test_util::{cleanup, create_test_context, now, run_test};
 #[test]
 fn test_insert_with_none_id() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let repo: ObjectRepository<WithNoneId> = ctx.db().repository()?;
 
@@ -27,7 +27,7 @@ fn test_insert_with_none_id() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
@@ -35,7 +35,7 @@ fn test_insert_with_none_id() {
 #[test]
 fn test_get_by_none_id() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let repo: ObjectRepository<WithPrivateField> = ctx.db().repository()?;
 
@@ -52,7 +52,7 @@ fn test_get_by_none_id() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
@@ -60,7 +60,7 @@ fn test_get_by_none_id() {
 #[test]
 fn test_update_without_id() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let repo: ObjectRepository<WithOutId> = ctx.db().repository()?;
 
@@ -75,7 +75,7 @@ fn test_update_without_id() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
@@ -83,7 +83,7 @@ fn test_update_without_id() {
 #[test]
 fn test_remove_without_id() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let repo: ObjectRepository<WithOutId> = ctx.db().repository()?;
 
@@ -98,7 +98,7 @@ fn test_remove_without_id() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
@@ -110,7 +110,7 @@ fn test_remove_without_id() {
 #[test]
 fn test_insert_empty_batch() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let repo: ObjectRepository<WithOutId> = ctx.db().repository()?;
 
@@ -120,7 +120,7 @@ fn test_insert_empty_batch() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
@@ -128,7 +128,7 @@ fn test_insert_empty_batch() {
 #[test]
 fn test_operations_on_closed_database() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let repo: ObjectRepository<WithOutId> = ctx.db().repository()?;
 
@@ -154,7 +154,7 @@ fn test_operations_on_closed_database() {
 #[test]
 fn test_external_nitrite_id_during_insert() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let repo: ObjectRepository<WithNitriteId> = ctx.db().repository()?;
 
@@ -171,7 +171,7 @@ fn test_external_nitrite_id_during_insert() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
@@ -183,7 +183,7 @@ fn test_external_nitrite_id_during_insert() {
 #[test]
 fn test_duplicate_unique_id() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let repo: ObjectRepository<WithPrivateField> = ctx.db().repository()?;
 
@@ -204,7 +204,7 @@ fn test_duplicate_unique_id() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
@@ -212,7 +212,7 @@ fn test_duplicate_unique_id() {
 #[test]
 fn test_update_with_duplicate_id() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let repo: ObjectRepository<Employee> = ctx.db().repository()?;
 
@@ -243,7 +243,7 @@ fn test_update_with_duplicate_id() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
@@ -255,7 +255,7 @@ fn test_update_with_duplicate_id() {
 #[test]
 fn test_create_index_on_empty_collection() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let repo: ObjectRepository<WithOutId> = ctx.db().repository()?;
 
@@ -270,7 +270,7 @@ fn test_create_index_on_empty_collection() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
@@ -278,7 +278,7 @@ fn test_create_index_on_empty_collection() {
 #[test]
 fn test_drop_non_existent_index() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let repo: ObjectRepository<WithOutId> = ctx.db().repository()?;
 
@@ -289,7 +289,7 @@ fn test_drop_non_existent_index() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
@@ -301,7 +301,7 @@ fn test_drop_non_existent_index() {
 #[test]
 fn test_filter_on_non_existent_field() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let repo: ObjectRepository<Employee> = ctx.db().repository()?;
 
@@ -315,7 +315,7 @@ fn test_filter_on_non_existent_field() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
@@ -327,7 +327,7 @@ fn test_filter_on_non_existent_field() {
 #[test]
 fn test_update_with_none_id() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let repo: ObjectRepository<Employee> = ctx.db().repository()?;
 
@@ -352,7 +352,7 @@ fn test_update_with_none_id() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
@@ -360,7 +360,7 @@ fn test_update_with_none_id() {
 #[test]
 fn test_multi_update_with_object_without_id() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let repo: ObjectRepository<Employee> = ctx.db().repository()?;
             let joining_date = now();
@@ -393,7 +393,7 @@ fn test_multi_update_with_object_without_id() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
@@ -401,7 +401,7 @@ fn test_multi_update_with_object_without_id() {
 #[test]
 fn test_change_id_during_update() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let repo: ObjectRepository<WithNitriteId> = ctx.db().repository()?;
 
@@ -425,7 +425,7 @@ fn test_change_id_during_update() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
@@ -437,7 +437,7 @@ fn test_change_id_during_update() {
 #[test]
 fn test_operations_on_dropped_repository() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let repo: ObjectRepository<WithOutId> = ctx.db().repository()?;
 
@@ -454,7 +454,7 @@ fn test_operations_on_dropped_repository() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
@@ -462,7 +462,7 @@ fn test_operations_on_dropped_repository() {
 #[test]
 fn test_is_dropped_after_dispose() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let repo: ObjectRepository<WithOutId> = ctx.db().repository()?;
 
@@ -474,7 +474,7 @@ fn test_is_dropped_after_dispose() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
@@ -486,7 +486,7 @@ fn test_is_dropped_after_dispose() {
 #[test]
 fn test_collection_repository_name_conflict() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             // Create a repository first
             let _repo: ObjectRepository<Employee> = ctx.db().repository()?;
@@ -499,7 +499,7 @@ fn test_collection_repository_name_conflict() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
@@ -511,7 +511,7 @@ fn test_collection_repository_name_conflict() {
 #[test]
 fn test_get_by_id_wrong_type() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let repo: ObjectRepository<Employee> = ctx.db().repository::<Employee>()?;
 
@@ -525,6 +525,6 @@ fn test_get_by_id_wrong_type() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }

@@ -14,7 +14,7 @@ pub struct ObjectCursorTestEntity {
 #[test]
 fn test_cursor_iteration() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let repo: ObjectRepository<ObjectCursorTestEntity> = ctx.db().repository()?;
 
@@ -31,7 +31,7 @@ fn test_cursor_iteration() {
             // Iterate through cursor
             let mut cursor = repo.find(all())?;
             let mut count = 0;
-            while let Some(obj_result) = cursor.next() {
+            for obj_result in cursor {
                 let _obj = obj_result?;
                 count += 1;
             }
@@ -40,14 +40,14 @@ fn test_cursor_iteration() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_cursor_count() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let repo: ObjectRepository<ObjectCursorTestEntity> = ctx.db().repository()?;
 
@@ -67,14 +67,14 @@ fn test_cursor_count() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_cursor_with_filter() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let repo: ObjectRepository<ObjectCursorTestEntity> = ctx.db().repository()?;
 
@@ -94,14 +94,14 @@ fn test_cursor_with_filter() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_cursor_empty() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let repo: ObjectRepository<ObjectCursorTestEntity> = ctx.db().repository()?;
 
@@ -111,14 +111,14 @@ fn test_cursor_empty() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_cursor_first() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let repo: ObjectRepository<ObjectCursorTestEntity> = ctx.db().repository()?;
 
@@ -137,6 +137,6 @@ fn test_cursor_first() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }

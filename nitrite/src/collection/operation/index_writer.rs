@@ -223,7 +223,7 @@ mod tests {
         nitrite_config.initialize().expect("Failed to initialize");
         let store = nitrite_config.nitrite_store().expect("Failed to get store");
         let nitrite_map = store
-            .open_map(&*collection_name.clone())
+            .open_map(&collection_name.clone())
             .expect("Failed to open map");
         let event_bus = NitriteEventBus::new();
         let find_optimizer = find_optimizer::FindOptimizer::new();

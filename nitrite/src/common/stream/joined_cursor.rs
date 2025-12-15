@@ -120,7 +120,7 @@ mod tests {
     use crate::errors::{ErrorKind, NitriteError};
 
     fn create_document_cursor(docs: Vec<Document>) -> DocumentCursor {
-        let iter = Box::new(docs.into_iter().map(|doc| Ok(doc)).into_iter());
+        let iter = Box::new(docs.into_iter().map(Ok));
         DocumentCursor::new(iter, ProcessorChain::new())
     }
 

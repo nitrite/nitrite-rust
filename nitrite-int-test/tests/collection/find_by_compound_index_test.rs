@@ -6,7 +6,7 @@ use nitrite_int_test::test_util::{cleanup, create_test_context, insert_test_docu
 #[test]
 fn test_find_by_and_filter() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let coll = ctx.db().collection("test")?;
             insert_test_documents(&coll)?;
@@ -22,7 +22,7 @@ fn test_find_by_and_filter() {
             let find_plan = cursor.find_plan().unwrap();
             assert!(find_plan.full_scan_filter().is_none());
             assert!(find_plan.index_descriptor().is_some());
-            assert_eq!(&find_plan.index_descriptor().unwrap(), coll.list_indexes()?.get(0).unwrap());
+            assert_eq!(&find_plan.index_descriptor().unwrap(), coll.list_indexes()?.first().unwrap());
             
             let index_scan_filter = find_plan.index_scan_filter().unwrap();
             assert_eq!(index_scan_filter.filters()[0].to_string(), field("list").eq("four").to_string());
@@ -39,14 +39,14 @@ fn test_find_by_and_filter() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_find_by_or_filter_and_filter() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let coll = ctx.db().collection("test")?;
             insert_test_documents(&coll)?;
@@ -97,6 +97,6 @@ fn test_find_by_or_filter_and_filter() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }

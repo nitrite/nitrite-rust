@@ -850,7 +850,7 @@ mod tests {
         type Output = MyEntity;
 
         fn to_value(&self) -> NitriteResult<Value> {
-            Ok(Document::new().to_value()?)
+            Document::new().to_value()
         }
 
         fn from_value(_value: &Value) -> NitriteResult<Self::Output> {
@@ -1065,7 +1065,7 @@ mod tests {
         nitrite.initialize(None, None).unwrap();
         let result = nitrite.has_keyed_repository::<MyEntity>("nonexistent_key");
         assert!(result.is_ok());
-        assert_eq!(result.unwrap(), false);
+        assert!(!result.unwrap());
     }
 
     #[test]
@@ -1096,7 +1096,7 @@ mod tests {
         let result = nitrite.has_keyed_repository::<MyEntity>("unknown");
         assert!(result.is_ok());
         // Result should be false, not panic from unwrap
-        assert_eq!(result.unwrap(), false);
+        assert!(!result.unwrap());
     }
 
     #[test]
@@ -1305,7 +1305,7 @@ mod tests {
         // Query non-existent keyed repository
         let result = nitrite.has_keyed_repository::<MyEntity>("nonexistent");
         assert!(result.is_ok());
-        assert_eq!(result.unwrap(), false);
+        assert!(!result.unwrap());
     }
 
     #[test]
@@ -1321,7 +1321,7 @@ mod tests {
             let key = format!("key_{}", i);
             let result = nitrite.has_keyed_repository::<MyEntity>(&key);
             assert!(result.is_ok());
-            assert_eq!(result.unwrap(), false);
+            assert!(!result.unwrap());
         }
     }
 

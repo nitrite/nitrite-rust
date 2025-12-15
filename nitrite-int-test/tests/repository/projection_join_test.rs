@@ -32,7 +32,7 @@ pub struct JoinAddress {
 #[test]
 fn test_projection_has_more() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let repo: ObjectRepository<Employee> = ctx.db().repository::<Employee>()?;
             let company = generate_company();
@@ -51,14 +51,14 @@ fn test_projection_has_more() {
             
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     );
 }
 
 #[test]
 fn test_projection_size() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let repo: ObjectRepository<Employee> = ctx.db().repository::<Employee>()?;
             let company = generate_company();
@@ -76,14 +76,14 @@ fn test_projection_size() {
             
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     );
 }
 
 #[test]
 fn test_projection_fields() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let repo: ObjectRepository<Employee> = ctx.db().repository::<Employee>()?;
             let company = generate_company();
@@ -105,14 +105,14 @@ fn test_projection_fields() {
             
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     );
 }
 
 #[test]
 fn test_projection_empty_result() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let repo: ObjectRepository<Employee> = ctx.db().repository()?;
             
@@ -124,7 +124,7 @@ fn test_projection_empty_result() {
             
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     );
 }
 
@@ -135,7 +135,7 @@ fn test_projection_empty_result() {
 #[test]
 fn test_join_basic() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let person_repo: ObjectRepository<JoinPerson> = ctx.db().repository::<JoinPerson>()?;
             let address_repo: ObjectRepository<JoinAddress> = ctx.db().repository::<JoinAddress>()?;
@@ -178,14 +178,14 @@ fn test_join_basic() {
             
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     );
 }
 
 #[test]
 fn test_join_with_multiple_matches() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let person_repo: ObjectRepository<JoinPerson> = ctx.db().keyed_repository::<JoinPerson>("persons")?;
             let address_repo: ObjectRepository<JoinAddress> = ctx.db().keyed_repository::<JoinAddress>("addresses")?;
@@ -224,14 +224,14 @@ fn test_join_with_multiple_matches() {
             
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     );
 }
 
 #[test]
 fn test_join_no_matches() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let person_repo: ObjectRepository<JoinPerson> = ctx.db().keyed_repository("persons")?;
             let address_repo: ObjectRepository<JoinAddress> = ctx.db().keyed_repository("addresses")?;
@@ -268,14 +268,14 @@ fn test_join_no_matches() {
             
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     );
 }
 
 #[test]
 fn test_join_empty_foreign_cursor() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let person_repo: ObjectRepository<JoinPerson> = ctx.db().keyed_repository("persons")?;
             let address_repo: ObjectRepository<JoinAddress> = ctx.db().keyed_repository("addresses")?;
@@ -304,14 +304,14 @@ fn test_join_empty_foreign_cursor() {
             
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     );
 }
 
 #[test]
 fn test_join_empty_local_cursor() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let person_repo: ObjectRepository<JoinPerson> = ctx.db().keyed_repository("persons")?;
             let address_repo: ObjectRepository<JoinAddress> = ctx.db().keyed_repository("addresses")?;
@@ -335,14 +335,14 @@ fn test_join_empty_local_cursor() {
             
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     );
 }
 
 #[test]
 fn test_join_iteration() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let person_repo: ObjectRepository<JoinPerson> = ctx.db().keyed_repository("persons")?;
             let address_repo: ObjectRepository<JoinAddress> = ctx.db().keyed_repository("addresses")?;
@@ -379,7 +379,7 @@ fn test_join_iteration() {
             
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     );
 }
 
@@ -390,7 +390,7 @@ fn test_join_iteration() {
 #[test]
 fn test_projection_iterator() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let repo: ObjectRepository<Employee> = ctx.db().repository()?;
             let company = generate_company();
@@ -414,14 +414,14 @@ fn test_projection_iterator() {
             
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     );
 }
 
 #[test]
 fn test_projection_with_find_options() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let repo: ObjectRepository<Employee> = ctx.db().repository()?;
             let company = generate_company();
@@ -440,6 +440,6 @@ fn test_projection_with_find_options() {
             
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     );
 }

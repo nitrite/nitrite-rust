@@ -333,7 +333,7 @@ mod tests {
         let filter = EqualsFilter::new("field".to_string(), Value::I32(42));
         let mut doc = Document::new();
         doc.put("field", Value::I32(42)).unwrap();
-        assert_eq!(filter.apply(&doc).unwrap(), true);
+        assert!(filter.apply(&doc).unwrap());
     }
 
     #[test]
@@ -341,7 +341,7 @@ mod tests {
         let filter = EqualsFilter::new("field".to_string(), Value::I32(42));
         let mut doc = Document::new();
         doc.put("field", Value::I32(43)).unwrap();
-        assert_eq!(filter.apply(&doc).unwrap(), false);
+        assert!(!filter.apply(&doc).unwrap());
     }
 
     #[test]
@@ -349,7 +349,7 @@ mod tests {
         let filter = NotEqualsFilter::new("field".to_string(), Value::I32(42));
         let mut doc = Document::new();
         doc.put("field", Value::I32(43)).unwrap();
-        assert_eq!(filter.apply(&doc).unwrap(), true);
+        assert!(filter.apply(&doc).unwrap());
     }
 
     #[test]
@@ -357,7 +357,7 @@ mod tests {
         let filter = NotEqualsFilter::new("field".to_string(), Value::I32(42));
         let mut doc = Document::new();
         doc.put("field", Value::I32(42)).unwrap();
-        assert_eq!(filter.apply(&doc).unwrap(), false);
+        assert!(!filter.apply(&doc).unwrap());
     }
 
     // OnceLock initialization and display tests
@@ -429,7 +429,7 @@ mod tests {
         // So the comparison should work: Null != 42 is true
         let result = filter.apply(&doc);
         assert!(result.is_ok());
-        assert_eq!(result.unwrap(), true); // Null != 42
+        assert!(result.unwrap()); // Null != 42
     }
 
     #[test]
@@ -439,7 +439,7 @@ mod tests {
         let mut doc = Document::new();
         doc.put("field", Value::I32(42)).unwrap();
         // Should successfully apply since field_name is initialized
-        assert_eq!(filter.apply(&doc).unwrap(), true);
+        assert!(filter.apply(&doc).unwrap());
     }
 
     // Performance and optimization tests
@@ -461,7 +461,7 @@ mod tests {
         
         // Perform multiple comparisons to test inline optimization
         for _ in 0..100 {
-            assert_eq!(filter.apply(&doc).unwrap(), true);
+            assert!(filter.apply(&doc).unwrap());
         }
     }
 
@@ -473,7 +473,7 @@ mod tests {
         doc.put("field", Value::I32(42)).unwrap();
         
         for _ in 0..1000 {
-            assert_eq!(filter.apply(&doc).unwrap(), true);
+            assert!(filter.apply(&doc).unwrap());
         }
     }
 

@@ -314,7 +314,7 @@ mod tests {
         let start = std::time::Instant::now();
         for _ in 0..1000 {
             cursor.reset();
-            while let Some(_) = cursor.next() {}
+            for _ in cursor.by_ref() {}
         }
         let elapsed = start.elapsed();
 

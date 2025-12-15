@@ -182,9 +182,9 @@ impl FjallValue {
 ///
 /// # Panics
 /// - If deserialization fails (corrupted data, format version mismatch, etc.)
-impl Into<Value> for FjallValue {
-    fn into(self) -> Value {
-        if let Ok(value) = self.try_into_value() {
+impl From<FjallValue> for Value {
+    fn from(val: FjallValue) -> Self {
+        if let Ok(value) = val.try_into_value() {
             value
         } else {
             panic!("Failed to deserialize FjallValue")
@@ -209,13 +209,13 @@ impl From<Value> for FjallValue {
     }
 }
 
-impl Into<UserKey> for FjallValue {
+impl From<FjallValue> for UserKey {
     /// Converts FjallValue to a Fjall UserKey for partition operations.
     ///
     /// Returns: UserKey wrapping the internal byte vector
     #[inline]
-    fn into(self) -> UserKey {
-        UserKey::new(&*self.0)
+    fn from(val: FjallValue) -> Self {
+        UserKey::new(&val.0)
     }
 }
 
@@ -466,7 +466,7 @@ mod bincode_tests {
     fn test_roundtrip_value_to_fjall_to_value() {
         let original = Value::Array(vec![1.into(), 2.into(), 3.into(), 4.into()]);
         let fjall_value = FjallValue::try_from_value(&original).unwrap();
-        let recovered: Value = fjall_value.try_into().unwrap();
+        let recovered: Value = fjall_value.into();
         assert_eq!(original, recovered);
     }
 
@@ -479,14 +479,14 @@ mod bincode_tests {
             "nested": { "key": "value" }
         });
         let fjall_value = FjallValue::try_from_value(&original).unwrap();
-        let recovered: Value = fjall_value.try_into().unwrap();
+        let recovered: Value = fjall_value.into();
         assert_eq!(original, recovered);
     }
 
     #[test]
     #[cfg_attr(not(feature = "bincode"), ignore)]
     fn test_to_nitrite_error() {
-        let error = std::io::Error::new(std::io::ErrorKind::Other, "test error");
+        let error = std::io::Error::other("test error");
         let nitrite_error = to_nitrite_error(error);
         assert_eq!(nitrite_error.to_string(), "Fjall Error: test error");
     }
@@ -643,7 +643,7 @@ mod bincode_tests {
     #[cfg_attr(not(feature = "bincode"), ignore)]
     fn test_error_mapping_single_allocation() {
         // Verify optimized to_nitrite_error reduces string allocations
-        let error = std::io::Error::new(std::io::ErrorKind::Other, "connection closed");
+        let error = std::io::Error::other("connection closed");
         for _ in 0..1000 {
             let _ = black_box(to_nitrite_error(&error));
         }
@@ -653,7 +653,7 @@ mod bincode_tests {
     #[cfg_attr(not(feature = "bincode"), ignore)]
     fn test_error_mapping_case_insensitivity() {
         // Verify error mapping works correctly with lowercase checks
-        let error = std::io::Error::new(std::io::ErrorKind::Other, "not found");
+        let error = std::io::Error::other("not found");
         let nitrite_error = black_box(to_nitrite_error(&error));
         assert_eq!(nitrite_error.kind(), &ErrorKind::StoreNotInitialized);
     }

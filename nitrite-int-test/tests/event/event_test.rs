@@ -20,7 +20,7 @@ struct Employee {
 #[test]
 fn test_insert_event() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let collection = ctx.db().repository::<Employee>()?;
             let action = Arc::new(Mutex::new(None));
@@ -43,14 +43,14 @@ fn test_insert_event() {
             assert!(item.lock().unwrap().is_some());
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_update_event() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let collection = ctx.db().repository::<Employee>()?;
             let action = Arc::new(Mutex::new(None));
@@ -78,14 +78,14 @@ fn test_update_event() {
             assert_eq!(doc.unwrap().address, Some("xyz".to_string()));
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_upsert_event() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let collection = ctx.db().repository::<Employee>()?;
             let action = Arc::new(Mutex::new(None));
@@ -106,14 +106,14 @@ fn test_upsert_event() {
             assert!(item.lock().unwrap().is_some());
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     );
 }
 
 #[test]
 fn test_delete_event() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let collection = ctx.db().repository::<Employee>()?;
             let action = Arc::new(Mutex::new(None));
@@ -139,14 +139,14 @@ fn test_delete_event() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_drop_event() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let collection = ctx.db().repository::<Employee>()?;
             let item = Arc::new(Mutex::new(None));
@@ -160,14 +160,14 @@ fn test_drop_event() {
             assert!(item.lock().unwrap().is_none());
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_close_event() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let collection = ctx.db().collection("employee")?;
             let item = Arc::new(Mutex::new(None));
@@ -182,14 +182,14 @@ fn test_close_event() {
             assert!(item.lock().unwrap().is_none());
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_deregister_event() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let collection = ctx.db().repository::<Employee>()?;
             let action = Arc::new(Mutex::new(None));
@@ -220,14 +220,14 @@ fn test_deregister_event() {
             assert!(item.lock().unwrap().is_none());
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_multiple_listeners() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let collection = ctx.db().repository::<Employee>()?;
             let count = Arc::new(Mutex::new(0));
@@ -251,14 +251,14 @@ fn test_multiple_listeners() {
             wait_for_event(1000, || *count.lock().unwrap() == 2);
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_single_event_listener() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let collection = ctx.db().collection("employee")?;
             let count = Arc::new(Mutex::new(0));
@@ -280,6 +280,6 @@ fn test_single_event_listener() {
             wait_for_event(1000, || *count.lock().unwrap() == 1);
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }

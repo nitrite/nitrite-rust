@@ -381,7 +381,7 @@ mod tests {
     use super::*;
 
     fn create_io_error() -> Box<dyn Error + Send + Sync> {
-        Box::new(std::io::Error::new(std::io::ErrorKind::Other, "IO Error"))
+        Box::new(std::io::Error::other("IO Error"))
     }
 
     #[test]
@@ -717,7 +717,7 @@ mod tests {
 
     #[test]
     fn test_from_io_error_other() {
-        let io_err = std::io::Error::new(std::io::ErrorKind::Other, "unknown io error");
+        let io_err = std::io::Error::other("unknown io error");
         let nitrite_err: NitriteError = io_err.into();
         
         assert_eq!(nitrite_err.kind(), &ErrorKind::IOError);

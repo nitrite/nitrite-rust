@@ -15,7 +15,7 @@ use nitrite_int_test::test_util::{cleanup, create_test_context, run_test};
 #[test]
 fn test_find_by_compound_id() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let repo: ObjectRepository<Book> = ctx.db().repository::<Book>()?;
             
@@ -47,14 +47,14 @@ fn test_find_by_compound_id() {
             
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     );
 }
 
 #[test]
 fn test_compound_id_not_found() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let repo: ObjectRepository<Book> = ctx.db().repository::<Book>()?;
             
@@ -72,14 +72,14 @@ fn test_compound_id_not_found() {
             
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     );
 }
 
 #[test]
 fn test_compound_index_existence() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             // Book entity has compound index on (price, publisher)
             let repo: ObjectRepository<Book> = ctx.db().repository::<Book>()?;
@@ -93,14 +93,14 @@ fn test_compound_index_existence() {
             
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     );
 }
 
 #[test]
 fn test_list_compound_indexes() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let repo: ObjectRepository<Book> = ctx.db().repository::<Book>()?;
             let book = generate_book();
@@ -122,14 +122,14 @@ fn test_list_compound_indexes() {
             
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     );
 }
 
 #[test]
 fn test_create_compound_index() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let repo: ObjectRepository<Book> = ctx.db().repository::<Book>()?;
             let book = generate_book();
@@ -143,14 +143,14 @@ fn test_create_compound_index() {
             
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     );
 }
 
 #[test]
 fn test_drop_compound_index() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let repo: ObjectRepository<Book> = ctx.db().repository::<Book>()?;
             let book = generate_book();
@@ -172,14 +172,14 @@ fn test_drop_compound_index() {
             
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     );
 }
 
 #[test]
 fn test_rebuild_compound_index() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let repo: ObjectRepository<Book> = ctx.db().repository::<Book>()?;
             
@@ -202,14 +202,14 @@ fn test_rebuild_compound_index() {
             
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     );
 }
 
 #[test]
 fn test_update_with_compound_id() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let repo: ObjectRepository<Book> = ctx.db().repository::<Book>()?;
             
@@ -250,14 +250,14 @@ fn test_update_with_compound_id() {
             
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     );
 }
 
 #[test]
 fn test_delete_with_compound_id() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let repo: ObjectRepository<Book> = ctx.db().repository::<Book>()?;
             
@@ -292,14 +292,14 @@ fn test_delete_with_compound_id() {
             
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     );
 }
 
 #[test]
 fn test_multiple_books_same_partial_id() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let repo: ObjectRepository<Book> = ctx.db().repository::<Book>()?;
             
@@ -357,14 +357,14 @@ fn test_multiple_books_same_partial_id() {
             
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     );
 }
 
 #[test]
 fn test_compound_unique_index_violation() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let repo: ObjectRepository<Book> = ctx.db().repository::<Book>()?;
             
@@ -402,7 +402,7 @@ fn test_compound_unique_index_violation() {
             
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     );
 }
 
@@ -413,7 +413,7 @@ fn test_compound_unique_index_violation() {
 #[test]
 fn test_keyed_repository_compound_index() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             // MyBook uses key "my_books"
             let repo: ObjectRepository<MyBook> = ctx.db().repository::<MyBook>()?;
@@ -444,14 +444,14 @@ fn test_keyed_repository_compound_index() {
             
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     );
 }
 
 #[test]
 fn test_compound_index_with_null_fields() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let repo: ObjectRepository<Book> = ctx.db().repository::<Book>()?;
             
@@ -485,6 +485,6 @@ fn test_compound_index_with_null_fields() {
             
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     );
 }

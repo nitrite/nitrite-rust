@@ -16,7 +16,7 @@ use nitrite_int_test::test_util::{cleanup, create_test_context, now, run_test};
 #[test]
 fn test_find_with_skip_limit() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let repo: ObjectRepository<Employee> = ctx.db().repository()?;
 
@@ -45,14 +45,14 @@ fn test_find_with_skip_limit() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_find_with_sort_ascending() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let repo: ObjectRepository<Employee> = ctx.db().repository()?;
 
@@ -77,14 +77,14 @@ fn test_find_with_sort_ascending() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_find_with_sort_descending() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let repo: ObjectRepository<Employee> = ctx.db().repository()?;
 
@@ -109,7 +109,7 @@ fn test_find_with_sort_descending() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
@@ -120,7 +120,7 @@ fn test_find_with_sort_descending() {
 #[test]
 fn test_equal_filter_by_id() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let repo: ObjectRepository<Employee> = ctx.db().repository()?;
 
@@ -139,14 +139,14 @@ fn test_equal_filter_by_id() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_not_equal_filter() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let repo: ObjectRepository<Employee> = ctx.db().repository()?;
 
@@ -161,14 +161,14 @@ fn test_not_equal_filter() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_string_equal_filter() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let repo: ObjectRepository<ProductScore> = ctx.db().repository::<ProductScore>()?;
 
@@ -192,14 +192,14 @@ fn test_string_equal_filter() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_and_filter_with_multiple_conditions() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let repo: ObjectRepository<Employee> = ctx.db().repository()?;
             let join_date = now();
@@ -227,14 +227,14 @@ fn test_and_filter_with_multiple_conditions() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_or_filter_with_multiple_conditions() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let repo: ObjectRepository<Employee> = ctx.db().repository()?;
 
@@ -255,14 +255,14 @@ fn test_or_filter_with_multiple_conditions() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_not_filter_negation() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let repo: ObjectRepository<Employee> = ctx.db().repository()?;
 
@@ -277,7 +277,7 @@ fn test_not_filter_negation() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
@@ -288,7 +288,7 @@ fn test_not_filter_negation() {
 #[test]
 fn test_greater_than_filter() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let repo: ObjectRepository<Employee> = ctx.db().repository()?;
 
@@ -303,14 +303,14 @@ fn test_greater_than_filter() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_greater_than_or_equal_filter() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let repo: ObjectRepository<Employee> = ctx.db().repository()?;
 
@@ -325,14 +325,14 @@ fn test_greater_than_or_equal_filter() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_less_than_filter() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let repo: ObjectRepository<Employee> = ctx.db().repository()?;
 
@@ -347,14 +347,14 @@ fn test_less_than_filter() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_less_than_or_equal_filter() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let repo: ObjectRepository<Employee> = ctx.db().repository()?;
 
@@ -369,14 +369,14 @@ fn test_less_than_or_equal_filter() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_between_filter_inclusive() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let repo: ObjectRepository<Employee> = ctx.db().repository()?;
 
@@ -392,14 +392,14 @@ fn test_between_filter_inclusive() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_between_filter_exclusive() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let repo: ObjectRepository<Employee> = ctx.db().repository()?;
 
@@ -415,14 +415,14 @@ fn test_between_filter_exclusive() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_between_filter_mixed() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let repo: ObjectRepository<Employee> = ctx.db().repository()?;
 
@@ -442,7 +442,7 @@ fn test_between_filter_mixed() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
@@ -453,7 +453,7 @@ fn test_between_filter_mixed() {
 #[test]
 fn test_text_filter_basic() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let repo: ObjectRepository<Employee> = ctx.db().repository()?;
 
@@ -467,14 +467,14 @@ fn test_text_filter_basic() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_text_filter_case_insensitive() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let repo: ObjectRepository<Employee> = ctx.db().repository()?;
 
@@ -488,14 +488,14 @@ fn test_text_filter_case_insensitive() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_regex_filter() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let repo: ObjectRepository<Employee> = ctx.db().repository()?;
 
@@ -516,7 +516,7 @@ fn test_regex_filter() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
@@ -527,7 +527,7 @@ fn test_regex_filter() {
 #[test]
 fn test_in_filter() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let repo: ObjectRepository<Employee> = ctx.db().repository()?;
 
@@ -542,14 +542,14 @@ fn test_in_filter() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_not_in_filter() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let repo: ObjectRepository<Employee> = ctx.db().repository()?;
 
@@ -564,14 +564,14 @@ fn test_not_in_filter() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_in_filter_with_non_existent_values() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let repo: ObjectRepository<Employee> = ctx.db().repository()?;
 
@@ -586,7 +586,7 @@ fn test_in_filter_with_non_existent_values() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
@@ -597,7 +597,7 @@ fn test_in_filter_with_non_existent_values() {
 #[test]
 fn test_elem_match_with_nested_objects() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let repo: ObjectRepository<ElemMatch> = ctx.db().repository::<ElemMatch>()?;
 
@@ -642,14 +642,14 @@ fn test_elem_match_with_nested_objects() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_elem_match_with_string_array() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let repo: ObjectRepository<ElemMatch> = ctx.db().repository()?;
 
@@ -680,7 +680,7 @@ fn test_elem_match_with_string_array() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
@@ -691,7 +691,7 @@ fn test_elem_match_with_string_array() {
 #[test]
 fn test_find_by_nested_field() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let repo: ObjectRepository<Employee> = ctx.db().repository()?;
 
@@ -721,14 +721,14 @@ fn test_find_by_nested_field() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_find_by_nested_id() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let repo: ObjectRepository<Employee> = ctx.db().repository()?;
 
@@ -747,7 +747,7 @@ fn test_find_by_nested_id() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
@@ -758,7 +758,7 @@ fn test_find_by_nested_id() {
 #[test]
 fn test_complex_compound_filter() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let repo: ObjectRepository<Employee> = ctx.db().repository()?;
 
@@ -783,14 +783,14 @@ fn test_complex_compound_filter() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_filter_all() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let repo: ObjectRepository<Employee> = ctx.db().repository()?;
 
@@ -810,7 +810,7 @@ fn test_filter_all() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
@@ -821,7 +821,7 @@ fn test_filter_all() {
 #[test]
 fn test_cursor_size() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let repo: ObjectRepository<Employee> = ctx.db().repository()?;
 
@@ -839,14 +839,14 @@ fn test_cursor_size() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_cursor_first() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let repo: ObjectRepository<Employee> = ctx.db().repository()?;
 
@@ -862,14 +862,14 @@ fn test_cursor_first() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_cursor_first_empty() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let repo: ObjectRepository<Employee> = ctx.db().repository()?;
 
@@ -879,14 +879,14 @@ fn test_cursor_first_empty() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_cursor_iteration() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let repo: ObjectRepository<Employee> = ctx.db().repository()?;
 
@@ -902,7 +902,7 @@ fn test_cursor_iteration() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
@@ -913,7 +913,7 @@ fn test_cursor_iteration() {
 #[test]
 fn test_search_with_null_values() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let repo: ObjectRepository<Employee> = ctx.db().repository()?;
 
@@ -933,14 +933,14 @@ fn test_search_with_null_values() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_search_empty_string() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let repo: ObjectRepository<Employee> = ctx.db().repository()?;
 
@@ -954,14 +954,14 @@ fn test_search_empty_string() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_find_by_entity_id() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let repo: ObjectRepository<Book> = ctx.db().repository()?;
 
@@ -992,6 +992,6 @@ fn test_find_by_entity_id() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }

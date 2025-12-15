@@ -7,7 +7,7 @@ use nitrite_int_test::test_util::{cleanup, create_test_context, run_test};
 #[test]
 fn test_custom_filter() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let collection = ctx.db().collection("test")?;
 
@@ -34,14 +34,14 @@ fn test_custom_filter() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_custom_filter_case_insensitive() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let collection = ctx.db().collection("test")?;
 
@@ -58,6 +58,6 @@ fn test_custom_filter_case_insensitive() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }

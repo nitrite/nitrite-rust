@@ -110,7 +110,7 @@ impl NitriteMapProvider for FjallMap {
     ///
     /// Returns: `Ok(())` on success, error otherwise
     fn clear(&self) -> NitriteResult<()> {
-        let result = self.inner.clear()?;
+        self.inner.clear()?;
         let clone = self.clone();
         async_task(move || {
             // Safe cleanup: handle all errors gracefully without panicking in async task
@@ -144,7 +144,7 @@ impl NitriteMapProvider for FjallMap {
                 }
             }
         });
-        Ok(result)
+        Ok(())
     }
 
     /// Checks if this map is closed.
@@ -196,8 +196,8 @@ impl NitriteMapProvider for FjallMap {
     ///
     /// Returns: `Ok(())` on success, error otherwise
     fn put(&self, key: Key, value: Value) -> NitriteResult<()> {
-        let result = self.inner.put(key, value)?;
-        Ok(result)
+        self.inner.put(key, value)?;
+        Ok(())
     }
 
     /// Inserts or updates multiple key-value pairs atomically.
@@ -895,7 +895,7 @@ mod tests {
             .auto_configure()
             .expect("Failed to auto configure");
         let fjall_config = FjallConfig::new();
-        fjall_config.set_db_path(&*path);
+        fjall_config.set_db_path(&path);
         fjall_config.set_kv_separated(true);
 
         // Create the store first - it will create and own the keyspace
@@ -952,19 +952,19 @@ mod tests {
     #[test]
     fn test_initialize() {
         run_test(
-            || create_context(),
+            create_context,
             |ctx| {
                 let map = ctx.fjall_map_unsafe();
                 assert!(map.initialize().is_ok());
             },
-            |ctx| cleanup(ctx),
+            cleanup,
         );
     }
 
     #[test]
     fn test_collect_garbage() {
         run_test(
-            || create_context(),
+            create_context,
             |ctx| {
                 let map = ctx.fjall_map_unsafe();
                 map.put(Value::I8(1), Value::I8(1))
@@ -972,303 +972,303 @@ mod tests {
                 map.remove(&Value::I8(1)).expect("Failed to remove item");
                 assert!(map.collect_garbage().is_ok());
             },
-            |ctx| cleanup(ctx),
+            cleanup,
         );
     }
 
     #[test]
     fn test_attributes() {
         run_test(
-            || create_context(),
+            create_context,
             |ctx| {
                 let map = ctx.fjall_map_unsafe();
                 let attributes = Attributes::new();
                 assert!(map.set_attributes(attributes.clone()).is_ok());
                 assert_eq!(map.attributes().unwrap(), Some(attributes));
             },
-            |ctx| cleanup(ctx),
+            cleanup,
         );
     }
 
     #[test]
     fn test_contains_key() {
         run_test(
-            || create_context(),
+            create_context,
             |ctx| {
                 let map = ctx.fjall_map_unsafe();
                 let key = Key::from("test_key");
                 assert!(map.contains_key(&key).is_ok());
             },
-            |ctx| cleanup(ctx),
+            cleanup,
         );
     }
 
     #[test]
     fn test_get() {
         run_test(
-            || create_context(),
+            create_context,
             |ctx| {
                 let map = ctx.fjall_map_unsafe();
                 let key = Key::from("test_key");
                 assert!(map.get(&key).is_ok());
             },
-            |ctx| cleanup(ctx),
+            cleanup,
         );
     }
 
     #[test]
     fn test_clear() {
         run_test(
-            || create_context(),
+            create_context,
             |ctx| {
                 let map = ctx.fjall_map_unsafe();
                 assert!(map.clear().is_ok());
             },
-            |ctx| cleanup(ctx),
+            cleanup,
         );
     }
 
     #[test]
     fn test_is_closed() {
         run_test(
-            || create_context(),
+            create_context,
             |ctx| {
                 let map = ctx.fjall_map_unsafe();
                 assert!(map.is_closed().is_ok());
             },
-            |ctx| cleanup(ctx),
+            cleanup,
         );
     }
 
     #[test]
     fn test_close() {
         run_test(
-            || create_context(),
+            create_context,
             |ctx| {
                 let map = ctx.fjall_map_unsafe();
                 assert!(map.close().is_ok());
             },
-            |ctx| cleanup(ctx),
+            cleanup,
         );
     }
 
     #[test]
     fn test_values() {
         run_test(
-            || create_context(),
+            create_context,
             |ctx| {
                 let map = ctx.fjall_map_unsafe();
                 assert!(map.values().is_ok());
             },
-            |ctx| cleanup(ctx),
+            cleanup,
         );
     }
 
     #[test]
     fn test_keys() {
         run_test(
-            || create_context(),
+            create_context,
             |ctx| {
                 let map = ctx.fjall_map_unsafe();
                 assert!(map.keys().is_ok());
             },
-            |ctx| cleanup(ctx),
+            cleanup,
         );
     }
 
     #[test]
     fn test_remove() {
         run_test(
-            || create_context(),
+            create_context,
             |ctx| {
                 let map = ctx.fjall_map_unsafe();
                 let key = Key::from("test_key");
                 assert!(map.remove(&key).is_ok());
             },
-            |ctx| cleanup(ctx),
+            cleanup,
         );
     }
 
     #[test]
     fn test_put() {
         run_test(
-            || create_context(),
+            create_context,
             |ctx| {
                 let map = ctx.fjall_map_unsafe();
                 let key = Key::from("test_key");
                 let value = Value::from("test_value");
                 assert!(map.put(key, value).is_ok());
             },
-            |ctx| cleanup(ctx),
+            cleanup,
         );
     }
 
     #[test]
     fn test_size() {
         run_test(
-            || create_context(),
+            create_context,
             |ctx| {
                 let map = ctx.fjall_map_unsafe();
                 assert!(map.size().is_ok());
             },
-            |ctx| cleanup(ctx),
+            cleanup,
         );
     }
 
     #[test]
     fn test_put_if_absent() {
         run_test(
-            || create_context(),
+            create_context,
             |ctx| {
                 let map = ctx.fjall_map_unsafe();
                 let key = Key::from("test_key");
                 let value = Value::from("test_value");
                 assert!(map.put_if_absent(key, value).is_ok());
             },
-            |ctx| cleanup(ctx),
+            cleanup,
         );
     }
 
     #[test]
     fn test_first_key() {
         run_test(
-            || create_context(),
+            create_context,
             |ctx| {
                 let map = ctx.fjall_map_unsafe();
                 assert!(map.first_key().is_ok());
             },
-            |ctx| cleanup(ctx),
+            cleanup,
         );
     }
 
     #[test]
     fn test_last_key() {
         run_test(
-            || create_context(),
+            create_context,
             |ctx| {
                 let map = ctx.fjall_map_unsafe();
                 assert!(map.last_key().is_ok());
             },
-            |ctx| cleanup(ctx),
+            cleanup,
         );
     }
 
     #[test]
     fn test_higher_key() {
         run_test(
-            || create_context(),
+            create_context,
             |ctx| {
                 let map = ctx.fjall_map_unsafe();
                 let key = Key::from("test_key");
                 assert!(map.higher_key(&key).is_ok());
             },
-            |ctx| cleanup(ctx),
+            cleanup,
         );
     }
 
     #[test]
     fn test_ceiling_key() {
         run_test(
-            || create_context(),
+            create_context,
             |ctx| {
                 let map = ctx.fjall_map_unsafe();
                 let key = Key::from("test_key");
                 assert!(map.ceiling_key(&key).is_ok());
             },
-            |ctx| cleanup(ctx),
+            cleanup,
         );
     }
 
     #[test]
     fn test_lower_key() {
         run_test(
-            || create_context(),
+            create_context,
             |ctx| {
                 let map = ctx.fjall_map_unsafe();
                 let key = Key::from("test_key");
                 assert!(map.lower_key(&key).is_ok());
             },
-            |ctx| cleanup(ctx),
+            cleanup,
         );
     }
 
     #[test]
     fn test_floor_key() {
         run_test(
-            || create_context(),
+            create_context,
             |ctx| {
                 let map = ctx.fjall_map_unsafe();
                 let key = Key::from("test_key");
                 assert!(map.floor_key(&key).is_ok());
             },
-            |ctx| cleanup(ctx),
+            cleanup,
         );
     }
 
     #[test]
     fn test_is_empty() {
         run_test(
-            || create_context(),
+            create_context,
             |ctx| {
                 let map = ctx.fjall_map_unsafe();
                 assert!(map.is_empty().is_ok());
             },
-            |ctx| cleanup(ctx),
+            cleanup,
         );
     }
 
     #[test]
     fn test_get_store() {
         run_test(
-            || create_context(),
+            create_context,
             |ctx| {
                 let map = ctx.fjall_map_unsafe();
                 assert!(map.get_store().is_ok());
             },
-            |ctx| cleanup(ctx),
+            cleanup,
         );
     }
 
     #[test]
     fn test_get_name() {
         run_test(
-            || create_context(),
+            create_context,
             |ctx| {
                 let map = ctx.fjall_map_unsafe();
                 assert_eq!(map.get_name().unwrap(), "test_map");
             },
-            |ctx| cleanup(ctx),
+            cleanup,
         );
     }
 
     #[test]
     fn test_entries() {
         run_test(
-            || create_context(),
+            create_context,
             |ctx| {
                 let map = ctx.fjall_map_unsafe();
                 assert!(map.entries().is_ok());
             },
-            |ctx| cleanup(ctx),
+            cleanup,
         );
     }
 
     #[test]
     fn test_reverse_entries() {
         run_test(
-            || create_context(),
+            create_context,
             |ctx| {
                 let map = ctx.fjall_map_unsafe();
                 assert!(map.reverse_entries().is_ok());
             },
-            |ctx| cleanup(ctx),
+            cleanup,
         );
     }
 
     #[test]
     fn test_dispose_map() {
         run_test(
-            || create_context(),
+            create_context,
             |ctx| {
                 let map = ctx.fjall_map_unsafe();
                 let key = Key::from("test_key");
@@ -1276,26 +1276,26 @@ mod tests {
                 map.put(key, value).expect("Failed to put item");
                 assert!(map.dispose().is_ok());
             },
-            |ctx| cleanup(ctx),
+            cleanup,
         );
     }
 
     #[test]
     fn test_is_dropped() {
         run_test(
-            || create_context(),
+            create_context,
             |ctx| {
                 let map = ctx.fjall_map_unsafe();
                 assert!(map.is_dropped().is_ok());
             },
-            |ctx| cleanup(ctx),
+            cleanup,
         );
     }
 
     #[test]
     fn test_clear_with_async_cleanup_success() {
         run_test(
-            || create_context(),
+            create_context,
             |ctx| {
                 let map = ctx.fjall_map_unsafe();
 
@@ -1317,14 +1317,14 @@ mod tests {
                 // Verify cleared
                 assert_eq!(map.size().unwrap(), 0);
             },
-            |ctx| cleanup(ctx),
+            cleanup,
         );
     }
 
     #[test]
     fn test_clear_async_cleanup_handles_commit_gracefully() {
         run_test(
-            || create_context(),
+            create_context,
             |ctx| {
                 let map = ctx.fjall_map_unsafe();
 
@@ -1342,14 +1342,14 @@ mod tests {
                 // Map should still be usable after clear
                 assert!(map.get(&Key::from("test")).is_ok());
             },
-            |ctx| cleanup(ctx),
+            cleanup,
         );
     }
 
     #[test]
     fn test_clear_on_closed_map() {
         run_test(
-            || create_context(),
+            create_context,
             |ctx| {
                 let map = ctx.fjall_map_unsafe();
 
@@ -1359,14 +1359,14 @@ mod tests {
                 // Clear should fail since map is closed
                 assert!(map.clear().is_err());
             },
-            |ctx| cleanup(ctx),
+            cleanup,
         );
     }
 
     #[test]
     fn test_clear_on_dropped_map() {
         run_test(
-            || create_context(),
+            create_context,
             |ctx| {
                 let map = ctx.fjall_map_unsafe();
 
@@ -1376,14 +1376,14 @@ mod tests {
                 // Clear should fail since map is dropped
                 assert!(map.clear().is_err());
             },
-            |ctx| cleanup(ctx),
+            cleanup,
         );
     }
 
     #[test]
     fn test_multiple_clears_in_succession() {
         run_test(
-            || create_context(),
+            create_context,
             |ctx| {
                 let map = ctx.fjall_map_unsafe();
 
@@ -1406,14 +1406,14 @@ mod tests {
                 thread::sleep(Duration::from_millis(200));
                 assert_eq!(map.size().unwrap(), 0);
             },
-            |ctx| cleanup(ctx),
+            cleanup,
         );
     }
 
     #[test]
     fn test_clear_does_not_panic_on_async_errors() {
         run_test(
-            || create_context(),
+            create_context,
             |ctx| {
                 let map = ctx.fjall_map_unsafe();
 
@@ -1436,14 +1436,14 @@ mod tests {
                 // Map should be usable and cleared
                 assert_eq!(map.size().unwrap(), 0);
             },
-            |ctx| cleanup(ctx),
+            cleanup,
         );
     }
 
     #[test]
     fn test_clear_followed_by_put_operations() {
         run_test(
-            || create_context(),
+            create_context,
             |ctx| {
                 let map = ctx.fjall_map_unsafe();
 
@@ -1465,14 +1465,14 @@ mod tests {
                 assert!(result.is_some());
                 assert_eq!(result.unwrap(), Value::from("new_value"));
             },
-            |ctx| cleanup(ctx),
+            cleanup,
         );
     }
 
     #[test]
     fn test_clear_with_large_dataset() {
         run_test(
-            || create_context(),
+            create_context,
             |ctx| {
                 let map = ctx.fjall_map_unsafe();
 
@@ -1493,14 +1493,14 @@ mod tests {
 
                 assert_eq!(map.size().unwrap(), 0);
             },
-            |ctx| cleanup(ctx),
+            cleanup,
         );
     }
 
     #[test]
     fn test_clear_async_task_error_logging() {
         run_test(
-            || create_context(),
+            create_context,
             |ctx| {
                 let map = ctx.fjall_map_unsafe();
 
@@ -1518,14 +1518,14 @@ mod tests {
                 // Map should still be functional
                 assert!(map.is_closed().is_ok() || map.get(&Key::from("key")).is_ok());
             },
-            |ctx| cleanup(ctx),
+            cleanup,
         );
     }
 
     #[test]
     fn test_collect_garbage_error_handling() {
         run_test(
-            || create_context(),
+            create_context,
             |ctx| {
                 let map = ctx.fjall_map_unsafe();
 
@@ -1550,7 +1550,7 @@ mod tests {
                     }
                 }
             },
-            |ctx| cleanup(ctx),
+            cleanup,
         );
     }
 
@@ -1558,7 +1558,7 @@ mod tests {
     fn test_attributes_handles_non_document_gracefully() {
         // Verify attributes doesn't panic on non-Document metadata
         run_test(
-            || create_context(),
+            create_context,
             |ctx| {
                 let map = ctx.fjall_map_unsafe();
 
@@ -1569,7 +1569,7 @@ mod tests {
                     "get_attributes should not panic on non-Document metadata"
                 );
             },
-            |ctx| cleanup(ctx),
+            cleanup,
         );
     }
 
@@ -1577,7 +1577,7 @@ mod tests {
     fn test_remove_uses_safe_error_pattern() {
         // Verify remove() uses safe error handling pattern
         run_test(
-            || create_context(),
+            create_context,
             |ctx| {
                 let map = ctx.fjall_map_unsafe();
                 let key = Key::from("test_key");
@@ -1593,7 +1593,7 @@ mod tests {
                     "Remove should succeed and use safe error handling"
                 );
             },
-            |ctx| cleanup(ctx),
+            cleanup,
         );
     }
 
@@ -1601,7 +1601,7 @@ mod tests {
     fn test_put_if_absent_uses_safe_error_pattern() {
         // Verify put_if_absent() uses safe error handling pattern
         run_test(
-            || create_context(),
+            create_context,
             |ctx| {
                 let map = ctx.fjall_map_unsafe();
                 let key = Key::from("unique_key");
@@ -1617,7 +1617,7 @@ mod tests {
                 let existing = result2.unwrap();
                 assert!(existing.is_some(), "Should return existing value");
             },
-            |ctx| cleanup(ctx),
+            cleanup,
         );
     }
 
@@ -1625,7 +1625,7 @@ mod tests {
     fn test_collect_garbage_uses_safe_error_pattern() {
         // Verify collect_garbage() uses safe error pattern
         run_test(
-            || create_context(),
+            create_context,
             |ctx| {
                 let map = ctx.fjall_map_unsafe();
 
@@ -1642,7 +1642,7 @@ mod tests {
                 // Result may be Ok or Err, but should never panic
                 assert!(true, "GC completed safely");
             },
-            |ctx| cleanup(ctx),
+            cleanup,
         );
     }
 
@@ -1650,7 +1650,7 @@ mod tests {
     fn test_error_handling_consistency_across_methods() {
         // Verify all methods use consistent error handling patterns
         run_test(
-            || create_context(),
+            create_context,
             |ctx| {
                 let map = ctx.fjall_map_unsafe();
                 let key = Key::from("test_key");
@@ -1676,7 +1676,7 @@ mod tests {
                 // Should complete without panic regardless of success/failure
                 assert!(true, "collect_garbage completed safely");
             },
-            |ctx| cleanup(ctx),
+            cleanup,
         );
     }
 
@@ -1684,7 +1684,7 @@ mod tests {
     fn test_multiple_garbage_collection_cycles() {
         // Verify refactored GC helper handles multiple cycles safely
         run_test(
-            || create_context(),
+            create_context,
             |ctx| {
                 let map = ctx.fjall_map_unsafe();
 
@@ -1703,7 +1703,7 @@ mod tests {
 
                 assert!(true, "Multiple GC cycles completed safely");
             },
-            |ctx| cleanup(ctx),
+            cleanup,
         );
     }
 
@@ -1711,7 +1711,7 @@ mod tests {
     fn test_attributes_empty_map_doesnt_panic() {
         // Verify attributes don't panic on empty map
         run_test(
-            || create_context(),
+            create_context,
             |ctx| {
                 let map = ctx.fjall_map_unsafe();
 
@@ -1719,7 +1719,7 @@ mod tests {
                 let result = map.get_attributes();
                 assert!(result.is_ok(), "Empty map attributes should not panic");
             },
-            |ctx| cleanup(ctx),
+            cleanup,
         );
     }
 
@@ -1727,7 +1727,7 @@ mod tests {
     fn test_remove_after_put_safe_error_handling() {
         // Comprehensive remove test with safe error handling
         run_test(
-            || create_context(),
+            create_context,
             |ctx| {
                 let map = ctx.fjall_map_unsafe();
 
@@ -1748,7 +1748,7 @@ mod tests {
                     assert_eq!(retrieved, Some(value), "Should retrieve correct value");
                 }
             },
-            |ctx| cleanup(ctx),
+            cleanup,
         );
     }
 
@@ -1756,7 +1756,7 @@ mod tests {
     fn test_garbage_collection_with_various_data_types() {
         // Test GC helper with various data types
         run_test(
-            || create_context(),
+            create_context,
             |ctx| {
                 let map = ctx.fjall_map_unsafe();
 
@@ -1788,7 +1788,7 @@ mod tests {
     #[test]
     fn test_fjall_map_contains_key_perf() {
         run_test(
-            || create_context(),
+            create_context,
             |ctx| {
                 let map = ctx.fjall_map_unsafe();
                 let key = Key::from("perf_key");
@@ -1809,7 +1809,7 @@ mod tests {
     #[test]
     fn test_fjall_map_get_perf() {
         run_test(
-            || create_context(),
+            create_context,
             |ctx| {
                 let map = ctx.fjall_map_unsafe();
                 let key = Key::from("perf_key");
@@ -1832,7 +1832,7 @@ mod tests {
     #[test]
     fn test_put_all_empty_batch() {
         run_test(
-            || create_context(),
+            create_context,
             |ctx| {
                 let map = ctx.fjall_map_unsafe();
 
@@ -1852,7 +1852,7 @@ mod tests {
     #[test]
     fn test_put_all_single_entry() {
         run_test(
-            || create_context(),
+            create_context,
             |ctx| {
                 let map = ctx.fjall_map_unsafe();
 
@@ -1874,7 +1874,7 @@ mod tests {
     #[test]
     fn test_put_all_multiple_entries() {
         run_test(
-            || create_context(),
+            create_context,
             |ctx| {
                 let map = ctx.fjall_map_unsafe();
 
@@ -1918,7 +1918,7 @@ mod tests {
     #[test]
     fn test_put_all_overwrites_existing() {
         run_test(
-            || create_context(),
+            create_context,
             |ctx| {
                 let map = ctx.fjall_map_unsafe();
 
@@ -1947,7 +1947,7 @@ mod tests {
     #[test]
     fn test_put_all_large_batch() {
         run_test(
-            || create_context(),
+            create_context,
             |ctx| {
                 let map = ctx.fjall_map_unsafe();
 
@@ -1994,7 +1994,7 @@ mod tests {
     #[test]
     fn test_put_all_with_numeric_keys() {
         run_test(
-            || create_context(),
+            create_context,
             |ctx| {
                 let map = ctx.fjall_map_unsafe();
 
@@ -2036,7 +2036,7 @@ mod tests {
     #[test]
     fn test_put_all_on_closed_map_fails() {
         run_test(
-            || create_context(),
+            create_context,
             |ctx| {
                 let map = ctx.fjall_map_unsafe();
 
@@ -2058,7 +2058,7 @@ mod tests {
     #[test]
     fn test_put_all_perf_vs_individual_puts() {
         run_test(
-            || create_context(),
+            create_context,
             |ctx| {
                 let map = ctx.fjall_map_unsafe();
 

@@ -270,7 +270,7 @@ impl SpatialIndex {
             .nitrite_store()
             .and_then(|store| store.open_map(collection_name))?;
 
-        let document_opt = nitrite_map.get(&Value::NitriteId(nitrite_id.clone()))?;
+        let document_opt = nitrite_map.get(&Value::NitriteId(*nitrite_id))?;
 
         if let Some(value) = document_opt {
             let first_field = &field_names[0];

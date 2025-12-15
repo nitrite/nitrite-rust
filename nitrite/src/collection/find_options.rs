@@ -282,7 +282,7 @@ mod tests {
     #[test]
     fn test_find_options_collator_options() {
         let collator = CollatorOptions::default();
-        let options = FindOptions::new().collator_options(collator.clone());
+        let options = FindOptions::new().collator_options(collator);
 
         assert_eq!(options.collator_options.unwrap().alternate_handling, collator.alternate_handling);
     }
@@ -290,7 +290,7 @@ mod tests {
     #[test]
     fn test_find_options_collator_preferences() {
         let collator = CollatorPreferences::default();
-        let options = FindOptions::new().collator_preferences(collator.clone());
+        let options = FindOptions::new().collator_preferences(collator);
 
         assert_eq!(options.collator_preferences.unwrap().case_first, collator.case_first);
     }

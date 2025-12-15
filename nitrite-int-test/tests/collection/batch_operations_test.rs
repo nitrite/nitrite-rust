@@ -17,7 +17,7 @@ use nitrite_int_test::test_util::{cleanup, create_test_context, run_test};
 fn test_batch_insert_small_batch_uses_sequential() {
     // Batches <= 10 documents use sequential insert path
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let collection = ctx.db().collection("small_batch")?;
             
@@ -36,7 +36,7 @@ fn test_batch_insert_small_batch_uses_sequential() {
             
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
@@ -44,7 +44,7 @@ fn test_batch_insert_small_batch_uses_sequential() {
 fn test_batch_insert_large_batch_uses_optimized() {
     // Batches > 10 documents use optimized put_all path
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let collection = ctx.db().collection("large_batch")?;
             
@@ -69,14 +69,14 @@ fn test_batch_insert_large_batch_uses_optimized() {
             
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_batch_insert_returns_correct_ids() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let collection = ctx.db().collection("test_ids")?;
             
@@ -99,14 +99,14 @@ fn test_batch_insert_returns_correct_ids() {
             
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_batch_insert_with_nested_documents() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let collection = ctx.db().collection("nested")?;
             
@@ -135,14 +135,14 @@ fn test_batch_insert_with_nested_documents() {
             
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_batch_insert_with_arrays() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let collection = ctx.db().collection("arrays")?;
             
@@ -163,7 +163,7 @@ fn test_batch_insert_with_arrays() {
             
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
@@ -174,7 +174,7 @@ fn test_batch_insert_with_arrays() {
 #[test]
 fn test_batch_insert_fails_on_unique_index_violation() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let collection = ctx.db().collection("unique_test")?;
             
@@ -209,21 +209,21 @@ fn test_batch_insert_fails_on_unique_index_violation() {
             
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_batch_insert_duplicate_ids_detected() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let collection = ctx.db().collection("dup_ids")?;
             
             // Insert a document first
             let doc1 = doc!{ "value": "original" };
             let result = collection.insert(doc1.clone())?;
-            let existing_id = result.affected_nitrite_ids()[0].clone();
+            let existing_id = result.affected_nitrite_ids()[0];
             
             // Try to insert a batch with the same ID
             let mut docs: Vec<_> = (0..15).map(|i| {
@@ -249,14 +249,14 @@ fn test_batch_insert_duplicate_ids_detected() {
             
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_batch_insert_empty_batch() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let collection = ctx.db().collection("empty")?;
             
@@ -268,7 +268,7 @@ fn test_batch_insert_empty_batch() {
             
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
@@ -280,7 +280,7 @@ fn test_batch_insert_empty_batch() {
 fn test_batch_insert_exactly_at_threshold() {
     // Exactly 10 documents - should use sequential path
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let collection = ctx.db().collection("threshold_10")?;
             
@@ -293,7 +293,7 @@ fn test_batch_insert_exactly_at_threshold() {
             
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
@@ -301,7 +301,7 @@ fn test_batch_insert_exactly_at_threshold() {
 fn test_batch_insert_just_above_threshold() {
     // 11 documents - should use optimized path
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let collection = ctx.db().collection("threshold_11")?;
             
@@ -314,14 +314,14 @@ fn test_batch_insert_just_above_threshold() {
             
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_batch_insert_with_null_values() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let collection = ctx.db().collection("nulls")?;
             
@@ -341,7 +341,7 @@ fn test_batch_insert_with_null_values() {
             
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
@@ -349,7 +349,7 @@ fn test_batch_insert_with_null_values() {
 fn test_batch_insert_concurrent_operations() {
     // Test that batch insert works correctly with other operations
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let collection = ctx.db().collection("concurrent")?;
             
@@ -377,7 +377,7 @@ fn test_batch_insert_concurrent_operations() {
             
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
@@ -388,7 +388,7 @@ fn test_batch_insert_concurrent_operations() {
 #[test]
 fn test_batch_update_small_batch() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let collection = ctx.db().collection("update_small")?;
             
@@ -408,14 +408,14 @@ fn test_batch_update_small_batch() {
             
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_batch_update_large_batch() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let collection = ctx.db().collection("update_large")?;
             
@@ -438,14 +438,14 @@ fn test_batch_update_large_batch() {
             
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_batch_update_increments_revision() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let collection = ctx.db().collection("revisions")?;
             
@@ -479,14 +479,14 @@ fn test_batch_update_increments_revision() {
             
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_batch_update_with_insert_if_absent() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let collection = ctx.db().collection("upsert")?;
             
@@ -513,7 +513,7 @@ fn test_batch_update_with_insert_if_absent() {
             
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
@@ -524,7 +524,7 @@ fn test_batch_update_with_insert_if_absent() {
 #[test]
 fn test_batch_update_unique_constraint_violation() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let collection = ctx.db().collection("update_unique")?;
             
@@ -557,14 +557,14 @@ fn test_batch_update_unique_constraint_violation() {
             
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_batch_update_no_matching_documents() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let collection = ctx.db().collection("no_match")?;
             
@@ -589,7 +589,7 @@ fn test_batch_update_no_matching_documents() {
             
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
@@ -600,7 +600,7 @@ fn test_batch_update_no_matching_documents() {
 #[test]
 fn test_batch_update_single_document() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let collection = ctx.db().collection("single_update")?;
             
@@ -615,14 +615,14 @@ fn test_batch_update_single_document() {
             
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_batch_update_with_complex_document() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let collection = ctx.db().collection("complex_update")?;
             
@@ -658,7 +658,7 @@ fn test_batch_update_with_complex_document() {
             
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
@@ -669,7 +669,7 @@ fn test_batch_update_with_complex_document() {
 #[test]
 fn test_batch_insert_then_batch_update() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let collection = ctx.db().collection("insert_update")?;
             
@@ -697,14 +697,14 @@ fn test_batch_insert_then_batch_update() {
             
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_batch_insert_with_index_then_update() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let collection = ctx.db().collection("indexed_ops")?;
             
@@ -733,7 +733,7 @@ fn test_batch_insert_with_index_then_update() {
             
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
@@ -744,7 +744,7 @@ fn test_batch_insert_with_index_then_update() {
 #[test]
 fn test_batch_insert_rollback_on_index_failure() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let collection = ctx.db().collection("rollback_insert")?;
             
@@ -779,14 +779,14 @@ fn test_batch_insert_rollback_on_index_failure() {
             
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_batch_update_rollback_on_unique_violation() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let collection = ctx.db().collection("rollback_update")?;
             
@@ -820,7 +820,7 @@ fn test_batch_update_rollback_on_unique_violation() {
             
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
@@ -831,7 +831,7 @@ fn test_batch_update_rollback_on_unique_violation() {
 #[test]
 fn test_batch_insert_performance_large() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let collection = ctx.db().collection("performance")?;
             
@@ -863,14 +863,14 @@ fn test_batch_insert_performance_large() {
             
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_batch_update_performance_large() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let collection = ctx.db().collection("update_performance")?;
             
@@ -897,6 +897,6 @@ fn test_batch_update_performance_large() {
             
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }

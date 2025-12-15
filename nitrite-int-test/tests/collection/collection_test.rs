@@ -5,21 +5,21 @@ use nitrite_int_test::test_util::{cleanup, create_test_context, run_test};
 #[test]
 fn test_get_name() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let collection = ctx.db().collection("test")?;
             // Assert that the collection name is "test"
             assert_eq!(collection.name(), "test");
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_dispose_collection() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let db = ctx.db();
             // Check that the collection exists
@@ -34,14 +34,14 @@ fn test_dispose_collection() {
             assert!(!collection.is_open()?);
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_close_connection() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let collection = ctx.db().collection("test")?;
             // Close the collection connection
@@ -50,14 +50,14 @@ fn test_close_connection() {
             assert!(!collection.is_open()?);
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_dispose_after_close() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let collection = ctx.db().collection("test")?;
             // Close the collection connection first
@@ -68,14 +68,14 @@ fn test_dispose_after_close() {
             assert!(result.is_err());
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_operation_after_drop() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let collection = ctx.db().collection("test")?;
             // Drop the collection
@@ -86,14 +86,14 @@ fn test_operation_after_drop() {
             assert!(result.is_err());
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_attributes() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let collection = ctx.db().collection("test")?;
             let attributes = collection.attributes()?;
@@ -113,5 +113,5 @@ fn test_attributes() {
             assert_eq!(attributes.get("key1").unwrap(), &Value::from("value1"));
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )}

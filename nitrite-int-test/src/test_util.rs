@@ -11,7 +11,7 @@ use std::{env, fs, thread};
 
 /// Runs a test with retry logic and error handling.
 /// Tests run on the current thread to avoid thread exhaustion when running many tests in parallel.
-pub fn run_test<T, B, A>(before: B, test: T, after: A) -> ()
+pub fn run_test<T, B, A>(before: B, test: T, after: A)
 where
     T: Fn(TestContext) -> NitriteResult<()> + std::panic::UnwindSafe + std::panic::RefUnwindSafe,
     B: Fn() -> NitriteResult<TestContext> + std::panic::UnwindSafe + std::panic::RefUnwindSafe,
@@ -472,9 +472,9 @@ impl NitriteDateTime {
     }
 }
 
-impl Into<Value> for NitriteDateTime {
-    fn into(self) -> Value {
-        Value::String(self.0.to_rfc3339())
+impl From<NitriteDateTime> for Value {
+    fn from(val: NitriteDateTime) -> Self {
+        Value::String(val.0.to_rfc3339())
     }
 }
 
@@ -500,7 +500,7 @@ impl Convertible for NitriteDateTime {
     fn from_value(value: &Value) -> NitriteResult<Self::Output> {
         match value {
             Value::String(s) => {
-                let dt = DateTime::parse_from_rfc3339(&s).unwrap();
+                let dt = DateTime::parse_from_rfc3339(s).unwrap();
                 Ok(NitriteDateTime(dt))
             }
             _ => panic!("Invalid value type"),
@@ -516,10 +516,8 @@ pub fn is_sorted<T: Ord>(iterable: impl IntoIterator<Item = T>, ascending: bool)
                 if prev > current {
                     return false;
                 }
-            } else {
-                if prev < current {
-                    return false;
-                }
+            } else if prev < current {
+                return false;
             }
             prev = current;
         }

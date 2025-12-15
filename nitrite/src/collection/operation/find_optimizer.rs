@@ -993,7 +993,7 @@ mod tests {
         if is_or_filter(&filter) {
             // This shouldn't happen for regular filters
             let result = optimizer.inner.create_or_plan(
-                &vec![create_index_descriptor()],
+                &[create_index_descriptor()],
                 FilterVec::from_vec(vec![filter]),
             );
             // If it gets here, it should handle it safely
@@ -1030,7 +1030,7 @@ mod tests {
         
         // And create_or_plan should work
         let result = optimizer.inner.create_or_plan(
-            &vec![create_index_descriptor()],
+            &[create_index_descriptor()],
             FilterVec::from_vec(vec![or_filter]),
         );
         assert!(result.is_ok());

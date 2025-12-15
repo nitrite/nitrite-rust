@@ -13,7 +13,7 @@ use nitrite_int_test::test_util::{cleanup, create_test_context, now, run_test};
 #[test]
 fn test_insert_single() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let repo: ObjectRepository<Employee> = ctx.db().repository()?;
 
@@ -29,14 +29,14 @@ fn test_insert_single() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_insert_multiple() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let repo: ObjectRepository<Employee> = ctx.db().repository()?;
 
@@ -55,14 +55,14 @@ fn test_insert_multiple() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_insert_with_nested_objects() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let repo: ObjectRepository<Employee> = ctx.db().repository()?;
 
@@ -85,14 +85,14 @@ fn test_insert_with_nested_objects() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_insert_preserves_order() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let repo: ObjectRepository<Employee> = ctx.db().repository()?;
 
@@ -118,7 +118,7 @@ fn test_insert_preserves_order() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
@@ -129,7 +129,7 @@ fn test_insert_preserves_order() {
 #[test]
 fn test_update_with_filter() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let repo: ObjectRepository<Employee> = ctx.db().repository()?;
 
@@ -155,14 +155,14 @@ fn test_update_with_filter() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_update_one() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let repo: ObjectRepository<Employee> = ctx.db().repository()?;
 
@@ -183,14 +183,14 @@ fn test_update_one() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_update_document() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let repo: ObjectRepository<Employee> = ctx.db().repository()?;
 
@@ -211,14 +211,14 @@ fn test_update_document() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_update_multiple() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let repo: ObjectRepository<Employee> = ctx.db().repository()?;
             let join_date = now();
@@ -247,14 +247,14 @@ fn test_update_multiple() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_update_just_once() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let repo: ObjectRepository<Employee> = ctx.db().repository()?;
             let join_date = now();
@@ -280,14 +280,14 @@ fn test_update_just_once() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_upsert_insert() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let repo: ObjectRepository<Employee> = ctx.db().repository()?;
 
@@ -309,14 +309,14 @@ fn test_upsert_insert() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_upsert_update() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let repo: ObjectRepository<Employee> = ctx.db().repository()?;
 
@@ -343,14 +343,14 @@ fn test_upsert_update() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_update_null_value() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let repo: ObjectRepository<Employee> = ctx.db().repository()?;
 
@@ -372,14 +372,14 @@ fn test_update_null_value() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_nested_update() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let repo: ObjectRepository<Employee> = ctx.db().repository()?;
 
@@ -408,7 +408,7 @@ fn test_nested_update() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
@@ -419,7 +419,7 @@ fn test_nested_update() {
 #[test]
 fn test_remove_with_filter() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let repo: ObjectRepository<Employee> = ctx.db().repository()?;
 
@@ -441,14 +441,14 @@ fn test_remove_with_filter() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_remove_multiple() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let repo: ObjectRepository<Employee> = ctx.db().repository()?;
             let join_date = now();
@@ -467,14 +467,14 @@ fn test_remove_multiple() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_remove_just_once() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let repo: ObjectRepository<Employee> = ctx.db().repository()?;
             let join_date = now();
@@ -493,14 +493,14 @@ fn test_remove_just_once() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_remove_one() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let repo: ObjectRepository<Employee> = ctx.db().repository()?;
 
@@ -517,14 +517,14 @@ fn test_remove_one() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_remove_all() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let repo: ObjectRepository<Employee> = ctx.db().repository()?;
 
@@ -540,14 +540,14 @@ fn test_remove_all() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_remove_non_existent() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let repo: ObjectRepository<Employee> = ctx.db().repository()?;
 
@@ -562,7 +562,7 @@ fn test_remove_non_existent() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
@@ -573,7 +573,7 @@ fn test_remove_non_existent() {
 #[test]
 fn test_create_index() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let repo: ObjectRepository<Employee> = ctx.db().repository()?;
 
@@ -585,14 +585,14 @@ fn test_create_index() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_create_unique_index() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let repo: ObjectRepository<Employee> = ctx.db().repository()?;
 
@@ -613,14 +613,14 @@ fn test_create_unique_index() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_list_indexes() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let repo: ObjectRepository<Employee> = ctx.db().repository()?;
 
@@ -634,14 +634,14 @@ fn test_list_indexes() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_drop_index() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let repo: ObjectRepository<Employee> = ctx.db().repository()?;
 
@@ -653,14 +653,14 @@ fn test_drop_index() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_drop_all_indexes() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let repo: ObjectRepository<Employee> = ctx.db().repository()?;
 
@@ -674,14 +674,14 @@ fn test_drop_all_indexes() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_rebuild_index() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let repo: ObjectRepository<Employee> = ctx.db().repository()?;
 
@@ -704,7 +704,7 @@ fn test_rebuild_index() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
@@ -715,7 +715,7 @@ fn test_rebuild_index() {
 #[test]
 fn test_clear() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let repo: ObjectRepository<Employee> = ctx.db().repository()?;
 
@@ -733,14 +733,14 @@ fn test_clear() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_size() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let repo: ObjectRepository<Employee> = ctx.db().repository()?;
 
@@ -750,32 +750,32 @@ fn test_size() {
                 let mut emp = Employee::default();
                 emp.emp_id = Some(i);
                 repo.insert(emp)?;
-                assert_eq!(repo.size()?, (i + 1) as u64);
+                assert_eq!(repo.size()?, ((i + 1)));
             }
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_is_open() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let repo: ObjectRepository<Employee> = ctx.db().repository()?;
             assert!(repo.is_open()?);
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_is_dropped() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let repo: ObjectRepository<Employee> = ctx.db().repository()?;
 
@@ -787,14 +787,14 @@ fn test_is_dropped() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_dispose() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let repo: ObjectRepository<Employee> = ctx.db().repository()?;
 
@@ -809,6 +809,6 @@ fn test_dispose() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }

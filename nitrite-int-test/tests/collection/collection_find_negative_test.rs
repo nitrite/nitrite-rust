@@ -7,7 +7,7 @@ use nitrite_int_test::test_util::{cleanup, create_test_context, insert_test_docu
 #[test]
 fn test_find_with_empty_collection() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let collection = ctx.db().collection("test")?;
 
@@ -17,14 +17,14 @@ fn test_find_with_empty_collection() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_find_with_no_matching_filter() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let collection = ctx.db().collection("test")?;
             insert_test_documents(&collection)?;
@@ -35,14 +35,14 @@ fn test_find_with_no_matching_filter() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_find_with_null_filter() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let collection = ctx.db().collection("test")?;
 
@@ -56,14 +56,14 @@ fn test_find_with_null_filter() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_find_on_non_existent_field() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let collection = ctx.db().collection("test")?;
             insert_test_documents(&collection)?;
@@ -74,14 +74,14 @@ fn test_find_on_non_existent_field() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_find_with_skip_limit() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let collection = ctx.db().collection("test")?;
             insert_test_documents(&collection)?;
@@ -97,14 +97,14 @@ fn test_find_with_skip_limit() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_find_with_invalid_field_path() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let collection = ctx.db().collection("test")?;
 
@@ -117,6 +117,6 @@ fn test_find_with_invalid_field_path() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }

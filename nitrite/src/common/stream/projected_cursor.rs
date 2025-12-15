@@ -81,7 +81,7 @@ mod tests {
 
         let mut projected_cursor = ProjectedDocumentCursor::new(&mut cursor, projection);
 
-        let iter = (&mut projected_cursor).into_iter();
+        let iter = &mut projected_cursor;
         let result = iter.next().unwrap().unwrap();
         assert_eq!(
             result.get("field1").unwrap(),
@@ -112,7 +112,7 @@ mod tests {
 
         let mut projected_cursor = ProjectedDocumentCursor::new(&mut cursor, projection);
 
-        let iter = (&mut projected_cursor).into_iter();
+        let iter = &mut projected_cursor;
         let result = iter.next().unwrap().unwrap();
         assert_eq!(
             result.get("field1").unwrap(),
@@ -157,7 +157,7 @@ mod tests {
             .map(|i| {
                 Ok(create_document(vec![
                     ("field1", Value::String(format!("value{}", i))),
-                    ("field2", Value::I32(i as i32)),
+                    ("field2", Value::I32(i)),
                 ]))
             })
             .collect();
@@ -190,7 +190,7 @@ mod tests {
             .map(|i| {
                 Ok(create_document(vec![
                     ("field1", Value::String(format!("value{}", i))),
-                    ("field2", Value::I32(i as i32)),
+                    ("field2", Value::I32(i)),
                 ]))
             })
             .collect();
@@ -222,7 +222,7 @@ mod tests {
             .map(|i| {
                 Ok(create_document(vec![
                     ("field1", Value::String(format!("value{}", i))),
-                    ("field2", Value::I32(i as i32)),
+                    ("field2", Value::I32(i)),
                     ("field3", Value::String(format!("data{}", i))),
                 ]))
             })

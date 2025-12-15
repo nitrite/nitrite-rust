@@ -698,7 +698,7 @@ mod tests {
         let mut doc = Document::new();
         doc.put("field", Value::String("test123".to_string()))
             .unwrap();
-        assert_eq!(filter.apply(&doc).unwrap(), true);
+        assert!(filter.apply(&doc).unwrap());
     }
 
     #[test]
@@ -707,7 +707,7 @@ mod tests {
         let mut doc = Document::new();
         doc.put("field", Value::String("no_match".to_string()))
             .unwrap();
-        assert_eq!(filter.apply(&doc).unwrap(), false);
+        assert!(!filter.apply(&doc).unwrap());
     }
 
     #[test]
@@ -716,7 +716,7 @@ mod tests {
         let mut doc = Document::new();
         doc.put("field", Value::String("this is a test".to_string()))
             .unwrap();
-        assert_eq!(filter.apply(&doc).unwrap(), true);
+        assert!(filter.apply(&doc).unwrap());
     }
 
     #[test]
@@ -725,7 +725,7 @@ mod tests {
         let mut doc = Document::new();
         doc.put("field", Value::String("no match".to_string()))
             .unwrap();
-        assert_eq!(filter.apply(&doc).unwrap(), false);
+        assert!(!filter.apply(&doc).unwrap());
     }
 
     #[test]
@@ -738,7 +738,7 @@ mod tests {
         inner_doc.put("inner_field", Value::I32(42)).unwrap();
         doc.put("field", Value::Array(vec![Value::Document(inner_doc)]))
             .unwrap();
-        assert_eq!(filter.apply(&doc).unwrap(), true);
+        assert!(filter.apply(&doc).unwrap());
     }
 
     #[test]
@@ -751,7 +751,7 @@ mod tests {
         inner_doc.put("inner_field", Value::I32(43)).unwrap();
         doc.put("field", Value::Array(vec![Value::Document(inner_doc)]))
             .unwrap();
-        assert_eq!(filter.apply(&doc).unwrap(), false);
+        assert!(!filter.apply(&doc).unwrap());
     }
 
     // Invalid regex pattern handling tests
@@ -773,7 +773,7 @@ mod tests {
         assert!(filter.pattern.get().is_some());
         let mut doc = Document::new();
         doc.put("field", Value::String("test123".to_string())).unwrap();
-        assert_eq!(filter.apply(&doc).unwrap(), true);
+        assert!(filter.apply(&doc).unwrap());
     }
 
     #[test]
@@ -819,7 +819,7 @@ mod tests {
         let mut doc = Document::new();
         doc.put("content", Value::String("hello world example".to_string())).unwrap();
         // This tests basic text matching without needing a tokenizer
-        assert_eq!(filter.apply(&doc).unwrap(), true);
+        assert!(filter.apply(&doc).unwrap());
     }
 
     #[test]
@@ -828,7 +828,7 @@ mod tests {
         let mut doc = Document::new();
         doc.put("field", Value::String("this is a test".to_string())).unwrap();
         // Case-insensitive match should work
-        assert_eq!(filter.apply(&doc).unwrap(), true);
+        assert!(filter.apply(&doc).unwrap());
     }
 
     #[test]
@@ -837,7 +837,7 @@ mod tests {
         let mut doc = Document::new();
         doc.put("field", Value::String("this is a test".to_string())).unwrap();
         // Case-sensitive match should fail
-        assert_eq!(filter.apply(&doc).unwrap(), false);
+        assert!(!filter.apply(&doc).unwrap());
     }
 
     #[test]
@@ -926,7 +926,7 @@ mod tests {
         
         let result = filter.apply(&doc);
         assert!(result.is_ok());
-        assert_eq!(result.unwrap(), true);
+        assert!(result.unwrap());
     }
 
     #[test]
@@ -939,7 +939,7 @@ mod tests {
         
         let result = filter.apply(&doc);
         assert!(result.is_ok());
-        assert_eq!(result.unwrap(), false);
+        assert!(!result.unwrap());
     }
 
     #[test]
@@ -952,7 +952,7 @@ mod tests {
         
         let result = filter.apply(&doc);
         assert!(result.is_ok());
-        assert_eq!(result.unwrap(), true);
+        assert!(result.unwrap());
     }
 
     #[test]
@@ -965,7 +965,7 @@ mod tests {
         
         let result = filter.apply(&doc);
         assert!(result.is_ok());
-        assert_eq!(result.unwrap(), true);
+        assert!(result.unwrap());
     }
 
     #[test]
@@ -979,7 +979,7 @@ mod tests {
         
         let result = filter.apply(&doc);
         assert!(result.is_ok());
-        assert_eq!(result.unwrap(), false);
+        assert!(!result.unwrap());
     }
 
     #[test]
@@ -993,7 +993,7 @@ mod tests {
         
         let result = filter.apply(&doc);
         assert!(result.is_ok());
-        assert_eq!(result.unwrap(), true);
+        assert!(result.unwrap());
     }
 
     #[test]
@@ -1015,6 +1015,6 @@ mod tests {
         
         let result = filter.apply(&doc);
         assert!(result.is_ok());
-        assert_eq!(result.unwrap(), true);
+        assert!(result.unwrap());
     }
 }

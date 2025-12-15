@@ -86,7 +86,7 @@ impl FilterProvider for IntersectsFilter {
             NitriteError::new("Field name not set", ErrorKind::InvalidOperation)
         })?;
         
-        match entry.get(&*field) {
+        match entry.get(field) {
             Ok(value) => {
                 if let Some(stored_geom) = value_to_geometry(&value) {
                     Ok(self.inner.geometry.intersects(&stored_geom))
@@ -123,19 +123,19 @@ impl FilterProvider for IntersectsFilter {
     }
 
     fn can_be_grouped(&self, other: Filter) -> NitriteResult<bool> {
-        if let Some(_) = other.as_any().downcast_ref::<IntersectsFilter>() {
+        if other.as_any().downcast_ref::<IntersectsFilter>().is_some() {
             let self_field = self.get_field_name()?;
             let other_field = other.get_field_name()?;
             Ok(self_field == other_field)
-        } else if let Some(_) = other.as_any().downcast_ref::<WithinFilter>() {
+        } else if other.as_any().downcast_ref::<WithinFilter>().is_some() {
             let self_field = self.get_field_name()?;
             let other_field = other.get_field_name()?;
             Ok(self_field == other_field)
-        } else if let Some(_) = other.as_any().downcast_ref::<NearFilter>() {
+        } else if other.as_any().downcast_ref::<NearFilter>().is_some() {
             let self_field = self.get_field_name()?;
             let other_field = other.get_field_name()?;
             Ok(self_field == other_field)
-        } else if let Some(_) = other.as_any().downcast_ref::<GeoNearFilter>() {
+        } else if other.as_any().downcast_ref::<GeoNearFilter>().is_some() {
             let self_field = self.get_field_name()?;
             let other_field = other.get_field_name()?;
             Ok(self_field == other_field)
@@ -204,7 +204,7 @@ impl FilterProvider for WithinFilter {
             NitriteError::new("Field name not set", ErrorKind::InvalidOperation)
         })?;
         
-        match entry.get(&*field) {
+        match entry.get(field) {
             Ok(value) => {
                 if let Some(stored_geom) = value_to_geometry(&value) {
                     Ok(self.inner.geometry.contains(&stored_geom))
@@ -339,7 +339,7 @@ impl FilterProvider for NearFilter {
             NitriteError::new("Field name not set", ErrorKind::InvalidOperation)
         })?;
         
-        match entry.get(&*field) {
+        match entry.get(field) {
             Ok(value) => {
                 if let Some(stored_geom) = value_to_geometry(&value) {
                     Ok(self.matches_geometry(&stored_geom))
@@ -500,7 +500,7 @@ impl FilterProvider for GeoNearFilter {
             NitriteError::new("Field name not set", ErrorKind::InternalError)
         })?;
         
-        match entry.get(&*field) {
+        match entry.get(field) {
             Ok(value) => {
                 if let Some(stored_geom) = value_to_geometry(&value) {
                     Ok(self.matches_geometry(&stored_geom))
@@ -706,7 +706,7 @@ impl FilterProvider for KNearestFilter {
             NitriteError::new("Field name not set", ErrorKind::InternalError)
         })?;
         
-        match entry.get(&*field) {
+        match entry.get(field) {
             Ok(value) => {
                 if let Some(stored_geom) = value_to_geometry(&value) {
                     Ok(self.matches_geometry(&stored_geom))
@@ -764,7 +764,7 @@ impl FilterProvider for KNearestFilter {
 
 impl Display for KNearestFilter {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let field = self.inner.field.get().ok_or_else(|| fmt::Error)?;
+        let field = self.inner.field.get().ok_or(fmt::Error)?;
         if let Some(max_dist) = self.inner.max_distance {
             write!(
                 f,

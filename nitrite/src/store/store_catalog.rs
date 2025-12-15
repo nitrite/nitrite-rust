@@ -418,7 +418,7 @@ mod tests {
     fn test_get_keyed_repository_names() {
         let catalog = setup_catalog();
         let keyed_repo_name = format!("{}{}{}", "test_keyed_repo", KEY_OBJ_SEPARATOR, "test_key");
-        catalog.write_keyed_repository_entry(&*keyed_repo_name).unwrap();
+        catalog.write_keyed_repository_entry(&keyed_repo_name).unwrap();
         let names = catalog.get_keyed_repository_names().unwrap();
         assert!(names.contains_key("test_key"));
         assert!(names.get("test_key").unwrap().contains("test_keyed_repo"));

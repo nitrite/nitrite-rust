@@ -366,7 +366,7 @@ mod tests {
         let iter = Box::new(docs.into_iter());
         let cursor = DocumentCursor::new(iter, ProcessorChain::new());
         let object_cursor: ObjectCursor<TestEntity> = ObjectCursor::new(cursor);
-        assert_eq!(object_cursor.cursor.into_iter().count(), 2);
+        assert_eq!(object_cursor.cursor.count(), 2);
     }
 
     #[test]
@@ -390,7 +390,7 @@ mod tests {
         let iter = Box::new(docs.into_iter());
         let cursor = DocumentCursor::new(iter, ProcessorChain::new());
         let mut object_cursor: ObjectCursor<TestEntity> = ObjectCursor::new(cursor);
-        let object_cursor = (&mut object_cursor).into_iter();
+        let object_cursor = &mut object_cursor;
         assert!(object_cursor.next().unwrap().is_err());
     }
 
@@ -403,7 +403,7 @@ mod tests {
         let iter = Box::new(docs.into_iter());
         let cursor = DocumentCursor::new(iter, ProcessorChain::new());
         let mut object_cursor: ObjectCursor<TestEntity> = ObjectCursor::new(cursor);
-        let iter = (&mut object_cursor).into_iter();
+        let iter = &mut object_cursor;
         let first = iter.next().unwrap().unwrap();
         assert_eq!(first.first, "John");
         let second = iter.next().unwrap().unwrap();
@@ -420,7 +420,7 @@ mod tests {
         let iter = Box::new(docs.into_iter());
         let cursor = DocumentCursor::new(iter, ProcessorChain::new());
         let mut object_cursor: ObjectCursor<TestEntity> = ObjectCursor::new(cursor);
-        let iter = (&mut object_cursor).into_iter();
+        let iter = &mut object_cursor;
         let first = iter.next().unwrap().unwrap();
         assert_eq!(first.first, "John");
         assert!(iter.next().unwrap().is_err());
@@ -532,7 +532,7 @@ mod tests {
         let iter = Box::new(docs.into_iter());
         let cursor = DocumentCursor::new(iter, ProcessorChain::new());
         let mut object_cursor: ObjectCursor<TestEntity> = ObjectCursor::new(cursor);
-        let iter = (&mut object_cursor).into_iter();
+        let iter = &mut object_cursor;
         
         let mut count = 0;
         for result in iter {

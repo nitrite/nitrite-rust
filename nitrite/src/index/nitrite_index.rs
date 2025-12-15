@@ -335,7 +335,7 @@ mod tests {
             NitriteId::new(),
             Fields::with_names(vec!["test_field"]).unwrap(),
         );
-        let mut nitrite_ids = vec![field_values.nitrite_id().clone()];
+        let mut nitrite_ids = vec![*field_values.nitrite_id()];
         let result = index.remove_nitrite_ids(&mut nitrite_ids, &field_values);
         assert!(result.is_ok());
         assert!(result.unwrap().is_empty());
@@ -382,7 +382,7 @@ mod tests {
             NitriteId::new(),
             Fields::with_names(vec!["test_field"]).unwrap(),
         );
-        let mut nitrite_ids = vec![field_values.nitrite_id().clone()];
+        let mut nitrite_ids = vec![*field_values.nitrite_id()];
         let result = index.remove_nitrite_ids(&mut nitrite_ids, &field_values);
         assert!(result.is_ok());
         assert!(result.unwrap().is_empty());
@@ -420,7 +420,7 @@ mod tests {
         );
         
         let mut nitrite_ids = vec![
-            field_values.nitrite_id().clone(),
+            *field_values.nitrite_id(),
             NitriteId::new(),
             NitriteId::new(),
         ];

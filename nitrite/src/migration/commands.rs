@@ -738,7 +738,7 @@ mod tests {
 
         let nitrite = setup_nitrite()?;
         // Verify Command trait can be called
-        let _result = cmd.execute(nitrite)?;
+        cmd.execute(nitrite)?;
         Ok(())
     }
 

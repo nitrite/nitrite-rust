@@ -459,7 +459,7 @@ mod tests {
         let field_values_vec = vec![("name".to_string(), Value::String("John".to_string()))];
         let nitrite_id = NitriteId::new();
         let fields = Fields::with_names(vec!["name"]).unwrap();
-        let field_values = FieldValues::new(field_values_vec.clone(), nitrite_id.clone(), fields.clone());
+        let field_values = FieldValues::new(field_values_vec.clone(), nitrite_id, fields.clone());
         assert_eq!(field_values.values(), field_values_vec);
         assert_eq!(field_values.nitrite_id(), &nitrite_id);
         assert_eq!(field_values.fields(), &fields);

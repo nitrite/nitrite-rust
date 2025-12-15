@@ -832,7 +832,7 @@ mod tests {
         nitrite_config.initialize().expect("Failed to initialize");
         let store = nitrite_config.nitrite_store().expect("Failed to get store");
         let nitrite_map = store
-            .open_map(&*collection_name.clone())
+            .open_map(&collection_name.clone())
             .expect("Failed to open map");
         let event_bus = NitriteEventBus::new();
         let find_optimizer = FindOptimizer::new();
@@ -1191,7 +1191,7 @@ mod tests {
         
         // Add the duplicate at position 5
         let mut duplicate = Document::new();
-        duplicate.put(DOC_ID, Value::NitriteId(id.clone())).unwrap();
+        duplicate.put(DOC_ID, Value::NitriteId(id)).unwrap();
         duplicate.put("field", Value::from("duplicate")).unwrap();
         docs.insert(5, duplicate);
         
@@ -1296,7 +1296,7 @@ mod tests {
         
         // Verify they exist
         for id in &ids {
-            assert!(inner.nitrite_map.contains_key(&Value::NitriteId(id.clone())).unwrap());
+            assert!(inner.nitrite_map.contains_key(&Value::NitriteId(*id)).unwrap());
         }
         
         // Rollback
@@ -1304,7 +1304,7 @@ mod tests {
         
         // Verify they're gone
         for id in &ids {
-            assert!(!inner.nitrite_map.contains_key(&Value::NitriteId(id.clone())).unwrap());
+            assert!(!inner.nitrite_map.contains_key(&Value::NitriteId(*id)).unwrap());
         }
     }
     
@@ -1419,7 +1419,7 @@ mod tests {
         
         // Verify documents have both old and new fields
         for id in &inserted_ids {
-            let stored = inner.nitrite_map.get(&Value::NitriteId(id.clone())).unwrap();
+            let stored = inner.nitrite_map.get(&Value::NitriteId(*id)).unwrap();
             assert!(stored.is_some());
             
             let doc = stored.unwrap();
@@ -1479,7 +1479,7 @@ mod tests {
             let result = inner.insert(doc.clone()).unwrap();
             
             // Read back the stored document for update
-            let id = result.affected_nitrite_ids().first().unwrap().clone();
+            let id = *result.affected_nitrite_ids().first().unwrap();
             let stored = inner.nitrite_map.get(&Value::NitriteId(id)).unwrap().unwrap();
             docs.push(stored.as_document().unwrap().clone());
         }
@@ -1586,7 +1586,7 @@ mod tests {
         
         // Verify each ID exists in the map
         for id in ids {
-            let stored = inner.nitrite_map.get(&Value::NitriteId(id.clone())).unwrap();
+            let stored = inner.nitrite_map.get(&Value::NitriteId(*id)).unwrap();
             assert!(stored.is_some(), "Document with ID {} should exist", id);
         }
     }
@@ -1607,7 +1607,7 @@ mod tests {
         
         // Create another document with the same ID (manually assigned)
         let mut doc2 = Document::new();
-        doc2.put(DOC_ID, Value::NitriteId(id.clone())).unwrap();
+        doc2.put(DOC_ID, Value::NitriteId(id)).unwrap();
         doc2.put("field", Value::from("second")).unwrap();
         
         // For small batch (<= 10), this goes through sequential insert which uses put_if_absent
@@ -1857,7 +1857,7 @@ mod tests {
         
         // Verify merged correctly
         for id in &inserted_ids {
-            let stored = inner.nitrite_map.get(&Value::NitriteId(id.clone())).unwrap().unwrap();
+            let stored = inner.nitrite_map.get(&Value::NitriteId(*id)).unwrap().unwrap();
             let doc = stored.as_document().unwrap();
             
             // Original field should be overwritten
@@ -1991,7 +1991,7 @@ mod tests {
         
         // Check revision is 3 (1 from insert + 2 updates)
         for id in &inserted_ids {
-            let stored = inner.nitrite_map.get(&Value::NitriteId(id.clone())).unwrap().unwrap();
+            let stored = inner.nitrite_map.get(&Value::NitriteId(*id)).unwrap().unwrap();
             let doc = stored.as_document().unwrap();
             let revision = doc.revision().unwrap();
             assert_eq!(revision, 3, "Revision should be 3 after insert + 2 updates");
@@ -2021,9 +2021,9 @@ mod tests {
         
         // This tests the rollback mechanism itself
         let updated_indexes: Vec<(NitriteId, Document, Document)> = Vec::new();
-        let failed_id = ids[0].clone();
+        let failed_id = ids[0];
         let failed_old_doc = inner.nitrite_map
-            .get(&Value::NitriteId(failed_id.clone()))
+            .get(&Value::NitriteId(failed_id))
             .unwrap()
             .unwrap()
             .as_document()

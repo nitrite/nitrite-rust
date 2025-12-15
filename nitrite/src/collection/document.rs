@@ -1209,12 +1209,12 @@ mod tests {
 
     #[test]
     fn test_normalize() {
-        let mut value = "\"ABC\"".to_string();
-        let result = normalize(&mut value);
+        let value = "\"ABC\"".to_string();
+        let result = normalize(&value);
         assert_eq!(result, "ABC");
 
-        let mut value = "ABC".to_string();
-        let result = normalize(&mut value);
+        let value = "ABC".to_string();
+        let result = normalize(&value);
         assert_eq!(result, "ABC");
     }
 
@@ -1336,10 +1336,10 @@ mod tests {
 
         value = doc.get("location.address.test").unwrap();
         assert_eq!(value, Null);
-        assert_eq!(doc.get("location.address.house.3").is_err(), true);
-        assert_eq!(doc.get("location.address.house.-1").is_err(), true);
-        assert_eq!(doc.get(".").is_err(), true);
-        assert_eq!(doc.get("..").is_err(), true);
+        assert!(doc.get("location.address.house.3").is_err());
+        assert!(doc.get("location.address.house.-1").is_err());
+        assert!(doc.get(".").is_err());
+        assert!(doc.get("..").is_err());
         assert_eq!(doc.get("score.test").unwrap(), Null);
     }
 
@@ -1376,14 +1376,14 @@ mod tests {
     fn test_put_id() {
         let mut doc = empty_document();
         let result = doc.put(DOC_ID, Value::String("id".to_string()));
-        assert_eq!(result.is_err(), true);
+        assert!(result.is_err());
     }
 
     #[test]
     fn test_put_valid_nitrite_id() {
         let mut doc = empty_document();
         let result = doc.put(DOC_ID, Value::NitriteId(NitriteId::new()));
-        assert_eq!(result.is_ok(), true);
+        assert!(result.is_ok());
     }
 
     #[test]
@@ -1393,7 +1393,7 @@ mod tests {
         map.insert(DOC_ID.to_string(), Value::String("invalid_id".to_string()));
         
         let err = document_from_map(&map).is_err();
-        assert_eq!(err, true);
+        assert!(err);
     }
 
     #[test]
@@ -1411,15 +1411,15 @@ mod tests {
             },
         };
         let err = doc.get(key).is_err();
-        assert_eq!(err, true);
+        assert!(err);
     }
 
     #[test]
     fn test_id() {
         let mut doc = empty_document();
         let id = doc.id().unwrap();
-        assert_eq!(NitriteId::valid_id(id.id_value()).unwrap(), true);
-        assert_eq!(doc.has_id(), true);
+        assert!(NitriteId::valid_id(id.id_value()).unwrap());
+        assert!(doc.has_id());
     }
 
     #[test]
@@ -1440,9 +1440,9 @@ mod tests {
     #[test]
     fn test_has_id() {
         let mut doc = empty_document();
-        assert_eq!(doc.has_id(), false);
+        assert!(!doc.has_id());
         doc.put(DOC_ID, Value::NitriteId(NitriteId::new())).unwrap();
-        assert_eq!(doc.has_id(), true);
+        assert!(doc.has_id());
     }
 
     #[test]
@@ -1525,15 +1525,15 @@ mod tests {
         let fields = doc.fields();
         assert_eq!(fields.len(), 9);
 
-        assert_eq!(fields.contains(&"score".to_string()), true);
-        assert_eq!(fields.contains(&"location.state".to_string()), true);
-        assert_eq!(fields.contains(&"location.city".to_string()), true);
-        assert_eq!(fields.contains(&"location.address.line1".to_string()), true);
-        assert_eq!(fields.contains(&"location.address.line2".to_string()), true);
-        assert_eq!(fields.contains(&"location.address.house".to_string()), true);
-        assert_eq!(fields.contains(&"location.address.zip".to_string()), true);
-        assert_eq!(fields.contains(&"category".to_string()), true);
-        assert_eq!(fields.contains(&"obj_array".to_string()), true);
+        assert!(fields.contains(&"score".to_string()));
+        assert!(fields.contains(&"location.state".to_string()));
+        assert!(fields.contains(&"location.city".to_string()));
+        assert!(fields.contains(&"location.address.line1".to_string()));
+        assert!(fields.contains(&"location.address.line2".to_string()));
+        assert!(fields.contains(&"location.address.house".to_string()));
+        assert!(fields.contains(&"location.address.zip".to_string()));
+        assert!(fields.contains(&"category".to_string()));
+        assert!(fields.contains(&"obj_array".to_string()));
     }
 
     #[test]
@@ -1689,14 +1689,14 @@ mod tests {
     fn test_deep_put_invalid_field() {
         let mut doc = empty_document();
         let result = doc.put("..invalid..field", Value::I32(1));
-        assert_eq!(result.is_err(), true);
+        assert!(result.is_err());
     }
 
     #[test]
     fn test_deep_remove_invalid_field() {
         let mut doc = empty_document();
         let result = doc.remove("..invalid..field");
-        assert_eq!(result.is_err(), true);
+        assert!(result.is_err());
     }
 
     #[test]
@@ -1763,14 +1763,14 @@ mod tests {
     fn test_put_invalid_id() {
         let mut doc = empty_document();
         let result = doc.put(DOC_ID, Value::String("invalid_id".to_string()));
-        assert_eq!(result.is_err(), true);
+        assert!(result.is_err());
     }
 
     #[test]
     fn test_get_invalid_key() {
         let doc = empty_document();
         let result = doc.get("invalid.key");
-        assert_eq!(result.is_ok(), true);
+        assert!(result.is_ok());
         assert_eq!(result.unwrap(), Null);
     }
 
@@ -1778,7 +1778,7 @@ mod tests {
     fn test_remove_invalid_key() {
         let mut doc = empty_document();
         let result = doc.remove("invalid.key");
-        assert_eq!(result.is_ok(), true);
+        assert!(result.is_ok());
     }
 
     #[test]
@@ -1796,7 +1796,7 @@ mod tests {
         };
 
         let result = doc.get("key.-1");
-        assert_eq!(result.is_err(), true);
+        assert!(result.is_err());
     }
 
     #[test]
@@ -1806,7 +1806,7 @@ mod tests {
         };
 
         let result = doc.remove("key.-1");
-        assert_eq!(result.is_err(), true);
+        assert!(result.is_err());
     }
 
     #[test]
@@ -1841,26 +1841,26 @@ mod tests {
     fn test_deep_put_invalid_path() {
         let mut doc = empty_document();
         let result = doc.put("key..key", Value::I32(1));
-        assert_eq!(result.is_err(), true);
+        assert!(result.is_err());
     }
 
     #[test]
     fn test_deep_get_invalid_path() {
         let doc = set_up();
         let result = doc.get("location..key");
-        assert_eq!(result.is_err(), true);
+        assert!(result.is_err());
     }
 
     #[test]
     fn contains_field_with_existing_field() {
         let doc = set_up();
-        assert_eq!(doc.contains_field("location.state"), true);
+        assert!(doc.contains_field("location.state"));
     }
 
     #[test]
     fn contains_field_with_non_existing_field() {
         let doc = set_up();
-        assert_eq!(doc.contains_field("location.country"), false);
+        assert!(!doc.contains_field("location.country"));
     }
 
     #[test]
@@ -2009,7 +2009,7 @@ mod tests {
     #[test]
     fn test_empty_document_macro() {
         let doc = doc!{};
-        assert_eq!(doc.is_empty(), true);
+        assert!(doc.is_empty());
     }
 
     #[test]
@@ -2261,7 +2261,7 @@ mod tests {
         let start = std::time::Instant::now();
         for i in 0..1000 {
             let mut doc = Document::new();
-            doc.put(&format!("key{}", i), Value::I32(i as i32)).ok();
+            doc.put(format!("key{}", i), Value::I32(i)).ok();
         }
         let elapsed = start.elapsed();
         println!("1000 put operations: {:?}", elapsed);
@@ -2845,10 +2845,10 @@ mod tests {
 
             value = doc.get("location:address:test").unwrap();
             assert_eq!(value, Null);
-            assert_eq!(doc.get("location:address:house:3").is_err(), true);
-            assert_eq!(doc.get("location:address:house:-1").is_err(), true);
-            assert_eq!(doc.get(":").is_err(), true);
-            assert_eq!(doc.get("::").is_err(), true);
+            assert!(doc.get("location:address:house:3").is_err());
+            assert!(doc.get("location:address:house:-1").is_err());
+            assert!(doc.get(":").is_err());
+            assert!(doc.get("::").is_err());
             assert_eq!(doc.get("score:test").unwrap(), Null);
         }
 

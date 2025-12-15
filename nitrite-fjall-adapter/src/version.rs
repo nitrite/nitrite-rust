@@ -48,8 +48,7 @@ mod tests {
         let result = match dependency {
             Dependency::Simple(version) => Ok(version.clone()),
             Dependency::Detailed(d) => {
-                d.version.as_ref()
-                    .map(|v| v.clone())
+                d.version.clone()
                     .ok_or_else(|| "version not specified".to_string())
             },
             Dependency::Inherited(_) => Err("Inherited dependency not supported".to_string()),
@@ -75,8 +74,7 @@ mod tests {
         let result = match dependency {
             Dependency::Simple(version) => Ok(version.clone()),
             Dependency::Detailed(d) => {
-                d.version.as_ref()
-                    .map(|v| v.clone())
+                d.version.clone()
                     .ok_or_else(|| "version not specified".to_string())
             },
             Dependency::Inherited(_) => Err("Inherited dependency not supported".to_string()),
@@ -102,8 +100,7 @@ mod tests {
         let result = match dependency {
             Dependency::Simple(version) => Ok(version.clone()),
             Dependency::Detailed(d) => {
-                d.version.as_ref()
-                    .map(|v| v.clone())
+                d.version.clone()
                     .ok_or_else(|| "version not specified".to_string())
             },
             Dependency::Inherited(_) => Err("Inherited dependency not supported".to_string()),

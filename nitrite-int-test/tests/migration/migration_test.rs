@@ -1563,7 +1563,7 @@ fn test_migration_repository_change_data_type() {
 
     let migration = Migration::new(1, 2, |instruction| {
         instruction.for_repository("books", None)
-            .change_data_type("price", |price| Ok(Value::I64(price.as_f64().unwrap().clone() as i64)));
+            .change_data_type("price", |price| Ok(Value::I64(*price.as_f64().unwrap() as i64)));
         Ok(())
     });
 
@@ -1944,7 +1944,7 @@ fn test_migration_repository_add_field_with_generator() {
             .add_field("description_length", None, Some(|doc: nitrite::collection::Document| {
                 let description = doc.get("description")
                     .ok()
-                    .and_then(|v| v.as_string().map(|s| s.clone()))
+                    .and_then(|v| v.as_string().cloned())
                     .unwrap_or_default();
                 Ok(Value::from(description.len() as i64))
             }));

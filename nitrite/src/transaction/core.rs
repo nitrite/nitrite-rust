@@ -971,7 +971,7 @@ mod tests {
         let context = TransactionContext::new("col".to_string(), map);
 
         // Test Deref trait
-        let inner: &TransactionContextInner = &*context;
+        let inner: &TransactionContextInner = &context;
         assert!(inner.is_active());
     }
 

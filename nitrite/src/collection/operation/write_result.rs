@@ -79,7 +79,7 @@ mod tests {
     fn test_write_result_iterator() {
         let nitrite_id1 = NitriteId::new();
         let nitrite_id2 = NitriteId::new();
-        let mut write_result = WriteResult::new(vec![nitrite_id1.clone(), nitrite_id2.clone()]);
+        let mut write_result = WriteResult::new(vec![nitrite_id1, nitrite_id2]);
 
         assert_eq!(write_result.next(), Some(nitrite_id2));
         assert_eq!(write_result.next(), Some(nitrite_id1));

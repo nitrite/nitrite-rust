@@ -389,7 +389,7 @@ mod tests {
         let simple_index = SimpleIndex::new(index_descriptor, nitrite_store);
 
         let field_values = create_test_field_values();
-        let mut nitrite_ids = vec![field_values.nitrite_id().clone()];
+        let mut nitrite_ids = vec![*field_values.nitrite_id()];
 
         let result = simple_index.remove_nitrite_ids(&mut nitrite_ids, &field_values);
         assert!(result.is_ok());
@@ -618,17 +618,17 @@ mod tests {
         let simple_index = SimpleIndex::new(index_descriptor, nitrite_store);
 
         let field_values = create_test_field_values();
-        let id = field_values.nitrite_id().clone();
+        let id = *field_values.nitrite_id();
         
         // Create duplicates to test dedup efficiency
-        let mut nitrite_ids = vec![id.clone(), id.clone(), id];
+        let mut nitrite_ids = vec![id, id, id];
 
         let result = simple_index.add_nitrite_ids(&mut nitrite_ids, &field_values);
         assert!(result.is_ok());
         
         // Should have deduplicated and added the new field value ID
         let dedup = result.unwrap();
-        assert!(dedup.len() >= 1);
+        assert!(!dedup.is_empty());
     }
 
     #[test]
@@ -656,7 +656,7 @@ mod tests {
         let simple_index = SimpleIndex::new(index_descriptor, nitrite_store);
 
         let field_values = create_test_field_values();
-        let id = field_values.nitrite_id().clone();
+        let id = *field_values.nitrite_id();
         let mut nitrite_ids = vec![id];
         
         let result = simple_index.remove_nitrite_ids(&mut nitrite_ids, &field_values);

@@ -32,8 +32,8 @@ const MAX_HILBERT_ORDER: u32 = 32;
 /// assert!(index < (1u64 << 32)); // At order 16, max index is 2^32-1
 /// ```
 pub fn hilbert_index(x: f64, y: f64, order: u32) -> u64 {
-    debug_assert!(x >= 0.0 && x <= 1.0, "x must be in [0,1]");
-    debug_assert!(y >= 0.0 && y <= 1.0, "y must be in [0,1]");
+    debug_assert!((0.0..=1.0).contains(&x), "x must be in [0,1]");
+    debug_assert!((0.0..=1.0).contains(&y), "y must be in [0,1]");
     debug_assert!(order > 0 && order <= MAX_HILBERT_ORDER, "order must be 1-32");
 
     // Convert normalized coordinates to discrete grid coordinates
@@ -132,11 +132,7 @@ mod tests {
         let center = hilbert_index(0.5, 0.5, 8);
         let nearby = hilbert_index(0.50001, 0.50001, 8);
 
-        let diff = if center > nearby {
-            center - nearby
-        } else {
-            nearby - center
-        };
+        let diff = center.abs_diff(nearby);
         assert!(diff < 1000, "Nearby points should have close indices");
     }
 
@@ -196,7 +192,7 @@ mod tests {
         let idx_three_quarter = hilbert_index(0.75, 0.75, 8);
 
         // Both should be valid positive indices
-        assert!(idx_quarter > 0 || idx_quarter == 0);
+        assert!(idx_quarter >= 0);
         assert!(idx_three_quarter > 0);
         // They should be different
         assert_ne!(idx_quarter, idx_three_quarter);
@@ -231,8 +227,8 @@ mod tests {
         let idx_outside = hilbert_index_bounded(150.0, 150.0, &bounds, 8);
         let idx_max = hilbert_index_bounded(100.0, 100.0, &bounds, 8);
         // Both should produce valid indices
-        assert!(idx_outside > 0 || idx_outside == 0);
-        assert!(idx_max > 0 || idx_max == 0);
+        assert!(idx_outside >= 0);
+        assert!(idx_max >= 0);
     }
 
     #[test]
@@ -265,7 +261,7 @@ mod tests {
         let idx_pos = hilbert_index_bounded(90.0, 45.0, &bounds, 8);
 
         // Both should produce valid indices
-        assert!(idx_neg > 0 || idx_neg == 0);
+        assert!(idx_neg >= 0);
         assert!(idx_pos > 0);
         // They should be different
         assert_ne!(idx_neg, idx_pos);

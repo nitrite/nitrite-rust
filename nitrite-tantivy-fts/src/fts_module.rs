@@ -40,6 +40,7 @@ use crate::indexer::FtsIndexer;
 /// # Ok(())
 /// # }
 /// ```
+#[derive(Default)]
 pub struct TantivyFtsModule {
     config: FtsConfig,
 }
@@ -70,13 +71,6 @@ impl TantivyFtsModule {
     }
 }
 
-impl Default for TantivyFtsModule {
-    fn default() -> Self {
-        Self {
-            config: FtsConfig::default(),
-        }
-    }
-}
 
 impl NitriteModule for TantivyFtsModule {
     fn plugins(&self) -> NitriteResult<Vec<NitritePlugin>> {

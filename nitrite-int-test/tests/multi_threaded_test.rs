@@ -9,7 +9,7 @@ use std::thread;
 #[test]
 fn test_multi_threaded_insert() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let db = ctx.db();
             let collection = Arc::new(db.collection("test")?);
@@ -55,14 +55,14 @@ fn test_multi_threaded_insert() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_multi_threaded_mixed_operations() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let db = ctx.db();
             let collection = Arc::new(db.collection("test")?);
@@ -111,14 +111,14 @@ fn test_multi_threaded_mixed_operations() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_multi_threaded_find() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let collection = ctx.db().collection("test")?;
 
@@ -156,6 +156,6 @@ fn test_multi_threaded_find() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }

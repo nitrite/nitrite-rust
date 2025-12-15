@@ -9,7 +9,7 @@ use nitrite_int_test::test_util::{cleanup, create_test_context, run_test, Nitrit
 #[test]
 fn test_collection() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let collection = ctx.db().collection("test")?;
 
@@ -91,14 +91,14 @@ fn test_collection() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_create_index() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let collection = ctx.db().collection("test")?;
 
@@ -119,14 +119,14 @@ fn test_create_index() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_list_indexes() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let collection = ctx.db().collection("test")?;
             assert_eq!(collection.list_indexes()?.len(), 0);
@@ -144,14 +144,14 @@ fn test_list_indexes() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_drop_index() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let collection = ctx.db().collection("test")?;
             collection.create_index(vec!["first_name"], &non_unique_index())?;
@@ -162,14 +162,14 @@ fn test_drop_index() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_drop_all_indexes() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let collection = ctx.db().collection("test")?;
             collection.drop_all_indexes()?;
@@ -186,14 +186,14 @@ fn test_drop_all_indexes() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_has_index() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let collection = ctx.db().collection("test")?;
             
@@ -207,14 +207,14 @@ fn test_has_index() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_delete_with_index() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let collection = ctx.db().collection("test")?;
             
@@ -237,14 +237,14 @@ fn test_delete_with_index() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_rebuild_index() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let collection = ctx.db().collection("test")?;
             collection.create_index(vec!["body"], &full_text_index())?;
@@ -260,14 +260,14 @@ fn test_rebuild_index() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_null_value_in_indexed_field() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let collection = ctx.db().collection("test")?;
             collection.create_index(vec!["first_name"], &non_unique_index())?;
@@ -289,14 +289,14 @@ fn test_null_value_in_indexed_field() {
             // If we got here without errors, the test passes
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_drop_all_and_create_index() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let mut collection = ctx.db().collection("test")?;
             collection.create_index(vec!["first_name"], &non_unique_index())?;
@@ -314,14 +314,14 @@ fn test_drop_all_and_create_index() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_numeric_field_index() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let collection = ctx.db().collection("test")?;
             collection.drop_all_indexes()?;
@@ -345,14 +345,14 @@ fn test_numeric_field_index() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_index_event() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             use rand::Rng;
             let collection = ctx.db().collection("index-test")?;
@@ -398,14 +398,14 @@ fn test_index_event() {
             });
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_create_invalid_unique_index() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let collection = ctx.db().collection("test")?;
 
@@ -421,14 +421,14 @@ fn test_create_invalid_unique_index() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_create_index_on_array() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let collection = ctx.db().collection("test")?;
 
@@ -444,14 +444,14 @@ fn test_create_index_on_array() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_create_on_invalid_field() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let collection = ctx.db().collection("test")?;
 
@@ -466,14 +466,14 @@ fn test_create_on_invalid_field() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_create_full_text_on_non_text_field() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let collection = ctx.db().collection("test")?;
 
@@ -488,14 +488,14 @@ fn test_create_full_text_on_non_text_field() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_drop_index_on_non_indexed_field() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let collection = ctx.db().collection("test")?;
 
@@ -507,14 +507,14 @@ fn test_drop_index_on_non_indexed_field() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_rebuild_index_invalid() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let collection = ctx.db().collection("test")?;
 
@@ -526,14 +526,14 @@ fn test_rebuild_index_invalid() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_index_and_search_on_null_values() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let collection = ctx.db().collection("index-on-null")?;
             
@@ -563,7 +563,7 @@ fn test_index_and_search_on_null_values() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
@@ -605,7 +605,7 @@ fn insert_test_documents(collection: &NitriteCollection) -> nitrite::errors::Nit
 #[test]
 fn test_rebuild_index_with_valid_index() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let collection = ctx.db().collection("test_defect_18")?;
 
@@ -634,14 +634,14 @@ fn test_rebuild_index_with_valid_index() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     );
 }
 
 #[test]
 fn test_rebuild_index_with_nonexistent_index() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let collection = ctx.db().collection("test_defect_18_non_existent")?;
 
@@ -663,14 +663,14 @@ fn test_rebuild_index_with_nonexistent_index() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     );
 }
 
 #[test]
 fn test_rebuild_index_with_data() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let collection = ctx.db().collection("test_defect_18_active_indexing")?;
 
@@ -699,14 +699,14 @@ fn test_rebuild_index_with_data() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     );
 }
 
 #[test]
 fn test_rebuild_multiple_indexes() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let collection = ctx.db().collection("test_defect_18_multi_index")?;
 
@@ -743,6 +743,6 @@ fn test_rebuild_multiple_indexes() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     );
 }

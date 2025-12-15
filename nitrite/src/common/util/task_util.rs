@@ -219,7 +219,7 @@ mod tests {
         let start = std::time::Instant::now();
         for _ in 0..100 {
             async_task(|| {
-                let _ = std::thread::sleep(Duration::from_micros(1));
+                std::thread::sleep(Duration::from_micros(1));
             });
         }
         let elapsed = start.elapsed();

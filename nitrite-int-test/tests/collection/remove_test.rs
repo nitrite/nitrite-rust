@@ -9,7 +9,7 @@ use nitrite_int_test::test_util::{
 #[test]
 fn test_delete() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let coll = ctx.db().collection("test")?;
             insert_test_documents(&coll)?;
@@ -22,14 +22,14 @@ fn test_delete() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_delete_with_options() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let coll = ctx.db().collection("test")?;
             insert_test_documents(&coll)?;
@@ -42,14 +42,14 @@ fn test_delete_with_options() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_delete_with_non_matching_filter() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let coll = ctx.db().collection("test")?;
             insert_test_documents(&coll)?;
@@ -62,14 +62,14 @@ fn test_delete_with_non_matching_filter() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_delete_in_empty_collection() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let coll = ctx.db().collection("test")?;
 
@@ -81,14 +81,14 @@ fn test_delete_in_empty_collection() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_clear() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let dt1 = NitriteDateTime::parse_from_rfc3339("2012-07-01T02:15:22+02:00");
             let doc1 = doc!{
@@ -110,7 +110,7 @@ fn test_clear() {
             assert!(coll.has_index(vec!["first_name"])?);
 
             let mut unique_error = false;
-            if let Err(_) = coll.insert(doc1.clone()) {
+            if coll.insert(doc1.clone()).is_err() {
                 unique_error = true;
             }
             assert!(unique_error);
@@ -128,14 +128,14 @@ fn test_clear() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_remove_all() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let coll = ctx.db().collection("test")?;
             insert_test_documents(&coll)?;
@@ -145,14 +145,14 @@ fn test_remove_all() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_remove_document() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let coll = ctx.db().collection("test")?;
             insert_test_documents(&coll)?;
@@ -171,7 +171,7 @@ fn test_remove_document() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
@@ -179,7 +179,7 @@ fn test_remove_document() {
 #[should_panic]
 fn test_destroy() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let coll = ctx.db().collection("test")?;
             coll.dispose()?;
@@ -190,14 +190,14 @@ fn test_destroy() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_delete_with_invalid_filter() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let coll = ctx.db().collection("test")?;
             insert_test_documents(&coll)?;
@@ -210,7 +210,7 @@ fn test_delete_with_invalid_filter() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 

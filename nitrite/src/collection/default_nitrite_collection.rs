@@ -454,7 +454,7 @@ mod tests {
     #[test]
     fn test_rebuild_index() {
         let collection = setup_collection();
-        let _ = collection.create_index(vec!["field1"], &IndexOptions::default()).expect("Failed to create index");
+        collection.create_index(vec!["field1"], &IndexOptions::default()).expect("Failed to create index");
         let result = collection.rebuild_index(vec!["field1"]);
         assert!(result.is_ok());
     }
@@ -667,7 +667,7 @@ mod tests {
     #[test]
     fn test_index_insert() {
         let collection = setup_collection();
-        let _ = collection.create_index(vec!["field1"], &unique_index()).expect("Failed to create index");
+        collection.create_index(vec!["field1"], &unique_index()).expect("Failed to create index");
         
         let mut documents = vec![];
         for i in 0..10 {

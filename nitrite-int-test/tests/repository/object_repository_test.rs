@@ -30,7 +30,7 @@ use uuid::Uuid;
 #[test]
 fn test_insert_with_empty_string_id() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let repo: ObjectRepository<WithEmptyStringId> = ctx.db().repository()?;
 
@@ -44,14 +44,14 @@ fn test_insert_with_empty_string_id() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_with_out_id() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let repo: ObjectRepository<WithOutId> = ctx.db().repository()?;
 
@@ -70,14 +70,14 @@ fn test_with_out_id() {
             }
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_with_private_field() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let repo: ObjectRepository<WithPrivateField> = ctx.db().repository()?;
 
@@ -92,14 +92,14 @@ fn test_with_private_field() {
             assert_eq!(instance.number, 2.0);
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_with_transient_field() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let repo: ObjectRepository<WithTransientField> = ctx.db().repository()?;
 
@@ -115,14 +115,14 @@ fn test_with_transient_field() {
             assert_eq!(instance.number, 2);
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_with_date_as_id() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let repo: ObjectRepository<WithDateId> = ctx.db().repository()?;
 
@@ -160,30 +160,30 @@ fn test_with_date_as_id() {
             assert_eq!(found2, object2);
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_attributes() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let repo: ObjectRepository<WithDateId> = ctx.db().repository()?;
             let collection_name = repo.document_collection().name();
-            let attributes = Attributes::new_for_collection(&*collection_name);
+            let attributes = Attributes::new_for_collection(&collection_name);
             repo.set_attributes(attributes.clone())?;
             assert_eq!(repo.attributes()?.unwrap(), attributes);
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_keyed_repository() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             // an object repository of employees who are managers
             let manager_repo: ObjectRepository<Employee> = ctx.db().keyed_repository("managers")?;
@@ -233,14 +233,14 @@ fn test_keyed_repository() {
             );
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_entity_repository() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let manager_repo: ObjectRepository<EmployeeEntity> =
                 ctx.db().keyed_repository("managers")?;
@@ -286,14 +286,14 @@ fn test_entity_repository() {
             assert_eq!(ctx.db().list_keyed_repositories()?.len(), 1);
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_subscription() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let counter = Arc::new(AtomicUsize::new(0));
             let employee_repo: ObjectRepository<EmployeeEntity> = ctx.db().repository()?;
@@ -314,7 +314,7 @@ fn test_subscription() {
             assert_eq!(counter.load(Ordering::Relaxed), 1);
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
@@ -325,7 +325,7 @@ fn test_subscription() {
 #[test]
 fn test_insert() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let repo: ObjectRepository<Company> = ctx.db().repository()?;
 
@@ -342,14 +342,14 @@ fn test_insert() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_update_with_filter() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let repo: ObjectRepository<Employee> = ctx.db().repository()?;
 
@@ -383,14 +383,14 @@ fn test_update_with_filter() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_upsert_true() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let repo: ObjectRepository<Employee> = ctx.db().repository()?;
             let joining_date = now();
@@ -421,14 +421,14 @@ fn test_upsert_true() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_upsert_false() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let repo: ObjectRepository<Employee> = ctx.db().repository()?;
             let joining_date = now();
@@ -455,14 +455,14 @@ fn test_upsert_false() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_update_with_object() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let repo: ObjectRepository<Employee> = ctx.db().repository()?;
             let company = generate_company();
@@ -487,14 +487,14 @@ fn test_update_with_object() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_remove_with_filter() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let repo: ObjectRepository<Employee> = ctx.db().repository()?;
             let joining_date = now();
@@ -519,14 +519,14 @@ fn test_remove_with_filter() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_remove_with_filter_just_once() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let repo: ObjectRepository<Employee> = ctx.db().repository()?;
             let joining_date = now();
@@ -551,14 +551,14 @@ fn test_remove_with_filter_just_once() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_remove_object() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let repo: ObjectRepository<Employee> = ctx.db().repository()?;
 
@@ -579,7 +579,7 @@ fn test_remove_object() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
@@ -590,7 +590,7 @@ fn test_remove_object() {
 #[test]
 fn test_find_with_options() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let repo: ObjectRepository<Employee> = ctx.db().repository()?;
 
@@ -610,14 +610,14 @@ fn test_find_with_options() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_get_by_id() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let repo: ObjectRepository<Employee> = ctx.db().repository()?;
 
@@ -635,14 +635,14 @@ fn test_get_by_id() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_equal_filter() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let repo: ObjectRepository<Employee> = ctx.db().repository()?;
             let join_date = now();
@@ -661,14 +661,14 @@ fn test_equal_filter() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_and_filter() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let repo: ObjectRepository<Employee> = ctx.db().repository()?;
             let join_date = now();
@@ -689,14 +689,14 @@ fn test_and_filter() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_or_filter() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let repo: ObjectRepository<Employee> = ctx.db().repository()?;
             let join_date = now();
@@ -715,14 +715,14 @@ fn test_or_filter() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_not_filter() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let repo: ObjectRepository<Employee> = ctx.db().repository()?;
 
@@ -742,14 +742,14 @@ fn test_not_filter() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_greater_filter() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let repo: ObjectRepository<Employee> = ctx.db().repository()?;
 
@@ -764,14 +764,14 @@ fn test_greater_filter() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_greater_equal_filter() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let repo: ObjectRepository<Employee> = ctx.db().repository()?;
 
@@ -786,14 +786,14 @@ fn test_greater_equal_filter() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_lesser_filter() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let repo: ObjectRepository<Employee> = ctx.db().repository()?;
 
@@ -808,14 +808,14 @@ fn test_lesser_filter() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_lesser_equal_filter() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let repo: ObjectRepository<Employee> = ctx.db().repository()?;
 
@@ -830,14 +830,14 @@ fn test_lesser_equal_filter() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_text_filter() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let repo: ObjectRepository<Employee> = ctx.db().repository()?;
 
@@ -851,14 +851,14 @@ fn test_text_filter() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_regex_filter() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let repo: ObjectRepository<Employee> = ctx.db().repository()?;
 
@@ -873,14 +873,14 @@ fn test_regex_filter() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_in_filter() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let repo: ObjectRepository<Employee> = ctx.db().repository()?;
 
@@ -895,14 +895,14 @@ fn test_in_filter() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_not_in_filter() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let repo: ObjectRepository<Employee> = ctx.db().repository()?;
 
@@ -917,14 +917,14 @@ fn test_not_in_filter() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_between_filter() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let repo: ObjectRepository<Employee> = ctx.db().repository()?;
 
@@ -944,7 +944,7 @@ fn test_between_filter() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
@@ -955,7 +955,7 @@ fn test_between_filter() {
 #[test]
 fn test_create_index() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let repo: ObjectRepository<Company> = ctx.db().repository()?;
 
@@ -968,14 +968,14 @@ fn test_create_index() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_list_indexes() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let repo: ObjectRepository<Company> = ctx.db().repository()?;
 
@@ -988,14 +988,14 @@ fn test_list_indexes() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_drop_index() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let repo: ObjectRepository<Company> = ctx.db().repository()?;
 
@@ -1007,14 +1007,14 @@ fn test_drop_index() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_drop_all_indexes() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let repo: ObjectRepository<Company> = ctx.db().repository()?;
 
@@ -1026,14 +1026,14 @@ fn test_drop_all_indexes() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_rebuild_index() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let repo: ObjectRepository<Company> = ctx.db().repository()?;
 
@@ -1046,14 +1046,14 @@ fn test_rebuild_index() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_repeatable_index() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let repo: ObjectRepository<RepeatableIndexTest> = ctx.db().repository()?;
 
@@ -1073,7 +1073,7 @@ fn test_repeatable_index() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
@@ -1084,7 +1084,7 @@ fn test_repeatable_index() {
 #[test]
 fn test_projection() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let repo: ObjectRepository<Employee> = ctx.db().repository()?;
 
@@ -1112,14 +1112,14 @@ fn test_projection() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_empty_result_projection() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let repo: ObjectRepository<Employee> = ctx.db().repository()?;
 
@@ -1131,7 +1131,7 @@ fn test_empty_result_projection() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
@@ -1142,7 +1142,7 @@ fn test_empty_result_projection() {
 #[test]
 fn test_join() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let person_repo: ObjectRepository<Person> = ctx.db().keyed_repository("persons")?;
             let address_repo: ObjectRepository<Address> = ctx.db().keyed_repository("addresses")?;
@@ -1187,7 +1187,7 @@ fn test_join() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
@@ -1198,7 +1198,7 @@ fn test_join() {
 #[test]
 fn test_find_by_compound_id() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let repo: ObjectRepository<Book> = ctx.db().repository()?;
 
@@ -1224,7 +1224,7 @@ fn test_find_by_compound_id() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
@@ -1235,7 +1235,7 @@ fn test_find_by_compound_id() {
 #[test]
 fn test_write_thousand_records() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let repo: ObjectRepository<StressRecord> = ctx.db().repository()?;
             let count = 1000;
@@ -1265,7 +1265,7 @@ fn test_write_thousand_records() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
@@ -1276,7 +1276,7 @@ fn test_write_thousand_records() {
 #[test]
 fn test_size() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let repo: ObjectRepository<Employee> = ctx.db().repository()?;
 
@@ -1292,14 +1292,14 @@ fn test_size() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_clear() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let repo: ObjectRepository<Employee> = ctx.db().repository()?;
 
@@ -1316,27 +1316,27 @@ fn test_clear() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_is_open() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let repo: ObjectRepository<Employee> = ctx.db().repository()?;
             assert!(repo.is_open()?);
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_dispose() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let repo: ObjectRepository<Employee> = ctx.db().repository()?;
 
@@ -1352,7 +1352,7 @@ fn test_dispose() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
@@ -1363,7 +1363,7 @@ fn test_dispose() {
 #[test]
 fn test_nested_object_find() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let repo: ObjectRepository<Employee> = ctx.db().repository()?;
 
@@ -1383,14 +1383,14 @@ fn test_nested_object_find() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_nested_update() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let repo: ObjectRepository<Employee> = ctx.db().repository()?;
 
@@ -1420,7 +1420,7 @@ fn test_nested_update() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 

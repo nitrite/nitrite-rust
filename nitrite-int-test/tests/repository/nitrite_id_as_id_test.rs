@@ -8,7 +8,7 @@ use nitrite_int_test::test_util::{cleanup, create_test_context, run_test};
 #[test]
 fn test_nitrite_id_field() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let repo: ObjectRepository<WithNitriteId> = ctx.db().repository()?;
 
@@ -36,7 +36,7 @@ fn test_nitrite_id_field() {
             // Get the first document, update its name, and update it in the repository.
             let mut first = cursor.first().expect("Expected first document")?;
             first.name = "third".to_string();
-            let id = first.id_field.clone().expect("Expected id to be set");
+            let id = first.id_field.expect("Expected id to be set");
             repo.update_one(first.clone(), true)?;
 
             // Retrieve the document by id and verify it equals the updated item.
@@ -45,7 +45,7 @@ fn test_nitrite_id_field() {
             assert_eq!(repo.size()?, 2);
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
@@ -53,7 +53,7 @@ fn test_nitrite_id_field() {
 #[test]
 fn test_set_id_during_insert() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let repo: ObjectRepository<WithNitriteId> = ctx.db().repository()?;
 
@@ -68,7 +68,7 @@ fn test_set_id_during_insert() {
             assert!(result.is_err());
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
@@ -76,7 +76,7 @@ fn test_set_id_during_insert() {
 #[test]
 fn test_change_id_during_update() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let repo: ObjectRepository<WithNitriteId> = ctx.db().repository()?;
 
@@ -95,6 +95,6 @@ fn test_change_id_during_update() {
             assert_eq!(repo.size()?, 1);
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }

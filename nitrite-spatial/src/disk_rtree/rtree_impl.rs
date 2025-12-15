@@ -447,8 +447,8 @@ impl DiskRTree {
         // Get current integrity status
         let integrity = self.check_integrity()?;
 
-        if !integrity.corrupted_pages.is_empty() {
-            if options.remove_corrupt {
+        if !integrity.corrupted_pages.is_empty()
+            && options.remove_corrupt {
                 // In a full implementation, we would:
                 // 1. Remove corrupted page references from parent nodes
                 // 2. Update tree structure as needed
@@ -464,7 +464,6 @@ impl DiskRTree {
                     report.pages_removed += 1;
                 }
             }
-        }
 
         // Rebuild if structure is compromised
         if options.rebuild_if_needed && !integrity.is_valid {
@@ -890,8 +889,8 @@ impl DiskRTree {
             }
             Node::Internal { children, .. } => {
                 for i in 0..children.len() {
-                    if children[i].bbox.intersects(bbox) {
-                        if self.remove_recursive(children[i].page_id, bbox, id)? {
+                    if children[i].bbox.intersects(bbox)
+                        && self.remove_recursive(children[i].page_id, bbox, id)? {
                             // Update child's bbox
                             let child_node = self.read_node(children[i].page_id)?;
                             let new_bbox = child_node.compute_bbox();
@@ -907,7 +906,6 @@ impl DiskRTree {
                             self.write_node(page_id, node)?;
                             return Ok(true);
                         }
-                    }
                 }
                 Ok(false)
             }
@@ -1476,7 +1474,7 @@ mod tests {
             .collect();
 
         // Bulk load
-        let tree = DiskRTree::bulk_load(&path, entries.into_iter()).unwrap();
+        let tree = DiskRTree::bulk_load(&path, entries).unwrap();
 
         // Verify all entries were inserted
         let stats = tree.stats();
@@ -1484,7 +1482,7 @@ mod tests {
 
         // Verify queries work
         let results = tree.find_intersecting_keys(&BoundingBox::new(0.0, 0.0, 5.0, 5.0)).unwrap();
-        assert!(results.len() > 0, "Should find entries in range");
+        assert!(!results.is_empty(), "Should find entries in range");
 
         tree.close().unwrap();
     }
@@ -1513,7 +1511,7 @@ mod tests {
 
         // Verify tree still works
         let results = tree.find_intersecting_keys(&BoundingBox::new(0.0, 0.0, 5.0, 5.0)).unwrap();
-        assert!(results.len() > 0, "Should find entries after rebuild");
+        assert!(!results.is_empty(), "Should find entries after rebuild");
 
         // Verify entry count unchanged
         let stats_after = tree.stats();

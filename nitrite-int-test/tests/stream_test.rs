@@ -6,7 +6,7 @@ use nitrite_int_test::test_util::{cleanup, create_test_context, run_test};
 #[test]
 fn test_find_result_is_document_stream() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let collection = ctx.db().collection("test")?;
             collection.insert(doc!{"first": "second"})?;
@@ -17,14 +17,14 @@ fn test_find_result_is_document_stream() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_projection() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let collection = ctx.db().collection("test")?;
 
@@ -38,14 +38,14 @@ fn test_projection() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_cursor_has_methods() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let collection = ctx.db().collection("test")?;
 
@@ -62,7 +62,7 @@ fn test_cursor_has_methods() {
             // Test iteration
             let mut cursor = collection.find(field("id").gte(1))?;
             let mut items = 0;
-            while let Some(doc_result) = cursor.next() {
+            for doc_result in cursor {
                 let _doc = doc_result?;
                 items += 1;
             }
@@ -70,14 +70,14 @@ fn test_cursor_has_methods() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_cursor_first() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let collection = ctx.db().collection("test")?;
 
@@ -91,14 +91,14 @@ fn test_cursor_first() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_cursor_empty() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let collection = ctx.db().collection("test")?;
 
@@ -110,14 +110,14 @@ fn test_cursor_empty() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
 
 #[test]
 fn test_cursor_size_and_count() {
     run_test(
-        || create_test_context(),
+        create_test_context,
         |ctx| {
             let collection = ctx.db().collection("test")?;
 
@@ -133,6 +133,6 @@ fn test_cursor_size_and_count() {
 
             Ok(())
         },
-        |ctx| cleanup(ctx),
+        cleanup,
     )
 }
