@@ -244,6 +244,11 @@ impl FjallStoreInner {
         }
     }
 
+    /// Delay in milliseconds to wait for file system cleanup when recreating a deleted partition.
+    /// This allows Fjall's internal cleanup processes to complete before attempting to create
+    /// a new partition with the same name.
+    const PARTITION_CLEANUP_DELAY_MS: u64 = 50;
+
     /// Helper function to check if an error indicates a partition was deleted
     #[inline]
     fn is_partition_deleted_error(err_msg: &str) -> bool {
@@ -255,13 +260,20 @@ impl FjallStoreInner {
     /// This handles the case where a partition was deleted (e.g., during index rebuild)
     /// and needs to be recreated. When Fjall reports a partition is deleted, we simply
     /// try to open it again, which will create a new partition.
+    /// 
+    /// Note: This method uses `std::thread::sleep` which blocks the current thread.
+    /// This is intentional as we need to wait for file system synchronization after
+    /// partition deletion. The sleep is brief (50ms) and only occurs on retry paths.
     fn open_partition_with_retry(
         &self,
         ks: &Keyspace,
         name: &str,
         config: &fjall::PartitionCreateOptions,
     ) -> NitriteResult<fjall::PartitionHandle> {
-        match ks.open_partition(name, config.clone()) {
+        // Clone config once to avoid multiple clones in retry paths
+        let config_clone = config.clone();
+        
+        match ks.open_partition(name, config_clone.clone()) {
             Ok(partition) => Ok(partition),
             Err(err) => {
                 let err_msg = err.to_string();
@@ -275,15 +287,19 @@ impl FjallStoreInner {
                     
                     // Fjall's open_partition should create a new partition if it doesn't exist
                     // If it fails, it might be due to file system cleanup in progress, so retry once
-                    match ks.open_partition(name, config.clone()) {
+                    match ks.open_partition(name, config_clone.clone()) {
                         Ok(partition) => Ok(partition),
                         Err(retry_err) => {
                             // If the retry also fails, wait a moment for file system cleanup
                             log::debug!("First retry failed, waiting briefly for cleanup: {}", retry_err);
-                            std::thread::sleep(std::time::Duration::from_millis(50));
+                            
+                            // Block briefly to allow Fjall's file system cleanup to complete
+                            std::thread::sleep(std::time::Duration::from_millis(
+                                Self::PARTITION_CLEANUP_DELAY_MS
+                            ));
                             
                             // Final attempt
-                            ks.open_partition(name, config.clone())
+                            ks.open_partition(name, config_clone)
                                 .map_err(|e| {
                                     log::error!("Failed to recreate partition '{}' after retries: {}", name, e);
                                     to_nitrite_error(e)
