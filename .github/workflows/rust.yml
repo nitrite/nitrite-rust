@@ -40,7 +40,5 @@ jobs:
         run: cargo test --verbose
       - name: Run test with custom_separator
         run: cargo test --features custom_separator -- custom_separator_test
-      - name: Run test with bitcode
-        run: cargo test --features bitcode --no-default-features
       - name: Run integration test with in-memory database
         run: cargo test --features memory --no-default-features

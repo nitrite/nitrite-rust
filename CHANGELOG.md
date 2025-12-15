@@ -24,7 +24,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Storage Backend** (`nitrite-fjall-adapter`)
   - Fjall LSM-tree based persistent storage
-  - Configurable with bincode or bitcode serialization
+  - Bincode serialization for efficient binary storage
   - High-performance disk-backed storage
 
 - **Full-Text Search** (`nitrite-tantivy-fts`)
