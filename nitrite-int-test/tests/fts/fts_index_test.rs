@@ -3,6 +3,8 @@
 //! These tests verify that FTS indexes work correctly with the full
 //! Nitrite database stack, including persistence and querying.
 
+#![cfg(feature = "fjall")]
+
 use nitrite::doc;
 use nitrite::filter::field;
 use nitrite_int_test::test_util::{cleanup, create_fts_test_context, run_test};
