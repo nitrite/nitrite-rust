@@ -244,6 +244,12 @@ impl FjallStoreInner {
         }
     }
 
+    /// Helper function to check if an error indicates a partition was deleted
+    #[inline]
+    fn is_partition_deleted_error(err_msg: &str) -> bool {
+        err_msg.contains("not found") || err_msg.contains("deleted") || err_msg.contains("PartitionDeleted")
+    }
+
     fn initialize(&self, config: NitriteConfig) -> NitriteResult<()> {
         // get_or_init() always returns a reference to the initialized value (or initial value if already initialized)
         // The None case in pattern matching below is unreachable after get_or_init() completes successfully
@@ -423,7 +429,7 @@ impl FjallStoreInner {
                 Err(err) => {
                     // If partition was deleted, remove from cache and propagate error
                     let err_msg = err.to_string();
-                    if err_msg.contains("deleted") || err_msg.contains("PartitionDeleted") {
+                    if Self::is_partition_deleted_error(&err_msg) {
                         self.map_registry.remove(name);
                     }
                     log::error!("Failed to open partition: {}", err);
@@ -455,11 +461,7 @@ impl FjallStoreInner {
             match ks.open_partition(name, options) {
                 Ok(partition) => {
                     match ks.delete_partition(partition.clone()) {
-                        Ok(_) => {
-                            // Ensure the map is removed from registry after successful deletion
-                            self.map_registry.remove(name);
-                            Ok(())
-                        }
+                        Ok(_) => Ok(()),
                         Err(err) => {
                             log::error!("Failed to remove partition: {}", err);
                             Err(to_nitrite_error(err))
@@ -470,7 +472,7 @@ impl FjallStoreInner {
                     // If partition doesn't exist, it might already be deleted
                     // This is acceptable - just ensure it's removed from registry
                     let err_msg = err.to_string();
-                    if err_msg.contains("not found") || err_msg.contains("deleted") || err_msg.contains("PartitionDeleted") {
+                    if Self::is_partition_deleted_error(&err_msg) {
                         self.map_registry.remove(name);
                         Ok(())
                     } else {
