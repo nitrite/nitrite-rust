@@ -223,7 +223,7 @@ impl Debug for IndexMap {
 
             for entry in entries {
                 match entry {
-                    Ok((key, value)) => write!(f, "Key: {:?}, Value: {:?}\n", key, value)?,
+                    Ok((key, value)) => writeln!(f, "Key: {:?}, Value: {:?}", key, value)?,
                     Err(e) => write!(f, "Error retrieving entry: {:?}", e)?,
                 }
             }
@@ -235,7 +235,7 @@ impl Debug for IndexMap {
 
             for entry in entries {
                 match entry {
-                    Ok((key, value)) => write!(f, "Key: {:?}, Value: {:?}\n", key, value)?,
+                    Ok((key, value)) => writeln!(f, "Key: {:?}, Value: {:?}", key, value)?,
                     Err(e) => write!(f, "Error retrieving entry: {:?}", e)?,
                 }
             }
@@ -257,11 +257,7 @@ impl IndexMapInner {
         nitrite_map: Option<NitriteMap>,
         sub_map: Option<BTreeMap<Value, Value>>,
     ) -> Self {
-        let in_memory_map = if let Some(sub_map) = sub_map {
-            Some(InMemoryIndexMap::new(sub_map))
-        } else {
-            None
-        };
+        let in_memory_map = sub_map.map(InMemoryIndexMap::new);
 
         IndexMapInner {
             nitrite_map,
@@ -279,8 +275,8 @@ impl IndexMapInner {
                 log::error!("Index is in corrupt state. Could not get value for key: {:?}", key);
                 INDEX_CORRUPT_ERROR.clone()
             })?;
-            let value = sub_map.get(key);
-            value
+            
+            sub_map.get(key)
         }
     }
 
@@ -581,7 +577,7 @@ impl Iterator for IndexMapIterator {
                 }
                 next
             } else if let Some(map) = &self.cached_index_map {
-                let next_key = self.higher_key(&map);
+                let next_key = self.higher_key(map);
                 match next_key {
                     Ok(Some(key)) => {
                         self.current = Some(key.clone());
@@ -603,34 +599,32 @@ impl Iterator for IndexMapIterator {
             } else {
                 None
             }
-        } else {
-            if let Some(nitrite_map_iterator) = &mut self.nitrite_map_iterator {
-                let next = nitrite_map_iterator.next_back();
-                if let Some(Ok((key, _))) = &next {
-                    self.current = Some(key.clone());
-                }
-                next
-            } else if let Some(map) = &self.cached_index_map {
-                let next_key = self.lower_key(&map);
-                match next_key {
-                    Ok(Some(key)) => {
-                        self.current = Some(key.clone());
-                        // Avoid unnecessary clone - use reference when possible
-                        match map.inner.get(&key) {
-                            Ok(Some(value)) => Some(Ok((key, value))),
-                            Ok(None) => Some(Ok((key, Value::Null))),
-                            Err(e) => Some(Err(e)),
-                        }
-                    }
-                    Ok(None) => {
-                        self.current = None;
-                        None
-                    }
-                    Err(e) => Some(Err(e)),
-                }
-            } else {
-                None
+        } else if let Some(nitrite_map_iterator) = &mut self.nitrite_map_iterator {
+            let next = nitrite_map_iterator.next_back();
+            if let Some(Ok((key, _))) = &next {
+                self.current = Some(key.clone());
             }
+            next
+        } else if let Some(map) = &self.cached_index_map {
+            let next_key = self.lower_key(map);
+            match next_key {
+                Ok(Some(key)) => {
+                    self.current = Some(key.clone());
+                    // Avoid unnecessary clone - use reference when possible
+                    match map.inner.get(&key) {
+                        Ok(Some(value)) => Some(Ok((key, value))),
+                        Ok(None) => Some(Ok((key, Value::Null))),
+                        Err(e) => Some(Err(e)),
+                    }
+                }
+                Ok(None) => {
+                    self.current = None;
+                    None
+                }
+                Err(e) => Some(Err(e)),
+            }
+        } else {
+            None
         }
     }
 }
@@ -645,7 +639,7 @@ impl DoubleEndedIterator for IndexMapIterator {
                 }
                 next
             } else if let Some(map) = &self.cached_index_map {
-                let next_key = self.lower_key(&map);
+                let next_key = self.lower_key(map);
                 match next_key {
                     Ok(Some(key)) => {
                         self.current = Some(key.clone());
@@ -663,34 +657,32 @@ impl DoubleEndedIterator for IndexMapIterator {
                 }
             } else {
                 None
+            }
+        } else if let Some(nitrite_map_iterator) = &mut self.nitrite_map_iterator {
+            let next = nitrite_map_iterator.next();
+            if let Some(Ok((key, _))) = &next {
+                self.current = Some(key.clone());
+            }
+            next
+        } else if let Some(map) = &self.cached_index_map {
+            let next_key = self.higher_key(map);
+            match next_key {
+                Ok(Some(key)) => {
+                    self.current = Some(key.clone());
+                    match map.inner.get(&key) {
+                        Ok(Some(value)) => Some(Ok((key, value))),
+                        Ok(None) => Some(Ok((key, Value::Null))),
+                        Err(e) => Some(Err(e)),
+                    }
+                }
+                Ok(None) => {
+                    self.current = None;
+                    None
+                }
+                Err(e) => Some(Err(e)),
             }
         } else {
-            if let Some(nitrite_map_iterator) = &mut self.nitrite_map_iterator {
-                let next = nitrite_map_iterator.next();
-                if let Some(Ok((key, _))) = &next {
-                    self.current = Some(key.clone());
-                }
-                next
-            } else if let Some(map) = &self.cached_index_map {
-                let next_key = self.higher_key(&map);
-                match next_key {
-                    Ok(Some(key)) => {
-                        self.current = Some(key.clone());
-                        match map.inner.get(&key) {
-                            Ok(Some(value)) => Some(Ok((key, value))),
-                            Ok(None) => Some(Ok((key, Value::Null))),
-                            Err(e) => Some(Err(e)),
-                        }
-                    }
-                    Ok(None) => {
-                        self.current = None;
-                        None
-                    }
-                    Err(e) => Some(Err(e)),
-                }
-            } else {
-                None
-            }
+            None
         }
     }
 }

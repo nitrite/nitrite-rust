@@ -62,18 +62,18 @@ pub(crate) fn validate_string_array_index_field(
     }
     
     for value in array {
-        match value {
-            &Value::Null => {
+        match *value {
+            Value::Null => {
                 continue;
             }
-            &Value::Array(_) => {
+            Value::Array(_) => {
                 log::error!("Nested array field {} is not supported", field_name);
                 return Err(NitriteError::new(
                     "Nested array is not supported",
                     ErrorKind::IndexingError,
                 ));
             }
-            &Value::String(_) => {
+            Value::String(_) => {
                 continue;
             }
             _ => {

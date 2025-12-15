@@ -465,7 +465,7 @@ impl Migration {
     /// - Sets executed flag to prevent re-execution
     pub(crate) fn execute(&self) -> NitriteResult<()> {
         let steps = self.get_all_steps()?;
-        let instruction_set = InstructionSet::new(steps.into());
+        let instruction_set = InstructionSet::new(steps);
         (self.inner.migrate)(&instruction_set)?;
         
         // Replace migration steps with the steps from InstructionSet (which may have been modified by the closure)

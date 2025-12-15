@@ -213,10 +213,9 @@ impl SessionInner {
     ///
     /// If the session is already closed, the compare-exchange fails and returns early.
     pub fn close(&self) -> NitriteResult<()> {
-        if !self
+        if self
             .active
-            .compare_exchange(true, false, Ordering::SeqCst, Ordering::SeqCst)
-            .is_ok()
+            .compare_exchange(true, false, Ordering::SeqCst, Ordering::SeqCst).is_err()
         {
             // Already closed
             return Ok(());

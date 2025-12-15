@@ -64,7 +64,7 @@
 //! - **Implementation Flexibility**: Internal structure can be refactored without affecting users
 //! - **Thread Safety**: All clones share the same underlying state through `Arc<NitriteInner>`
 //!
-//! This design ensures that the Nitrite database provides a clean, stable API while keeping implementation 
+//! This design ensures that the Nitrite database provides a clean, stable API while keeping implementation
 //! complexity hidden.
 //!
 //! ## Module Organization
@@ -88,7 +88,6 @@ use crate::common::*;
 use std::sync::LazyLock;
 use std::thread::available_parallelism;
 
-
 pub mod collection;
 pub mod common;
 pub mod errors;
@@ -103,8 +102,8 @@ pub mod repository;
 pub mod store;
 pub mod transaction;
 
-
-pub(crate) static FIELD_SEPARATOR: LazyLock<Atomic<String>> = LazyLock::new(|| atomic(".".to_string()));
+pub(crate) static FIELD_SEPARATOR: LazyLock<Atomic<String>> =
+    LazyLock::new(|| atomic(".".to_string()));
 pub(crate) static ID_GENERATOR: LazyLock<SnowflakeIdGenerator> =
     LazyLock::new(SnowflakeIdGenerator::new);
 
@@ -132,7 +131,10 @@ pub fn get_cpu_count() -> usize {
     available_parallelism()
         .map(|p| p.get())
         .unwrap_or_else(|err| {
-            log::warn!("Failed to detect available parallelism: {}. Defaulting to single thread.", err);
+            log::warn!(
+                "Failed to detect available parallelism: {}. Defaulting to single thread.",
+                err
+            );
             1
         })
 }

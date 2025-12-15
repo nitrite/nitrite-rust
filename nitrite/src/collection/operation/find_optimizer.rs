@@ -404,22 +404,22 @@ impl FindOptimizerInner {
             .max_by_key(|(_, filters)| filters.len())
         {
             // Cache the filters by moving them directly instead of cloning again
-            index_scan_filters.extend(best_filters.into_iter());
+            index_scan_filters.extend(best_filters);
             find_plan.set_index_descriptor(best_descriptor);
         }
 
         Ok(())
     }
 
-    fn plan_full_scan_filter<'a>(
+    fn plan_full_scan_filter(
         &self,
         find_plan: &mut FindPlan,
         index_scan_filters: &[Filter],
         full_scan_filters: &mut FilterVec,
-        filters: &'a [Filter],
+        filters: &[Filter],
     ) -> NitriteResult<()> {
         for filter in filters {
-            if !self.contains_filter(filter, &index_scan_filters)? {
+            if !self.contains_filter(filter, index_scan_filters)? {
                 let mut eligible = false;
 
                 if let Some(by_id_filter) = &find_plan.by_id_filter() {

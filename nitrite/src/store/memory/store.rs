@@ -276,7 +276,7 @@ impl InMemoryStoreInner {
                     Ok(NitriteMap::new(map))
                 } else {
                     // If the map is not closed, return it
-                    return Ok(NitriteMap::new(map.clone()));
+                    Ok(NitriteMap::new(map.clone()))
                 }
             }
             dashmap::mapref::entry::Entry::Vacant(entry) => {

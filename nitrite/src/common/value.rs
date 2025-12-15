@@ -301,7 +301,7 @@ impl Value {
     pub fn new<T: Any>(value: T) -> NitriteResult<Value> {
         let any = &value as &dyn Any;
 
-        if let Some(_) = any.downcast_ref::<()>() {
+        if any.downcast_ref::<()>().is_some() {
             Ok(Value::Null)
         } else if let Some(v) = any.downcast_ref::<bool>() {
             Ok(Value::Bool(*v))
@@ -344,7 +344,7 @@ impl Value {
         } else if let Some(v) = any.downcast_ref::<BTreeMap<Value, Value>>() {
             Ok(Value::Map(v.clone()))
         } else if let Some(v) = any.downcast_ref::<NitriteId>() {
-            Ok(Value::NitriteId(v.clone()))
+            Ok(Value::NitriteId(*v))
         } else if let Some(v) = any.downcast_ref::<Vec<u8>>() {
             Ok(Value::Bytes(v.clone()))
         } else if let Some(v) = any.downcast_ref::<Value>() {

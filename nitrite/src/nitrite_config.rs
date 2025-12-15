@@ -324,7 +324,7 @@ impl NitriteConfigInner {
 
     /// Returns the database file path if set.
     pub(crate) fn db_path(&self) -> Option<String> {
-        self.db_path.get().map(|it| it.clone())
+        self.db_path.get().cloned()
     }
 
     /// Initializes all plugins. Called internally during setup.

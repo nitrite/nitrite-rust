@@ -102,7 +102,7 @@ impl ReadOperationsInner {
     }
 
     pub fn get_by_id(&self, id: &NitriteId) -> NitriteResult<Option<Document>> {
-        let document = self.nitrite_map.get(&Value::from(id.clone()))?;
+        let document = self.nitrite_map.get(&Value::from(*id))?;
         if let Some(document) = document {
             match document.as_document() {
                 Some(doc) => {
@@ -149,7 +149,7 @@ impl ReadOperationsInner {
             && find_plan.index_descriptor().is_none()
             && find_plan.full_scan_filter().is_none()
             && find_plan.blocking_sort_order().is_none()
-            && find_plan.sub_plans().map_or(true, |p| p.is_empty())
+            && find_plan.sub_plans().is_none_or(|p| p.is_empty())
         {
             // Direct map iteration with no filters
             let iter = Box::new(MapValues::new(self.nitrite_map.clone()));
@@ -327,7 +327,7 @@ impl ReadOperationsInner {
             let sort_order = find_plan.blocking_sort_order().unwrap();
             let collator_preference = find_plan
                 .collator_preferences()
-                .unwrap_or(CollatorPreferences::default());
+                .unwrap_or_default();
             let collator_options = find_plan
                 .collator_options()
                 .unwrap_or(CollatorOptions::default());

@@ -180,6 +180,12 @@ pub struct ProcessorChain {
     inner: Arc<ProcessorChainInner>,
 }
 
+impl Default for ProcessorChain {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl ProcessorChain {
     /// Creates a new empty processor chain.
     ///

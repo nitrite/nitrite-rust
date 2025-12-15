@@ -7,6 +7,12 @@ pub struct LockHandle {
     lock: Arc<RwLock<()>>,
 }
 
+impl Default for LockHandle {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl LockHandle {
     /// Creates a new lock handle.
     pub fn new() -> Self {

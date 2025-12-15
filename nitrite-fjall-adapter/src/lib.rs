@@ -50,19 +50,27 @@ mod tests {
         }
 
         pub fn keyspace(&self) -> Result<Keyspace, String> {
-            self.keyspace.clone().ok_or_else(|| "Keyspace not available".to_string())
+            self.keyspace
+                .clone()
+                .ok_or_else(|| "Keyspace not available".to_string())
         }
 
         pub fn partition_handle(&self) -> Result<PartitionHandle, String> {
-            self.partition_handle.clone().ok_or_else(|| "Partition handle not available".to_string())
+            self.partition_handle
+                .clone()
+                .ok_or_else(|| "Partition handle not available".to_string())
         }
 
         pub fn fjall_store(&self) -> Result<FjallStore, String> {
-            self.fjall_store.clone().ok_or_else(|| "FjallStore not available".to_string())
+            self.fjall_store
+                .clone()
+                .ok_or_else(|| "FjallStore not available".to_string())
         }
 
         pub fn fjall_map(&self) -> Result<FjallMap, String> {
-            self.fjall_map.clone().ok_or_else(|| "FjallMap not available".to_string())
+            self.fjall_map
+                .clone()
+                .ok_or_else(|| "FjallMap not available".to_string())
         }
 
         #[cfg(test)]
@@ -94,7 +102,7 @@ mod tests {
                     }
                 }
             }
-            
+
             // Close fjall_store if available, log on failure but don't panic
             if let Some(store) = fjall_store {
                 match store.close() {
@@ -111,7 +119,7 @@ mod tests {
             if let Some(handle) = partition_handle {
                 drop(handle)
             }
-            
+
             // Drop keyspace gracefully
             if let Some(ks) = keyspace {
                 drop(ks)
@@ -143,7 +151,7 @@ mod tests {
                 } else {
                     format!("{:?}", e)
                 };
-                
+
                 eprintln!("Test execution failed with panic: {}", panic_msg);
                 panic!("Test execution failed with panic: {}", panic_msg);
             }
@@ -156,83 +164,47 @@ mod tests {
 
         #[test]
         fn test_context_keyspace_returns_result_on_error() {
-            let ctx = Context::new(
-                "test".to_string(),
-                None,
-                None,
-                None,
-                None,
-            );
-            
+            let ctx = Context::new("test".to_string(), None, None, None, None);
+
             let result = ctx.keyspace();
             assert!(result.is_err());
         }
 
         #[test]
         fn test_context_partition_handle_returns_result_on_error() {
-            let ctx = Context::new(
-                "test".to_string(),
-                None,
-                None,
-                None,
-                None,
-            );
-            
+            let ctx = Context::new("test".to_string(), None, None, None, None);
+
             let result = ctx.partition_handle();
             assert!(result.is_err());
         }
 
         #[test]
         fn test_context_fjall_store_returns_result_on_error() {
-            let ctx = Context::new(
-                "test".to_string(),
-                None,
-                None,
-                None,
-                None,
-            );
-            
+            let ctx = Context::new("test".to_string(), None, None, None, None);
+
             let result = ctx.fjall_store();
             assert!(result.is_err());
         }
 
         #[test]
         fn test_context_fjall_map_returns_result_on_error() {
-            let ctx = Context::new(
-                "test".to_string(),
-                None,
-                None,
-                None,
-                None,
-            );
-            
+            let ctx = Context::new("test".to_string(), None, None, None, None);
+
             let result = ctx.fjall_map();
             assert!(result.is_err());
         }
 
         #[test]
         fn test_context_drop_handles_empty_state() {
-            let _ctx = Context::new(
-                "test".to_string(),
-                None,
-                None,
-                None,
-                None,
-            );
+            let _ctx = Context::new("test".to_string(), None, None, None, None);
             // Drop implicitly called, should not panic
         }
 
         #[test]
         fn test_context_drop_handles_error_gracefully() {
             // Create a context with None values
-            let ctx = Context::new(
-                "test".to_string(),
-                None,
-                None,
-                None,
-                None,
-            );
-            
+            let ctx = Context::new("test".to_string(), None, None, None, None);
+
             // Drop should handle None values gracefully without panicking
             drop(ctx);
         }
@@ -253,8 +225,11 @@ mod tests {
             assert!(caught.is_err());
             let err = caught.err().unwrap();
             if let Some(panic_msg) = err.downcast_ref::<String>() {
-                assert!(panic_msg.contains(test_msg), 
-                    "Panic message should contain original message, got: {}", panic_msg);
+                assert!(
+                    panic_msg.contains(test_msg),
+                    "Panic message should contain original message, got: {}",
+                    panic_msg
+                );
             } else {
                 panic!("Expected String panic message");
             }
@@ -275,8 +250,11 @@ mod tests {
             assert!(caught.is_err());
             let err = caught.err().unwrap();
             if let Some(panic_msg) = err.downcast_ref::<String>() {
-                assert!(panic_msg.contains("Assertion failure with custom message"),
-                    "Should preserve assertion failure message: {}", panic_msg);
+                assert!(
+                    panic_msg.contains("Assertion failure with custom message"),
+                    "Should preserve assertion failure message: {}",
+                    panic_msg
+                );
             }
         }
 
@@ -295,8 +273,11 @@ mod tests {
             assert!(caught.is_err());
             let err = caught.err().unwrap();
             if let Some(panic_msg) = err.downcast_ref::<String>() {
-                assert!(panic_msg.contains("Setup failed"),
-                    "Should preserve setup failure message: {}", panic_msg);
+                assert!(
+                    panic_msg.contains("Setup failed"),
+                    "Should preserve setup failure message: {}",
+                    panic_msg
+                );
             }
         }
 
@@ -315,8 +296,11 @@ mod tests {
             assert!(caught.is_err());
             let err = caught.err().unwrap();
             if let Some(panic_msg) = err.downcast_ref::<String>() {
-                assert!(panic_msg.contains("Cleanup failed"),
-                    "Should preserve cleanup failure message: {}", panic_msg);
+                assert!(
+                    panic_msg.contains("Cleanup failed"),
+                    "Should preserve cleanup failure message: {}",
+                    panic_msg
+                );
             }
         }
 
@@ -351,10 +335,16 @@ mod tests {
             let err = caught.err().unwrap();
             if let Some(panic_msg) = err.downcast_ref::<String>() {
                 // Check that error includes both the prefix and the original message
-                assert!(panic_msg.contains("Test execution failed with panic"),
-                    "Should include error prefix: {}", panic_msg);
-                assert!(panic_msg.contains("Specific error condition"),
-                    "Should include original panic message: {}", panic_msg);
+                assert!(
+                    panic_msg.contains("Test execution failed with panic"),
+                    "Should include error prefix: {}",
+                    panic_msg
+                );
+                assert!(
+                    panic_msg.contains("Specific error condition"),
+                    "Should include original panic message: {}",
+                    panic_msg
+                );
             }
         }
 
@@ -374,8 +364,11 @@ mod tests {
             let err = caught.err().unwrap();
             if let Some(panic_msg) = err.downcast_ref::<String>() {
                 // Should still provide useful error message for non-string panics
-                assert!(panic_msg.contains("Test execution failed with panic"),
-                    "Should provide error prefix for generic panics: {}", panic_msg);
+                assert!(
+                    panic_msg.contains("Test execution failed with panic"),
+                    "Should provide error prefix for generic panics: {}",
+                    panic_msg
+                );
             }
         }
     }

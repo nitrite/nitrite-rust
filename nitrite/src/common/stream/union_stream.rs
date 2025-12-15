@@ -25,7 +25,7 @@ where
         };
         
         // Move remaining streams to remaining_streams
-        remaining.extend(streams.into_iter());
+        remaining.extend(streams);
         
         Self {
             streams: Vec::new(), // Keep for compatibility, but we don't use it

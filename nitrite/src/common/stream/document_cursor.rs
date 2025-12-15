@@ -41,7 +41,7 @@ impl DocumentCursor {
             return self.cache.len();
         }
         // Otherwise, iterate through the remaining items.
-        while let Some(_) = self.next() {}
+        for _ in self.by_ref() {}
         self.reset();
         self.cache.len()
     }

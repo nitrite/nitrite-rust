@@ -63,9 +63,9 @@ impl CollectionFactoryInner {
                     self.collection_map.write().remove(name);
                     return self.create_collection(name, nitrite_config, write_catalog);
                 }
-                return Ok(collection);
+                Ok(collection)
             }
-            None => return self.create_collection(name, nitrite_config, write_catalog),
+            None => self.create_collection(name, nitrite_config, write_catalog),
         }
     }
 

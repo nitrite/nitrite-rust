@@ -65,7 +65,7 @@ pub fn repository_name(entity_name: &str, key: Option<&str>) -> NitriteResult<St
         // Preallocate capacity to avoid reallocation
         Some(k) => {
             let mut result = String::with_capacity(entity_name.len() + 1 + k.len());
-            result.push_str(&entity_name);
+            result.push_str(entity_name);
             result.push_str(KEY_OBJ_SEPARATOR);
             result.push_str(k);
             Ok(result)

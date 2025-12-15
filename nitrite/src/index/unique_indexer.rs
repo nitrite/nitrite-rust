@@ -177,7 +177,7 @@ impl UniqueIndexerInner {
     ) -> NitriteResult<()> {
         let mut nitrite_index = self.find_nitrite_index(index_descriptor);
         if nitrite_index.is_none() {
-            nitrite_index = Some(self.create_nitrite_index(&index_descriptor, nitrite_config)?);
+            nitrite_index = Some(self.create_nitrite_index(index_descriptor, nitrite_config)?);
         }
 
         if let Some(nitrite_index) = nitrite_index {

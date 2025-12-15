@@ -39,7 +39,7 @@ impl Iterator for IndexedStream {
             log::debug!("IndexedStream::next - looking up id: {:?}", id);
             
             // Inline the match for better branch prediction
-            match self.nitrite_map.get(&Value::NitriteId(id.clone())) {
+            match self.nitrite_map.get(&Value::NitriteId(*id)) {
                 Ok(Some(value)) => {
                     // Direct as_document() check without nested match
                     if let Some(doc) = value.as_document() {

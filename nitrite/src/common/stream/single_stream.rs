@@ -17,10 +17,7 @@ impl Iterator for SingleStream {
 
     fn next(&mut self) -> Option<Self::Item> {
         // Avoid take() allocation - directly match and consume
-        match self.document.take() {
-            Some(document) => Some(Ok(document)),
-            None => None,
-        }
+        self.document.take().map(Ok)
     }
 }
 

@@ -60,7 +60,7 @@ pub(crate) fn get_document_values(
     document: &mut Document,
     fields: &Fields,
 ) -> NitriteResult<FieldValues> {
-    let nitrite_id = document.id()?.clone();
+    let nitrite_id = document.id()?;
     // Preallocate with exact field count to avoid reallocation
     let mut values = Vec::with_capacity(fields.field_names().len());
 
@@ -82,7 +82,7 @@ pub(crate) fn is_affected_by_update(fields: &Fields, updated_fields: &Document) 
 }
 
 pub(crate) fn create_unique_filter(document: &mut Document) -> NitriteResult<Filter> {
-    Ok(by_id(document.id()?.clone()))
+    Ok(by_id(document.id()?))
 }
 
 #[cfg(test)]

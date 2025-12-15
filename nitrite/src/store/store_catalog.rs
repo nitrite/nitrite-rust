@@ -300,7 +300,7 @@ impl StoreCatalogInner {
             let key = get_key_name(&name)?;
             let repo_type = get_keyed_repo_type(&name)?;
 
-            let types = result.entry(key).or_insert_with(HashSet::new);
+            let types = result.entry(key).or_default();
             types.insert(repo_type);
         }
 

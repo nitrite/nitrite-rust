@@ -150,7 +150,7 @@ impl FindOptions {
     }
 
     pub fn sort_by(mut self, field_name: String, sort_order: SortOrder) -> FindOptions {
-        let fields = self.sort_by.unwrap_or_else(|| SortableFields::new());
+        let fields = self.sort_by.unwrap_or_default();
 
         let fields = fields.add_sorted_field(field_name, sort_order);
         self.sort_by = Some(fields);

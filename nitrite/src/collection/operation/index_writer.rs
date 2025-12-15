@@ -156,7 +156,7 @@ impl DocumentIndexWriterInner {
         for index_descriptor in index_entries {
             let fields = index_descriptor.index_fields();
 
-            if is_affected_by_update(&fields, &updated_fields) {
+            if is_affected_by_update(&fields, updated_fields) {
                 let index_type = index_descriptor.index_type();
                 let mut indexer = self.nitrite_config.find_indexer(&index_type)?;
 
@@ -179,7 +179,7 @@ impl DocumentIndexWriterInner {
         if self.index_operation.should_rebuild_index(&fields)? {
             self.index_operation.build_index(index_descriptor, true)?;
         } else {
-            indexer.write_index_entry(&field_values, &index_descriptor, &self.nitrite_config)?;
+            indexer.write_index_entry(&field_values, index_descriptor, &self.nitrite_config)?;
         }
         Ok(())
     }
@@ -196,7 +196,7 @@ impl DocumentIndexWriterInner {
         if self.index_operation.should_rebuild_index(&fields)? {
             self.index_operation.build_index(index_descriptor, true)?;
         } else {
-            indexer.remove_index_entry(&field_values, &index_descriptor, &self.nitrite_config)?;
+            indexer.remove_index_entry(&field_values, index_descriptor, &self.nitrite_config)?;
         }
         Ok(())
     }

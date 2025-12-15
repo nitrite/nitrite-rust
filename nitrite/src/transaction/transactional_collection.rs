@@ -414,7 +414,7 @@ impl TransactionalCollectionInner {
 
         // Rollback: remove the inserted document using its ID
         let rollback: Command = Arc::new(move || {
-            let filter = crate::filter::by_id(inserted_id.clone());
+            let filter = crate::filter::by_id(inserted_id);
             primary_for_rollback.remove(filter, true)?;
             Ok(())
         });
@@ -524,17 +524,15 @@ impl TransactionalCollectionInner {
         if insert_if_absent {
             let filter = create_unique_filter(&mut document)?;
             self.update_with_options(filter, &document, &UpdateOptions::new(true, false))
+        } else if document.has_id() {
+            let filter = create_unique_filter(&mut document)?;
+            self.update_with_options(filter, &document, &UpdateOptions::new(false, false))
         } else {
-            if document.has_id() {
-                let filter = create_unique_filter(&mut document)?;
-                self.update_with_options(filter, &document, &UpdateOptions::new(false, false))
-            } else {
-                log::error!("Document does not have id");
-                Err(NitriteError::new(
-                    "Document does not have id",
-                    ErrorKind::NotIdentifiable,
-                ))
-            }
+            log::error!("Document does not have id");
+            Err(NitriteError::new(
+                "Document does not have id",
+                ErrorKind::NotIdentifiable,
+            ))
         }
     }
 
@@ -558,10 +556,10 @@ impl TransactionalCollectionInner {
         }
 
         let primary = self.primary.clone();
-        let id_for_commit = id.clone();
+        let id_for_commit = *id;
         let update_for_commit = update.clone();
         let primary_for_rollback = self.primary.clone();
-        let id_for_rollback = id.clone();
+        let id_for_rollback = *id;
         let original_for_rollback = original_doc.clone();
         let was_insert = original_doc.is_none();
 
@@ -649,10 +647,10 @@ impl TransactionalCollectionInner {
 
         // Capture the original document BEFORE removal to enable rollback
         // Check in the transactional operations, not the primary collection
-        return match self.operations.get_by_id(&doc_id)? {
+        match self.operations.get_by_id(&doc_id)? {
             None => {
                 log::error!("Document not found");
-                return Err(NitriteError::new("Document not found", ErrorKind::NotFound));
+                Err(NitriteError::new("Document not found", ErrorKind::NotFound))
             }
             Some(original_doc) => {
                 let result = self.operations.remove_document(document)?;
@@ -678,7 +676,7 @@ impl TransactionalCollectionInner {
                 self.context.add_entry(entry)?;
                 Ok(result)
             }
-        };
+        }
     }
 
     fn find(&self, filter: crate::filter::Filter) -> NitriteResult<crate::common::DocumentCursor> {

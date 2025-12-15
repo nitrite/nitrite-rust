@@ -285,17 +285,15 @@ impl NitriteCollectionProvider for DefaultNitriteCollection {
         if insert_if_absent {
             let filter = create_unique_filter(&mut document)?;
             self.update_with_options(filter, &document, &UpdateOptions::new(true, false))
+        } else if document.has_id() {
+            let filter = create_unique_filter(&mut document)?;
+            self.update_with_options(filter, &document, &UpdateOptions::new(false, false))
         } else {
-            if document.has_id() {
-                let filter = create_unique_filter(&mut document)?;
-                self.update_with_options(filter, &document, &UpdateOptions::new(false, false))
-            } else {
-                log::error!("Document does not have id");
-                Err(NitriteError::new(
-                    "Document does not have id",
-                    ErrorKind::NotIdentifiable,
-                ))
-            }
+            log::error!("Document does not have id");
+            Err(NitriteError::new(
+                "Document does not have id",
+                ErrorKind::NotIdentifiable,
+            ))
         }
     }
 

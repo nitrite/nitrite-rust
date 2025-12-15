@@ -128,7 +128,7 @@ impl TransactionalMapInner {
         }
 
         // Fall through to primary_map (read-only, no copy)
-        self.primary_map.get(&key)
+        self.primary_map.get(key)
     }
 
     fn get_store(&self) -> NitriteResult<NitriteStore> {

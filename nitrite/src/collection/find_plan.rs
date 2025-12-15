@@ -238,7 +238,7 @@ impl FindPlan {
     /// assert!(plan.collator_options().is_none());
     /// ```
     pub fn collator_options(&self) -> Option<CollatorOptions> {
-        self.inner.collator_options.clone()
+        self.inner.collator_options
     }
 
     /// Returns the collator preferences for text comparison if specified.
@@ -256,7 +256,7 @@ impl FindPlan {
     /// assert!(plan.collator_preferences().is_none());
     /// ```
     pub fn collator_preferences(&self) -> Option<CollatorPreferences> {
-        self.inner.collator_preferences.clone()
+        self.inner.collator_preferences
     }
 
     /// Returns any sub-plans attached to this plan.

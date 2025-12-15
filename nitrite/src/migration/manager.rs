@@ -364,7 +364,7 @@ impl MigrationManager {
                         ErrorKind::ValidationError,
                     )
                 })?;
-                let key = step.key.as_ref().map(|s| s.as_str());
+                let key = step.key.as_deref();
                 let collection_name = repository_name(entity_name, key)?;
 
                 let (new_entity_name, new_key) =

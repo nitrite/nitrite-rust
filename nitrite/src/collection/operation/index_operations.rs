@@ -419,21 +419,21 @@ impl IndexOperationInner {
     }
 
     pub fn has_index_entry(&self, fields: &Fields) -> NitriteResult<bool> {
-        Ok(self
+        self
             .index_manager
-            .read_with(|manager| manager.has_index_descriptor(fields))?)
+            .read_with(|manager| manager.has_index_descriptor(fields))
     }
 
     pub fn find_index_descriptor(&self, fields: &Fields) -> NitriteResult<Option<IndexDescriptor>> {
-        Ok(self
+        self
             .index_manager
-            .read_with(|manager| manager.find_exact_index(fields))?)
+            .read_with(|manager| manager.find_exact_index(fields))
     }
 
     pub fn list_indexes(&self) -> NitriteResult<Vec<IndexDescriptor>> {
-        Ok(self
+        self
             .index_manager
-            .read_with(|manager| manager.get_index_descriptors())?)
+            .read_with(|manager| manager.get_index_descriptors())
     }
 
     pub fn should_rebuild_index(&self, fields: &Fields) -> NitriteResult<bool> {

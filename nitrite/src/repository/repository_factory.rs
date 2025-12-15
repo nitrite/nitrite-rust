@@ -129,7 +129,7 @@ impl RepositoryFactoryInner {
             ));
         }
 
-        let collection = self.collection_factory.get_collection(&*name, nitrite_config, false)?;
+        let collection = self.collection_factory.get_collection(&name, nitrite_config, false)?;
         let operations = RepositoryOperations::new();
         operations.initialize::<T>(collection.clone())?;
         
@@ -143,7 +143,7 @@ impl RepositoryFactoryInner {
 
     fn destroy_repository<T: NitriteEntity>(&self, key: Option<&str>) -> NitriteResult<()> {
         let name = repository_name_by_type::<T>(key)?;
-        self.collection_factory.destroy_collection(&*name)?;
+        self.collection_factory.destroy_collection(&name)?;
         self.repository_operations.write().remove(&*name);
         self.collection_registry.write().remove(&*name);
         Ok(())

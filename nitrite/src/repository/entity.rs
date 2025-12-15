@@ -187,7 +187,7 @@ impl EntityId {
             field_name: field_name.to_string(),
             is_nitrite_id: is_nitrite_id.unwrap_or(false),
             embedded_fields: embedded_fields
-                .unwrap_or_else(|| Vec::new())
+                .unwrap_or_default()
                 .iter()
                 .map(|field| field.to_string())
                 .collect(),
@@ -260,7 +260,7 @@ impl EntityId {
         if self.is_embedded() {
             self.create_embedded_id_filter(element)
         } else {
-            let filter = field(&*self.field_name).eq(element);
+            let filter = field(&self.field_name).eq(element);
             Ok(filter)
         }
     }
@@ -281,14 +281,12 @@ impl EntityId {
     pub fn create_id_filter<T: Into<Value>>(&self, id: T) -> NitriteResult<Filter> {
         if self.is_embedded() {
             self.create_embedded_id_filter(id)
+        } else if self.is_nitrite_id() {
+            let filter = field(DOC_ID).eq(id);
+            Ok(filter)
         } else {
-            if self.is_nitrite_id() {
-                let filter = field(DOC_ID).eq(id);
-                Ok(filter)
-            } else {
-                let filter = field(&*self.field_name).eq(id);
-                Ok(filter)
-            }
+            let filter = field(&self.field_name).eq(id);
+            Ok(filter)
         }
     }
 
@@ -318,7 +316,7 @@ impl EntityId {
                 separator,
                 self.embedded_fields[0]
             );
-            let filter = field(&*filter_field).eq(value);
+            let filter = field(&filter_field).eq(value);
             Ok(filter)
         } else {
             if !value.is_document() {
@@ -350,7 +348,7 @@ impl EntityId {
                     embedded_field
                 );
                 let field_value = document.get(embedded_field)?;
-                let filter = field(&*filter_field).eq(field_value.clone());
+                let filter = field(&filter_field).eq(field_value.clone());
 
                 filters.push(filter);
             }

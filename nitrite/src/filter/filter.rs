@@ -185,7 +185,7 @@ pub trait FilterProvider: Any + Send + Sync + Display {
                         Value::Array(_) => {
                             log::error!("Nested array field {} is not supported", field);
                             return Err(NitriteError::new(
-                                &"Nested array is not supported".to_string(),
+                                "Nested array is not supported",
                                 ErrorKind::FilterError,
                             ))
                         }

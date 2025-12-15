@@ -18,6 +18,7 @@
 /// // Custom options
 /// let options = UpdateOptions::new(true, false);
 /// ```
+#[derive(Default)]
 pub struct UpdateOptions {
     insert_if_absent: bool,
     just_once: bool,
@@ -48,14 +49,6 @@ impl UpdateOptions {
     }
 }
 
-impl Default for UpdateOptions {
-    fn default() -> Self {
-        Self {
-            insert_if_absent: false,
-            just_once: false,
-        }
-    }
-}
 
 /// Creates `UpdateOptions` with insert-if-absent behavior.
 ///

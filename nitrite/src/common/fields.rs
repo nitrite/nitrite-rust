@@ -184,6 +184,12 @@ pub struct SortableFields {
     sorting_order: Vec<(String, SortOrder)>,
 }
 
+impl Default for SortableFields {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl SortableFields {
     pub fn new() -> SortableFields {
         SortableFields {
@@ -287,8 +293,7 @@ impl FieldValues {
     pub fn get_value(&self, field_name: &str) -> Option<&Value> {
         self.field_values
             .iter()
-            .find(|(name, _)| name == field_name)
-            .map_or(None, |(_, value)| {
+            .find(|(name, _)| name == field_name).and_then(|(_, value)| {
                 if value.is_null() {
                     return None;
                 }

@@ -73,26 +73,25 @@ pub mod fluent;
 pub mod geometry;
 pub mod geometry_extended;
 pub mod hilbert;
-pub mod indexer;
 pub mod index;
+pub mod indexer;
 pub mod spatial_module;
 
 // Re-export R-Tree types
 pub use bounding_box::BoundingBox;
-pub use disk_rtree::{DiskRTree, SpatialError, SpatialResult, RTreeStats};
+pub use disk_rtree::{DiskRTree, RTreeStats, SpatialError, SpatialResult};
 pub use nitrite_rtree::NitriteRTree;
 
 // Re-export geometry types
-pub use geometry::{Point, Geometry, GeoPoint, Coordinate, create_geodesic_circle, meters_to_degrees};
+pub use geometry::{
+    create_geodesic_circle, meters_to_degrees, Coordinate, GeoPoint, Geometry, Point,
+};
 pub use geometry_extended::{
-    LineString, PolygonWithHoles, MultiGeometry, GeometryValue, 
-    parse_wkt, parse_geojson
+    parse_geojson, parse_wkt, GeometryValue, LineString, MultiGeometry, PolygonWithHoles,
 };
 
 // Re-export filter types
-pub use filter::{
-    IntersectsFilter, WithinFilter, NearFilter, GeoNearFilter, SpatialFilterOps
-};
+pub use filter::{GeoNearFilter, IntersectsFilter, NearFilter, SpatialFilterOps, WithinFilter};
 
 // Re-export fluent API
 pub use fluent::SpatialFluentFilter;

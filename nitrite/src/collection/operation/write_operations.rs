@@ -177,20 +177,20 @@ impl WriteOperationsInner {
         
         // Phase 2: Check for duplicate NitriteIds (primary key uniqueness)
         let keys: Vec<_> = prepared.iter()
-            .map(|(id, _, _, _)| Value::NitriteId(id.clone()))
+            .map(|(id, _, _, _)| Value::NitriteId(*id))
             .collect();
         
         self.validate_no_duplicates(&keys)?;
         
         // Collect all IDs upfront for potential rollback (put_all stores all at once)
         let all_ids: Vec<NitriteId> = prepared.iter()
-            .map(|(id, _, _, _)| id.clone())
+            .map(|(id, _, _, _)| *id)
             .collect();
         
         // Phase 3: Batch write using put_all
         let entries: Vec<(Key, Value)> = prepared.iter()
             .map(|(id, processed_doc, _, _)| {
-                (Value::NitriteId(id.clone()), Value::Document(processed_doc.clone()))
+                (Value::NitriteId(*id), Value::Document(processed_doc.clone()))
             })
             .collect();
         
@@ -296,7 +296,7 @@ impl WriteOperationsInner {
                 .unwrap_or(4)
                 .min(keys.len());
             
-            let chunk_size = (keys.len() + num_threads - 1) / num_threads;
+            let chunk_size = keys.len().div_ceil(num_threads);
             let chunks: Vec<_> = keys.chunks(chunk_size).collect();
             
             let results: Vec<NitriteResult<Option<NitriteId>>> = std::thread::scope(|s| {
@@ -307,7 +307,7 @@ impl WriteOperationsInner {
                             for key in chunk {
                                 if self.nitrite_map.contains_key(key)? {
                                     if let Value::NitriteId(id) = key {
-                                        return Ok(Some(id.clone()));
+                                        return Ok(Some(*id));
                                     }
                                 }
                             }
@@ -351,7 +351,7 @@ impl WriteOperationsInner {
     /// Rollback helper: removes documents that were inserted during a failed batch
     fn rollback_batch_insert(&self, ids: &[NitriteId]) {
         for id in ids {
-            if let Err(e) = self.nitrite_map.remove(&Value::NitriteId(id.clone())) {
+            if let Err(e) = self.nitrite_map.remove(&Value::NitriteId(*id)) {
                 log::error!("Failed to rollback document {} during batch insert: {}", id, e);
             }
         }
@@ -391,7 +391,7 @@ impl WriteOperationsInner {
         let mut processed = self.processor_chain.process_before_write(new_doc.clone())
             .map_err(|e| NitriteError::new(&format!("Failed to process document before write during insert: {}", e), e.kind().clone()))?;
         let existing = self.nitrite_map.put_if_absent(
-            Value::NitriteId(nitrite_id.clone()),
+            Value::NitriteId(nitrite_id),
             Value::Document(processed.clone()),
         ).map_err(|e| NitriteError::new(&format!("Failed to store document in map during insert: {}", e), e.kind().clone()))?;
 
@@ -404,7 +404,7 @@ impl WriteOperationsInner {
         } else {
             let result = self.document_index_writer.write_index_entry(&mut processed);
             if let Err(e) = result {
-                self.nitrite_map.remove(&Value::NitriteId(nitrite_id.clone()))
+                self.nitrite_map.remove(&Value::NitriteId(nitrite_id))
                     .map_err(|remove_err| NitriteError::new(&format!("Failed to rollback document storage after index write failure: {}", remove_err), remove_err.kind().clone()))?;
                 return Err(NitriteError::new(&format!("Failed to write index entries during insert: {}", e), e.kind().clone()));
             }
@@ -537,7 +537,7 @@ impl WriteOperationsInner {
         // Phase 2: Batch write using put_all
         let entries: Vec<(Key, Value)> = prepared.iter()
             .map(|(id, _, _, processed)| {
-                (Value::NitriteId(id.clone()), Value::Document(processed.clone()))
+                (Value::NitriteId(*id), Value::Document(processed.clone()))
             })
             .collect();
         
@@ -562,7 +562,7 @@ impl WriteOperationsInner {
             }
             
             // Track for potential rollback
-            updated_indexes.push((id.clone(), old_doc, processed.clone()));
+            updated_indexes.push((id, old_doc, processed.clone()));
             
             // Publish event
             let value = Value::Document(new_doc);
@@ -589,7 +589,7 @@ impl WriteOperationsInner {
     ) -> NitriteResult<()> {
         // Restore the failed document's old state
         self.nitrite_map.put(
-            Value::NitriteId(failed_id.clone()),
+            Value::NitriteId(*failed_id),
             Value::Document(failed_old_doc.clone()),
         )?;
         
@@ -598,7 +598,7 @@ impl WriteOperationsInner {
         
         for (id, old_doc, processed) in updated_indexes {
             restore_entries.push((
-                Value::NitriteId(id.clone()),
+                Value::NitriteId(*id),
                 Value::Document(old_doc.clone()),
             ));
             
@@ -644,7 +644,7 @@ impl WriteOperationsInner {
 
         let mut processed = self.processor_chain.process_before_write(new_doc.clone())?;
         self.nitrite_map.put(
-            Value::NitriteId(nitrite_id.clone()),
+            Value::NitriteId(nitrite_id),
             Value::Document(processed.clone()),
         )?;
 
@@ -656,7 +656,7 @@ impl WriteOperationsInner {
         
         if let Err(e) = result {
             self.nitrite_map.put(
-                Value::NitriteId(nitrite_id.clone()),
+                Value::NitriteId(nitrite_id),
                 Value::Document(old_doc.clone()),
             )?;
             self.document_index_writer.update_index_entry(
@@ -696,7 +696,7 @@ impl WriteOperationsInner {
         insert_if_absent: bool,
     ) -> NitriteResult<WriteResult> {
         // Get the existing document directly by ID (O(1) lookup)
-        let existing = self.nitrite_map.get(&Value::NitriteId(id.clone()))?;
+        let existing = self.nitrite_map.get(&Value::NitriteId(*id))?;
         
         match existing {
             Some(value) => {
@@ -722,7 +722,7 @@ impl WriteOperationsInner {
                 if insert_if_absent {
                     // Insert the document with the specified ID
                     let mut new_doc = update.clone();
-                    new_doc.put(DOC_ID, Value::NitriteId(id.clone()))?;
+                    new_doc.put(DOC_ID, Value::NitriteId(*id))?;
                     self.insert(new_doc)
                 } else {
                     // Document not found and insert_if_absent is false
@@ -775,7 +775,7 @@ impl WriteOperationsInner {
         let nitrite_id = document.id()?;
         let document = self
             .nitrite_map
-            .remove(&Key::NitriteId(nitrite_id.clone()))?;
+            .remove(&Key::NitriteId(nitrite_id))?;
         
         // Validate that removed value is a Document, not another type
         let mut document = match document {
@@ -793,7 +793,7 @@ impl WriteOperationsInner {
         let remove_at = get_current_time_or_zero();
         self.document_index_writer
             .remove_index_entry(&mut document)?;
-        nitrite_ids.push(nitrite_id.clone());
+        nitrite_ids.push(nitrite_id);
 
         let revision = document.revision()? + 1;
         document.put(DOC_REVISION, Value::I32(revision))?;

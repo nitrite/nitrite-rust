@@ -416,7 +416,7 @@ impl CompoundIndexInner {
                 ErrorKind::InvalidOperation
             ))?
             .filters();
-        let index_scan_order = find_plan.index_scan_order().unwrap_or_else(HashMap::new);
+        let index_scan_order = find_plan.index_scan_order().unwrap_or_default();
 
         let i_map = IndexMap::new(Some(index_map), None);
         let index_scanner = IndexScanner::new(i_map);
@@ -431,7 +431,7 @@ impl CompoundIndexInner {
         let fields = field_values.fields();
         let field_names = fields.field_names();
 
-        let first_field = field_names.get(0).map_or("", |x| x.as_str());
+        let first_field = field_names.first().map_or("", |x| x.as_str());
         let first_value = field_values.get_value(first_field);
 
         // NOTE: only first field can have array or iterable value, subsequent fields can not
@@ -460,7 +460,7 @@ impl CompoundIndexInner {
         let fields = field_values.fields();
         let field_names = fields.field_names();
 
-        let first_field = field_names.get(0).map_or("", |x| x.as_str());
+        let first_field = field_names.first().map_or("", |x| x.as_str());
         let first_value = field_values.get_value(first_field);
 
         // NOTE: only first field can have array or iterable value, subsequent fields can not

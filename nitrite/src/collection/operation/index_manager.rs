@@ -214,7 +214,7 @@ impl IndexManagerInner {
     }
 
     pub fn has_index_descriptor(&self, fields: &Fields) -> NitriteResult<bool> {
-        Ok(self.find_matching_index(fields)?.is_empty() == false)
+        Ok(!self.find_matching_index(fields)?.is_empty())
     }
 
     pub fn get_index_descriptors(&self) -> NitriteResult<Vec<IndexDescriptor>> {

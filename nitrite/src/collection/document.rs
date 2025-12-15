@@ -247,14 +247,14 @@ impl Document {
     /// ```
     pub fn id(&mut self) -> NitriteResult<NitriteId> {
         if let Some(Value::NitriteId(id)) = self.data.get(DOC_ID) {
-            Ok(id.clone())
+            Ok(*id)
         } else {
             // if _id field is not populated already, create a new id
             // and set it in the document
             let nitrite_id = NitriteId::new();
             self.data = self.data.update(
                 DOC_ID.to_string(),
-                Value::NitriteId(nitrite_id.clone()),
+                Value::NitriteId(nitrite_id),
             );
             Ok(nitrite_id)
         }
@@ -454,7 +454,7 @@ impl Document {
                 Value::Document(obj) => {
                     // if the value is a document, merge it recursively
                     if let Some(Value::Document(mut nested_obj)) = self.data.get(key).cloned() {
-                        nested_obj.merge(&obj)?;
+                        nested_obj.merge(obj)?;
                         self.data = self.data.update(key.clone(), Value::Document(nested_obj));
                     } else {
                         // Otherwise, just set the value
@@ -1007,7 +1007,7 @@ impl Document {
                     self.recursive_get(Some(item), &splits[1..])
                 } else {
                     // if the current key is not an integer, decompose the list
-                    self.decompose(arr, &splits)
+                    self.decompose(arr, splits)
                 }
             }
             _ => Ok(Value::Null), // if no match found return null

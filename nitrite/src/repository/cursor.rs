@@ -72,7 +72,7 @@ where
     where
         P: Convertible<Output = P> + NitriteEntity + Default,
     {
-        Ok(ProjectedObjectCursor::new(&mut self.cursor)?)
+        ProjectedObjectCursor::new(&mut self.cursor)
     }
     
     /// Returns an iterator that yields `(NitriteId, T)` pairs.

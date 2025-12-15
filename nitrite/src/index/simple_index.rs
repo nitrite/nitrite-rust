@@ -201,7 +201,7 @@ impl SimpleIndexInner {
                 ErrorKind::InvalidOperation,
             ))?;
         let filters = index_scan_filter.filters();
-        let index_scan_order = find_plan.index_scan_order().unwrap_or(HashMap::new());
+        let index_scan_order = find_plan.index_scan_order().unwrap_or_default();
 
         let i_map = IndexMap::new(Some(index_map), None);
         let index_scanner = IndexScanner::new(i_map);

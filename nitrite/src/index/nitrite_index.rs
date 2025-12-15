@@ -127,7 +127,7 @@ pub trait NitriteIndexProvider: Send + Sync {
         }
 
         // index always are in ascending format
-        nitrite_ids.push(field_values.nitrite_id().clone());
+        nitrite_ids.push(*field_values.nitrite_id());
         Ok(std::mem::take(nitrite_ids))
     }
 

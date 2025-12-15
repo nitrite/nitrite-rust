@@ -63,7 +63,7 @@ impl Convertible for IndexMeta {
                     .clone();
                 
                 // Safely extract is_dirty as Bool with validation
-                let is_dirty = doc.get("is_dirty")?
+                let is_dirty = *doc.get("is_dirty")?
                     .as_bool()
                     .ok_or_else(|| {
                         log::error!("is_dirty field must be a bool, got: {:?}", doc.get("is_dirty"));
@@ -71,8 +71,7 @@ impl Convertible for IndexMeta {
                             "is_dirty field must be a bool in index metadata",
                             ErrorKind::ObjectMappingError,
                         )
-                    })?
-                    .clone();
+                    })?;
                     
                 Ok(IndexMeta {
                     index_descriptor,

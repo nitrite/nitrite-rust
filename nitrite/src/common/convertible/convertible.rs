@@ -377,12 +377,12 @@ impl Convertible for NitriteId {
     type Output = NitriteId;
 
     fn to_value(&self) -> NitriteResult<Value> {
-        Ok(Value::NitriteId(self.clone()))
+        Ok(Value::NitriteId(*self))
     }
 
     fn from_value(value: &Value) -> NitriteResult<Self> {
         match value {
-            Value::NitriteId(i) => Ok(i.clone()),
+            Value::NitriteId(i) => Ok(*i),
             _ => {
                 log::error!("Value {} is not a nitrite id", value);
                 Err(NitriteError::new(

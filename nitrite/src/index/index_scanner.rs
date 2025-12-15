@@ -160,7 +160,7 @@ impl IndexScannerInner {
                     nitrite_ids.reserve(scan_result.len());
                     for id in scan_result {
                         if let Some(nitrite_id) = id.as_nitrite_id() {
-                            nitrite_ids.push(nitrite_id.clone());
+                            nitrite_ids.push(*nitrite_id);
                         } else {
                             log::warn!("Invalid NitriteId found in scan result: {:?}", id);
                         }
@@ -188,7 +188,7 @@ impl IndexScannerInner {
             }
         } else {
             let terminal_result = self.index_map.terminal_nitrite_ids()?;
-            nitrite_ids.extend(terminal_result.into_iter());
+            nitrite_ids.extend(terminal_result);
         }
 
         // Sort to ensure consistent ordering for dedup operation
