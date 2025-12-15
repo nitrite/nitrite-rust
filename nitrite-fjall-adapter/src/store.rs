@@ -462,8 +462,9 @@ impl FjallStoreInner {
                 Ok(partition) => {
                     match ks.delete_partition(partition.clone()) {
                         Ok(_) => {
-                            // Ensure the map is removed from registry after successful deletion
-                            // This is defensive in case the map was re-opened between close_map and here
+                            // Defensive cleanup: Ensure the map is removed from registry after successful deletion.
+                            // This handles the unlikely race condition where the map might be re-opened
+                            // by another thread after close_map() but before delete_partition() completes.
                             self.map_registry.remove(name);
                             Ok(())
                         }
