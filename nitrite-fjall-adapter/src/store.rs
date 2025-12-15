@@ -250,6 +250,54 @@ impl FjallStoreInner {
         err_msg.contains("not found") || err_msg.contains("deleted") || err_msg.contains("PartitionDeleted")
     }
 
+    /// Opens a partition with retry logic for deleted partitions.
+    /// 
+    /// This handles the case where a partition was deleted (e.g., during index rebuild)
+    /// and needs to be recreated. When Fjall reports a partition is deleted, we simply
+    /// try to open it again, which will create a new partition.
+    fn open_partition_with_retry(
+        &self,
+        ks: &Keyspace,
+        name: &str,
+        config: &fjall::PartitionCreateOptions,
+    ) -> NitriteResult<fjall::PartitionHandle> {
+        match ks.open_partition(name, config.clone()) {
+            Ok(partition) => Ok(partition),
+            Err(err) => {
+                let err_msg = err.to_string();
+                
+                // If partition was deleted, we need to recreate it
+                if Self::is_partition_deleted_error(&err_msg) {
+                    log::warn!("Partition '{}' was deleted, recreating it", name);
+                    
+                    // Clean up any stale references in the registry
+                    self.map_registry.remove(name);
+                    
+                    // Fjall's open_partition should create a new partition if it doesn't exist
+                    // If it fails, it might be due to file system cleanup in progress, so retry once
+                    match ks.open_partition(name, config.clone()) {
+                        Ok(partition) => Ok(partition),
+                        Err(retry_err) => {
+                            // If the retry also fails, wait a moment for file system cleanup
+                            log::debug!("First retry failed, waiting briefly for cleanup: {}", retry_err);
+                            std::thread::sleep(std::time::Duration::from_millis(50));
+                            
+                            // Final attempt
+                            ks.open_partition(name, config.clone())
+                                .map_err(|e| {
+                                    log::error!("Failed to recreate partition '{}' after retries: {}", name, e);
+                                    to_nitrite_error(e)
+                                })
+                        }
+                    }
+                } else {
+                    log::error!("Failed to open partition '{}': {}", name, err);
+                    Err(to_nitrite_error(err))
+                }
+            }
+        }
+    }
+
     fn initialize(&self, config: NitriteConfig) -> NitriteResult<()> {
         // get_or_init() always returns a reference to the initialized value (or initial value if already initialized)
         // The None case in pattern matching below is unreachable after get_or_init() completes successfully
@@ -414,38 +462,8 @@ impl FjallStoreInner {
         if let Some(ks) = self.keyspace.get() {
             let config = self.store_config.partition_config();
             
-            // Try to open the partition
-            let partition_result = ks.open_partition(name, config.clone());
-            
-            let partition = match partition_result {
-                Ok(p) => p,
-                Err(err) => {
-                    let err_msg = err.to_string();
-                    
-                    // If partition was deleted, we need to recreate it
-                    if Self::is_partition_deleted_error(&err_msg) {
-                        log::warn!("Partition '{}' was deleted, recreating it", name);
-                        
-                        // Clean up any stale references in the registry
-                        self.map_registry.remove(name);
-                        
-                        // Try to delete any stale partition handle from keyspace
-                        // This is a best-effort operation - if it fails, we proceed anyway
-                        let _ = ks.open_partition(name, config.clone())
-                            .and_then(|p| ks.delete_partition(p));
-                        
-                        // Now create a fresh partition
-                        ks.open_partition(name, config.clone())
-                            .map_err(|e| {
-                                log::error!("Failed to recreate partition '{}': {}", name, e);
-                                to_nitrite_error(e)
-                            })?
-                    } else {
-                        log::error!("Failed to open partition '{}': {}", name, err);
-                        return Err(to_nitrite_error(err));
-                    }
-                }
-            };
+            // Try to open the partition - with retry logic for deleted partitions
+            let partition = self.open_partition_with_retry(&ks, name, &config)?;
 
             let fjall_map = FjallMap::new(
                 name.to_string(),
