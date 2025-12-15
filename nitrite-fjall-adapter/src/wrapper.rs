@@ -263,6 +263,9 @@ pub(crate) fn to_nitrite_error(error: impl Error) -> NitriteError {
         ErrorKind::StoreAlreadyClosed
     } else if error_msg.contains("not found") {
         ErrorKind::StoreNotInitialized
+    } else if error_msg.contains("deleted") || error_msg.contains("PartitionDeleted") {
+        // Partition was deleted - treat as not found/not initialized
+        ErrorKind::StoreNotInitialized
     } else if error_msg.contains("corrupt") {
         ErrorKind::FileCorrupted
     } else if error_msg.contains("permission") {

@@ -421,6 +421,11 @@ impl FjallStoreInner {
                     Ok(NitriteMap::new(fjall_map))
                 }
                 Err(err) => {
+                    // If partition was deleted, remove from cache and propagate error
+                    let err_msg = err.to_string();
+                    if err_msg.contains("deleted") || err_msg.contains("PartitionDeleted") {
+                        self.map_registry.remove(name);
+                    }
                     log::error!("Failed to open partition: {}", err);
                     Err(to_nitrite_error(err))
                 }
@@ -451,6 +456,7 @@ impl FjallStoreInner {
                 Ok(partition) => {
                     match ks.delete_partition(partition.clone()) {
                         Ok(_) => {
+                            // Ensure the map is removed from registry after successful deletion
                             self.map_registry.remove(name);
                             Ok(())
                         }
@@ -461,8 +467,16 @@ impl FjallStoreInner {
                     }
                 }
                 Err(err) => {
-                    log::error!("Failed to open partition: {}", err);
-                    Err(to_nitrite_error(err))
+                    // If partition doesn't exist, it might already be deleted
+                    // This is acceptable - just ensure it's removed from registry
+                    let err_msg = err.to_string();
+                    if err_msg.contains("not found") || err_msg.contains("deleted") || err_msg.contains("PartitionDeleted") {
+                        self.map_registry.remove(name);
+                        Ok(())
+                    } else {
+                        log::error!("Failed to open partition for removal: {}", err);
+                        Err(to_nitrite_error(err))
+                    }
                 }
             }
         } else {
