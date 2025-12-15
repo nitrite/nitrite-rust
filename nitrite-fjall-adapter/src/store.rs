@@ -412,30 +412,52 @@ impl FjallStoreInner {
         }
 
         if let Some(ks) = self.keyspace.get() {
-            match ks.open_partition(name, self.store_config.partition_config()) {
-                Ok(partition) => {
-                    let fjall_map = FjallMap::new(
-                        name.to_string(),
-                        partition,
-                        fjall_store,
-                        self.store_config.clone(),
-                    );
-                    fjall_map.initialize()?;
-
-                    self.map_registry
-                        .insert(name.to_string(), fjall_map.clone());
-                    Ok(NitriteMap::new(fjall_map))
-                }
+            let config = self.store_config.partition_config();
+            
+            // Try to open the partition
+            let partition_result = ks.open_partition(name, config.clone());
+            
+            let partition = match partition_result {
+                Ok(p) => p,
                 Err(err) => {
-                    // If partition was deleted, remove from cache and propagate error
                     let err_msg = err.to_string();
+                    
+                    // If partition was deleted, we need to recreate it
                     if Self::is_partition_deleted_error(&err_msg) {
+                        log::warn!("Partition '{}' was deleted, recreating it", name);
+                        
+                        // Clean up any stale references in the registry
                         self.map_registry.remove(name);
+                        
+                        // Try to delete any stale partition handle from keyspace
+                        // This is a best-effort operation - if it fails, we proceed anyway
+                        let _ = ks.open_partition(name, config.clone())
+                            .and_then(|p| ks.delete_partition(p));
+                        
+                        // Now create a fresh partition
+                        ks.open_partition(name, config.clone())
+                            .map_err(|e| {
+                                log::error!("Failed to recreate partition '{}': {}", name, e);
+                                to_nitrite_error(e)
+                            })?
+                    } else {
+                        log::error!("Failed to open partition '{}': {}", name, err);
+                        return Err(to_nitrite_error(err));
                     }
-                    log::error!("Failed to open partition: {}", err);
-                    Err(to_nitrite_error(err))
                 }
-            }
+            };
+
+            let fjall_map = FjallMap::new(
+                name.to_string(),
+                partition,
+                fjall_store,
+                self.store_config.clone(),
+            );
+            fjall_map.initialize()?;
+
+            self.map_registry
+                .insert(name.to_string(), fjall_map.clone());
+            Ok(NitriteMap::new(fjall_map))
         } else {
             Err(NitriteError::new(
                 "Keyspace is not initialized",
@@ -475,11 +497,12 @@ impl FjallStoreInner {
                     }
                 }
                 Err(err) => {
-                    // If partition doesn't exist, it might already be deleted
-                    // This is acceptable - just ensure it's removed from registry
                     let err_msg = err.to_string();
+                    
+                    // If partition doesn't exist or was already deleted, that's OK
                     if Self::is_partition_deleted_error(&err_msg) {
                         self.map_registry.remove(name);
+                        log::debug!("Partition '{}' was already deleted", name);
                         Ok(())
                     } else {
                         log::error!("Failed to open partition for removal: {}", err);
