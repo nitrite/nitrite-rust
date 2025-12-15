@@ -461,7 +461,12 @@ impl FjallStoreInner {
             match ks.open_partition(name, options) {
                 Ok(partition) => {
                     match ks.delete_partition(partition.clone()) {
-                        Ok(_) => Ok(()),
+                        Ok(_) => {
+                            // Ensure the map is removed from registry after successful deletion
+                            // This is defensive in case the map was re-opened between close_map and here
+                            self.map_registry.remove(name);
+                            Ok(())
+                        }
                         Err(err) => {
                             log::error!("Failed to remove partition: {}", err);
                             Err(to_nitrite_error(err))
