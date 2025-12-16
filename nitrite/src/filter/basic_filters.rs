@@ -124,12 +124,12 @@ impl FilterProvider for EqualsFilter {
         self.collection_name.get()
             .cloned()
             .ok_or_else(|| {
-                log::error!("Collection name is not set for filter");
+            log::error!("Collection name is not set for filter");
                 NitriteError::new(
                     "Collection name is not set",
                     ErrorKind::InvalidOperation,
                 )
-            })
+        })
     }
 
     fn set_collection_name(&self, collection_name: String) -> NitriteResult<()> {
@@ -235,8 +235,7 @@ impl FilterProvider for NotEqualsFilter {
                 ErrorKind::InvalidOperation
             ))?;
         let value = entry.get(field_name)?;
-        let field_value = self.field_value.get()
-            .unwrap_or(&Value::Null);
+        let field_value = self.field_value.get().unwrap_or(&Value::Null);
         Ok(&value != field_value)
     }
 
@@ -267,12 +266,12 @@ impl FilterProvider for NotEqualsFilter {
         self.collection_name.get()
             .cloned()
             .ok_or_else(|| {
-                log::error!("Collection name is not set for filter");
+            log::error!("Collection name is not set for filter");
                 NitriteError::new(
                     "Collection name is not set",
                     ErrorKind::InvalidOperation,
                 )
-            })
+        })
     }
 
     fn set_collection_name(&self, collection_name: String) -> NitriteResult<()> {
@@ -385,14 +384,16 @@ mod tests {
 
     #[test]
     fn test_equals_filter_get_field_value_initialization() {
-        let filter = EqualsFilter::new("field".to_string(), Value::String("test_value".to_string()));
+        let filter =
+            EqualsFilter::new("field".to_string(), Value::String("test_value".to_string()));
         let field_value = filter.get_field_value().unwrap();
         assert_eq!(field_value, Some(Value::String("test_value".to_string())));
     }
 
     #[test]
     fn test_not_equals_filter_display_with_initialized_values() {
-        let filter = NotEqualsFilter::new("status".to_string(), Value::String("inactive".to_string()));
+        let filter =
+            NotEqualsFilter::new("status".to_string(), Value::String("inactive".to_string()));
         let display_str = format!("{}", filter);
         // Display for String values includes quotes
         assert_eq!(display_str, "(status != \"inactive\")");
@@ -403,20 +404,26 @@ mod tests {
         let filter = NotEqualsFilter::new("field".to_string(), Value::I32(1));
         let result = filter.get_collection_name();
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("Collection name is not set"));
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("Collection name is not set"));
     }
 
     #[test]
     fn test_not_equals_filter_set_and_get_collection_name() {
         let filter = NotEqualsFilter::new("field".to_string(), Value::I32(1));
-        filter.set_collection_name("my_collection".to_string()).unwrap();
+        filter
+            .set_collection_name("my_collection".to_string())
+            .unwrap();
         let name = filter.get_collection_name().unwrap();
         assert_eq!(name, "my_collection");
     }
 
     #[test]
     fn test_not_equals_filter_get_field_name_after_initialization() {
-        let filter = NotEqualsFilter::new("my_field".to_string(), Value::String("value".to_string()));
+        let filter =
+            NotEqualsFilter::new("my_field".to_string(), Value::String("value".to_string()));
         let field_name = filter.get_field_name().unwrap();
         assert_eq!(field_name, "my_field");
     }
@@ -458,7 +465,7 @@ mod tests {
         let filter = NotEqualsFilter::new("test_field".to_string(), Value::I32(99));
         let mut doc = Document::new();
         doc.put("test_field", Value::I32(100)).unwrap();
-        
+
         // Perform multiple comparisons to test inline optimization
         for _ in 0..100 {
             assert!(filter.apply(&doc).unwrap());
@@ -471,7 +478,7 @@ mod tests {
         let filter = EqualsFilter::new("field".to_string(), Value::I32(42));
         let mut doc = Document::new();
         doc.put("field", Value::I32(42)).unwrap();
-        
+
         for _ in 0..1000 {
             assert!(filter.apply(&doc).unwrap());
         }
@@ -485,12 +492,11 @@ mod tests {
         map.insert(Value::I32(1), Value::Array(vec![Value::I32(10)]));
         map.insert(Value::I32(2), Value::Array(vec![Value::I32(20)]));
         map.insert(Value::I32(42), Value::Array(vec![Value::I32(30)])); // This should be excluded
-        
+
         let index_map = IndexMap::new(None, Some(map));
         let result = filter.apply_on_index(&index_map).unwrap();
-        
+
         // Should have 2 entries (excluding value 42)
         assert_eq!(result.len(), 2);
     }
 }
-

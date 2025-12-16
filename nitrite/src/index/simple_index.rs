@@ -4,8 +4,7 @@ use super::{
 use crate::{
     collection::{FindPlan, NitriteId},
     derive_index_map_name,
-    errors::{ErrorKind, NitriteError, NitriteResult}
-    ,
+    errors::{ErrorKind, NitriteError, NitriteResult},
     store::{NitriteMap, NitriteMapProvider, NitriteStore, NitriteStoreProvider},
     FieldValues, Value, UNIQUE_INDEX,
 };
@@ -113,7 +112,7 @@ impl SimpleIndexInner {
     ) -> NitriteResult<()> {
         let nitrite_ids = index_map.get(value)?;
         let mut nitrite_ids = nitrite_ids.unwrap_or(Value::Array(Vec::new()));
-        
+
         match nitrite_ids.as_array_mut() {
             Some(array) => {
                 if !array.is_empty() {
@@ -122,7 +121,7 @@ impl SimpleIndexInner {
                             Some(id) => id != field_values.nitrite_id(),
                             None => {
                                 log::warn!("Invalid NitriteId found in index, skipping");
-                                true  // Keep the entry
+                                true // Keep the entry
                             }
                         }
                     });
@@ -163,7 +162,7 @@ impl SimpleIndexInner {
         // Sort and dedup in-place instead of collecting unique
         nitrite_ids.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
         nitrite_ids.dedup();
-        
+
         Ok(std::mem::take(nitrite_ids))
     }
 
@@ -178,7 +177,7 @@ impl SimpleIndexInner {
                     Some(id) => id != field_values.nitrite_id(),
                     None => {
                         log::warn!("Invalid NitriteId found in index, keeping entry");
-                        true  // Keep the entry
+                        true // Keep the entry
                     }
                 }
             });
@@ -194,12 +193,13 @@ impl SimpleIndexInner {
         if find_plan.index_scan_filter().is_none() {
             return Ok(Vec::new());
         }
-        
-        let index_scan_filter = find_plan.index_scan_filter()
-            .ok_or_else(|| NitriteError::new(
+
+        let index_scan_filter = find_plan.index_scan_filter().ok_or_else(|| {
+            NitriteError::new(
                 "Index scan filter is not available",
                 ErrorKind::InvalidOperation,
-            ))?;
+            )
+        })?;
         let filters = index_scan_filter.filters();
         let index_scan_order = find_plan.index_scan_order().unwrap_or_default();
 
@@ -216,11 +216,12 @@ impl SimpleIndexInner {
         let fields = field_values.fields();
         let field_names = fields.field_names();
 
-        let first_field = field_names.first()
-            .ok_or_else(|| NitriteError::new(
+        let first_field = field_names.first().ok_or_else(|| {
+            NitriteError::new(
                 "Cannot write to index: no field names specified",
                 ErrorKind::InvalidOperation,
-            ))?;
+            )
+        })?;
         let field_value = field_values.get_value(first_field);
 
         let index_map = self.find_index_map()?;
@@ -248,16 +249,17 @@ impl SimpleIndexInner {
         let fields = field_values.fields();
         let field_names = fields.field_names();
 
-        let first_field = field_names.first()
-            .ok_or_else(|| NitriteError::new(
+        let first_field = field_names.first().ok_or_else(|| {
+            NitriteError::new(
                 "Cannot remove from index: no field names specified",
                 ErrorKind::InvalidOperation,
-            ))?;
+            )
+        })?;
         let field_value = field_values.get_value(first_field);
 
         let index_map = self.find_index_map()?;
 
-        match field_value { 
+        match field_value {
             None | Some(Value::Null) => {
                 self.remove_index_element(index_map.clone(), field_values, &Value::Null)?;
             }
@@ -475,11 +477,16 @@ mod tests {
         let value = Value::String("test_value".to_string());
 
         // Add the same element twice to trigger unique constraint violation
-        simple_index.add_index_element(&index_map, &field_values, &value).unwrap();
+        simple_index
+            .add_index_element(&index_map, &field_values, &value)
+            .unwrap();
         let result = simple_index.add_index_element(&index_map, &field_values, &value);
 
         assert!(result.is_err());
-        assert_eq!(result.unwrap_err().kind(), &ErrorKind::UniqueConstraintViolation);
+        assert_eq!(
+            result.unwrap_err().kind(),
+            &ErrorKind::UniqueConstraintViolation
+        );
     }
 
     #[test]
@@ -520,11 +527,16 @@ mod tests {
         let value = Value::String("test_value".to_string());
 
         // Put a non-array value to simulate corruption
-        index_map.put(value.clone(), Value::String("corrupted_data".to_string())).unwrap();
+        index_map
+            .put(value.clone(), Value::String("corrupted_data".to_string()))
+            .unwrap();
 
         // This should handle the error gracefully, not panic
         let result = simple_index.remove_index_element(index_map, &field_values, &value);
-        assert!(result.is_err(), "Should return error for corrupted index data");
+        assert!(
+            result.is_err(),
+            "Should return error for corrupted index data"
+        );
         if let Err(e) = result {
             assert!(e.to_string().contains("not an array") || e.to_string().contains("corrupted"));
         }
@@ -538,10 +550,10 @@ mod tests {
 
         let find_plan = FindPlan::new();
         // Ensure no index scan filter is set
-        
+
         let index_map = simple_index.find_index_map().unwrap();
         let result = simple_index.scan_index(&find_plan, index_map);
-        
+
         // Should return empty result, not panic
         assert!(result.is_ok());
         assert!(result.unwrap().is_empty());
@@ -554,7 +566,7 @@ mod tests {
         let simple_index = SimpleIndex::new(index_descriptor, nitrite_store);
 
         let field_values = create_test_field_values();
-        
+
         // This should not panic even with complex field values
         let result = simple_index.write(&field_values);
         assert!(result.is_ok() || result.is_err());
@@ -567,7 +579,7 @@ mod tests {
         let simple_index = SimpleIndex::new(index_descriptor, nitrite_store);
 
         let field_values = create_test_field_values();
-        
+
         // This should not panic even with complex field values
         let result = simple_index.remove(&field_values);
         assert!(result.is_ok() || result.is_err());
@@ -584,7 +596,9 @@ mod tests {
         let value = Value::String("test_empty".to_string());
 
         // Put an empty array
-        index_map.put(value.clone(), Value::Array(Vec::new())).unwrap();
+        index_map
+            .put(value.clone(), Value::Array(Vec::new()))
+            .unwrap();
 
         // This should handle gracefully
         let result = simple_index.remove_index_element(index_map, &field_values, &value);
@@ -619,13 +633,13 @@ mod tests {
 
         let field_values = create_test_field_values();
         let id = *field_values.nitrite_id();
-        
+
         // Create duplicates to test dedup efficiency
         let mut nitrite_ids = vec![id, id, id];
 
         let result = simple_index.add_nitrite_ids(&mut nitrite_ids, &field_values);
         assert!(result.is_ok());
-        
+
         // Should have deduplicated and added the new field value ID
         let dedup = result.unwrap();
         assert!(!dedup.is_empty());
@@ -640,10 +654,10 @@ mod tests {
 
         let field_values = create_test_field_values();
         let mut nitrite_ids = vec![];
-        
+
         let result = simple_index.add_nitrite_ids(&mut nitrite_ids, &field_values);
         assert!(result.is_ok());
-        
+
         // Original should be empty due to mem::take
         assert!(nitrite_ids.is_empty());
     }
@@ -658,11 +672,11 @@ mod tests {
         let field_values = create_test_field_values();
         let id = *field_values.nitrite_id();
         let mut nitrite_ids = vec![id];
-        
+
         let result = simple_index.remove_nitrite_ids(&mut nitrite_ids, &field_values);
         assert!(result.is_ok());
         assert!(result.unwrap().is_empty());
-        
+
         // Original should be empty due to mem::take
         assert!(nitrite_ids.is_empty());
     }
@@ -679,9 +693,10 @@ mod tests {
         let value = Value::String("test".to_string());
 
         // Add then remove to test array handling
-        simple_index.add_index_element(&index_map, &field_values, &value).ok();
+        simple_index
+            .add_index_element(&index_map, &field_values, &value)
+            .ok();
         let result = simple_index.remove_index_element(index_map, &field_values, &value);
         assert!(result.is_ok());
     }
 }
-

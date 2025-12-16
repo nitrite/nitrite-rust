@@ -225,7 +225,7 @@ impl FtsIndex {
             .inner
             .index
             .reader_builder()
-            .reload_policy(ReloadPolicy::OnCommitWithDelay)
+            .reload_policy(ReloadPolicy::Manual)
             .try_into()
             .map_err(|e| {
                 NitriteError::new(

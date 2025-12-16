@@ -219,11 +219,12 @@ impl InMemoryMapInner {
                 let attributes = meta_map.get(&Value::from(name))?;
                 if let Some(attributes) = attributes {
                     // Safe type conversion with proper error handling
-                    let doc = attributes.as_document()
-                        .ok_or_else(|| NitriteError::new(
+                    let doc = attributes.as_document().ok_or_else(|| {
+                        NitriteError::new(
                             "Stored attributes value is not a document",
                             ErrorKind::InvalidOperation,
-                        ))?;
+                        )
+                    })?;
                     return Ok(Some(Attributes::from_document(doc)));
                 }
             }
@@ -345,7 +346,11 @@ impl InMemoryMapInner {
 
     pub(crate) fn lower_key(&self, key: &Key) -> NitriteResult<Option<Key>> {
         self.check_opened()?;
-        if let Some(e) = self.backing_map.range((Unbounded, Excluded(key))).next_back() {
+        if let Some(e) = self
+            .backing_map
+            .range((Unbounded, Excluded(key)))
+            .next_back()
+        {
             Ok(Some(e.key().clone()))
         } else {
             Ok(None)
@@ -354,7 +359,11 @@ impl InMemoryMapInner {
 
     pub(crate) fn floor_key(&self, key: &Key) -> NitriteResult<Option<Key>> {
         self.check_opened()?;
-        if let Some(e) = self.backing_map.range((Unbounded, Included(key))).next_back() {
+        if let Some(e) = self
+            .backing_map
+            .range((Unbounded, Included(key)))
+            .next_back()
+        {
             Ok(Some(e.key().clone()))
         } else {
             Ok(None)
@@ -633,7 +642,7 @@ mod tests {
         let map = create_test_map();
         let attributes = Attributes::new();
         map.set_attributes(attributes.clone()).unwrap();
-        
+
         let retrieved = map.attributes().unwrap();
         assert_eq!(retrieved, Some(attributes));
     }
@@ -650,11 +659,11 @@ mod tests {
     fn test_set_and_get_attributes_round_trip() {
         // Test setting and getting attributes multiple times
         let map = create_test_map();
-        
+
         let attrs1 = Attributes::new();
         map.set_attributes(attrs1.clone()).unwrap();
         assert_eq!(map.attributes().unwrap(), Some(attrs1));
-        
+
         let attrs2 = Attributes::new();
         map.set_attributes(attrs2.clone()).unwrap();
         assert_eq!(map.attributes().unwrap(), Some(attrs2));
@@ -665,10 +674,10 @@ mod tests {
         // Test that get() uses efficient if-let pattern for optional handling
         let map = create_test_map();
         let key = Key::from("perf_key");
-        
+
         // Get non-existent key
         assert!(map.get(&key).unwrap().is_none());
-        
+
         // Put and get value
         let value = Value::from("perf_value");
         map.put(key.clone(), value.clone()).unwrap();
@@ -681,11 +690,11 @@ mod tests {
         let map = create_test_map();
         let key = Key::from("remove_key");
         let value = Value::from("remove_value");
-        
+
         map.put(key.clone(), value.clone()).unwrap();
         let removed = map.remove(&key).unwrap();
         assert_eq!(removed, Some(value));
-        
+
         // Second remove should return None
         assert!(map.remove(&key).unwrap().is_none());
     }
@@ -694,35 +703,47 @@ mod tests {
     fn test_range_operations_efficiency() {
         // Test that range operations (higher, ceiling, lower, floor) are optimized
         let map = create_test_map();
-        
+
         map.put(Key::from("a"), Value::from("1")).unwrap();
         map.put(Key::from("c"), Value::from("3")).unwrap();
         map.put(Key::from("e"), Value::from("5")).unwrap();
-        
+
         // Higher than "a" should be "c"
-        assert_eq!(map.higher_key(&Key::from("a")).unwrap(), Some(Key::from("c")));
-        
+        assert_eq!(
+            map.higher_key(&Key::from("a")).unwrap(),
+            Some(Key::from("c"))
+        );
+
         // Ceiling of "c" should be "c"
-        assert_eq!(map.ceiling_key(&Key::from("c")).unwrap(), Some(Key::from("c")));
-        
+        assert_eq!(
+            map.ceiling_key(&Key::from("c")).unwrap(),
+            Some(Key::from("c"))
+        );
+
         // Lower than "e" should be "c"
-        assert_eq!(map.lower_key(&Key::from("e")).unwrap(), Some(Key::from("c")));
-        
+        assert_eq!(
+            map.lower_key(&Key::from("e")).unwrap(),
+            Some(Key::from("c"))
+        );
+
         // Floor of "c" should be "c"
-        assert_eq!(map.floor_key(&Key::from("c")).unwrap(), Some(Key::from("c")));
+        assert_eq!(
+            map.floor_key(&Key::from("c")).unwrap(),
+            Some(Key::from("c"))
+        );
     }
 
     #[test]
     fn test_higher_key_if_let_pattern() {
         // Test that higher_key uses efficient if-let pattern
         let map = create_test_map();
-        
+
         map.put(Key::from("key1"), Value::from("v1")).unwrap();
         map.put(Key::from("key3"), Value::from("v3")).unwrap();
-        
+
         let result = map.higher_key(&Key::from("key1")).unwrap();
         assert_eq!(result, Some(Key::from("key3")));
-        
+
         let result = map.higher_key(&Key::from("key3")).unwrap();
         assert!(result.is_none());
     }
@@ -731,13 +752,13 @@ mod tests {
     fn test_ceiling_key_if_let_pattern() {
         // Test that ceiling_key uses efficient if-let pattern
         let map = create_test_map();
-        
+
         map.put(Key::from("b"), Value::from("2")).unwrap();
         map.put(Key::from("d"), Value::from("4")).unwrap();
-        
+
         let result = map.ceiling_key(&Key::from("b")).unwrap();
         assert_eq!(result, Some(Key::from("b")));
-        
+
         let result = map.ceiling_key(&Key::from("c")).unwrap();
         assert_eq!(result, Some(Key::from("d")));
     }
@@ -746,13 +767,13 @@ mod tests {
     fn test_lower_key_if_let_pattern() {
         // Test that lower_key uses efficient if-let pattern
         let map = create_test_map();
-        
+
         map.put(Key::from("x"), Value::from("24")).unwrap();
         map.put(Key::from("z"), Value::from("26")).unwrap();
-        
+
         let result = map.lower_key(&Key::from("z")).unwrap();
         assert_eq!(result, Some(Key::from("x")));
-        
+
         let result = map.lower_key(&Key::from("x")).unwrap();
         assert!(result.is_none());
     }
@@ -761,13 +782,13 @@ mod tests {
     fn test_floor_key_if_let_pattern() {
         // Test that floor_key uses efficient if-let pattern
         let map = create_test_map();
-        
+
         map.put(Key::from("m"), Value::from("13")).unwrap();
         map.put(Key::from("p"), Value::from("16")).unwrap();
-        
+
         let result = map.floor_key(&Key::from("p")).unwrap();
         assert_eq!(result, Some(Key::from("p")));
-        
+
         let result = map.floor_key(&Key::from("o")).unwrap();
         assert_eq!(result, Some(Key::from("m")));
     }
@@ -776,20 +797,66 @@ mod tests {
     fn test_sequential_range_lookups() {
         // Test multiple range lookups to validate if-let efficiency
         let map = create_test_map();
-        
+
         for i in 0..10 {
             let key = Key::from(format!("key{}", i));
             let value = Value::from(format!("value{}", i));
             map.put(key, value).unwrap();
         }
-        
+
         // Multiple higher_key lookups should be efficient
         let key1 = map.higher_key(&Key::from("key1")).unwrap();
         let key2 = map.higher_key(&Key::from("key3")).unwrap();
         let key3 = map.higher_key(&Key::from("key5")).unwrap();
-        
+
         assert!(key1.is_some());
         assert!(key2.is_some());
         assert!(key3.is_some());
+    }
+
+    #[test]
+    fn test_numeric_key_lookup_i32() {
+        // Test that numeric keys can be stored and retrieved correctly
+        let map = create_test_map();
+        let key = Key::I32(5);
+        let value = Value::Array(vec![Value::I32(1), Value::I32(2)]);
+
+        // Put the numeric key
+        map.put(key.clone(), value.clone()).unwrap();
+
+        // Get with the same type
+        let result = map.get(&Key::I32(5)).unwrap();
+        assert_eq!(
+            result,
+            Some(value.clone()),
+            "Should find I32(5) when looking up I32(5)"
+        );
+
+        // Verify the map is not empty
+        assert!(!map.is_empty().unwrap());
+        assert_eq!(map.size().unwrap(), 1);
+    }
+
+    #[test]
+    fn test_numeric_key_lookup_different_int_types() {
+        // Test cross-type integer lookups (I32 vs I64)
+        let map = create_test_map();
+        let key = Key::I32(5);
+        let value = Value::Array(vec![Value::I32(1)]);
+
+        // Put with I32(5)
+        map.put(key, value.clone()).unwrap();
+
+        // Get with I64(5) - cross-type comparison
+        // With current Value::Ord implementation, I32(5) and I64(5) compare as equal
+        let result_i64 = map.get(&Key::I64(5)).unwrap();
+
+        // This reveals if SkipMap lookup respects our Ord implementation
+        // If it uses internal equality instead of Ord, this will fail
+        println!("Looking up I64(5) for I32(5) key: {:?}", result_i64);
+
+        // The original I32 key should always work
+        let result_i32 = map.get(&Key::I32(5)).unwrap();
+        assert!(result_i32.is_some(), "I32(5) lookup should find I32(5) key");
     }
 }

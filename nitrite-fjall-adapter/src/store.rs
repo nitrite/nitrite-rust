@@ -244,6 +244,76 @@ impl FjallStoreInner {
         }
     }
 
+    /// Delay in milliseconds to wait for file system cleanup when recreating a deleted partition.
+    /// This allows Fjall's internal cleanup processes to complete before attempting to create
+    /// a new partition with the same name.
+    const PARTITION_CLEANUP_DELAY_MS: u64 = 50;
+
+    /// Helper function to check if an error indicates a partition was deleted
+    #[inline]
+    fn is_partition_deleted_error(err_msg: &str) -> bool {
+        err_msg.contains("not found") || err_msg.contains("deleted") || err_msg.contains("PartitionDeleted")
+    }
+
+    /// Opens a partition with retry logic for deleted partitions.
+    /// 
+    /// This handles the case where a partition was deleted (e.g., during index rebuild)
+    /// and needs to be recreated. When Fjall reports a partition is deleted, we simply
+    /// try to open it again, which will create a new partition.
+    /// 
+    /// Note: This method uses `std::thread::sleep` which blocks the current thread.
+    /// This is intentional as we need to wait for file system synchronization after
+    /// partition deletion. The sleep is brief (50ms) and only occurs on retry paths.
+    fn open_partition_with_retry(
+        &self,
+        ks: &Keyspace,
+        name: &str,
+        config: &fjall::PartitionCreateOptions,
+    ) -> NitriteResult<fjall::PartitionHandle> {
+        // Clone config once to avoid multiple clones in retry paths
+        let config_clone = config.clone();
+        
+        match ks.open_partition(name, config_clone.clone()) {
+            Ok(partition) => Ok(partition),
+            Err(err) => {
+                let err_msg = err.to_string();
+                
+                // If partition was deleted, we need to recreate it
+                if Self::is_partition_deleted_error(&err_msg) {
+                    log::warn!("Partition '{}' was deleted, recreating it", name);
+                    
+                    // Clean up any stale references in the registry
+                    self.map_registry.remove(name);
+                    
+                    // Fjall's open_partition should create a new partition if it doesn't exist
+                    // If it fails, it might be due to file system cleanup in progress, so retry once
+                    match ks.open_partition(name, config_clone.clone()) {
+                        Ok(partition) => Ok(partition),
+                        Err(retry_err) => {
+                            // If the retry also fails, wait a moment for file system cleanup
+                            log::debug!("First retry failed, waiting briefly for cleanup: {}", retry_err);
+                            
+                            // Block briefly to allow Fjall's file system cleanup to complete
+                            std::thread::sleep(std::time::Duration::from_millis(
+                                Self::PARTITION_CLEANUP_DELAY_MS
+                            ));
+                            
+                            // Final attempt
+                            ks.open_partition(name, config_clone)
+                                .map_err(|e| {
+                                    log::error!("Failed to recreate partition '{}' after retries: {}", name, e);
+                                    to_nitrite_error(e)
+                                })
+                        }
+                    }
+                } else {
+                    log::error!("Failed to open partition '{}': {}", name, err);
+                    Err(to_nitrite_error(err))
+                }
+            }
+        }
+    }
+
     fn initialize(&self, config: NitriteConfig) -> NitriteResult<()> {
         // get_or_init() always returns a reference to the initialized value (or initial value if already initialized)
         // The None case in pattern matching below is unreachable after get_or_init() completes successfully
@@ -406,25 +476,22 @@ impl FjallStoreInner {
         }
 
         if let Some(ks) = self.keyspace.get() {
-            match ks.open_partition(name, self.store_config.partition_config()) {
-                Ok(partition) => {
-                    let fjall_map = FjallMap::new(
-                        name.to_string(),
-                        partition,
-                        fjall_store,
-                        self.store_config.clone(),
-                    );
-                    fjall_map.initialize()?;
+            let config = self.store_config.partition_config();
+            
+            // Try to open the partition - with retry logic for deleted partitions
+            let partition = self.open_partition_with_retry(&ks, name, &config)?;
 
-                    self.map_registry
-                        .insert(name.to_string(), fjall_map.clone());
-                    Ok(NitriteMap::new(fjall_map))
-                }
-                Err(err) => {
-                    log::error!("Failed to open partition: {}", err);
-                    Err(to_nitrite_error(err))
-                }
-            }
+            let fjall_map = FjallMap::new(
+                name.to_string(),
+                partition,
+                fjall_store,
+                self.store_config.clone(),
+            );
+            fjall_map.initialize()?;
+
+            self.map_registry
+                .insert(name.to_string(), fjall_map.clone());
+            Ok(NitriteMap::new(fjall_map))
         } else {
             Err(NitriteError::new(
                 "Keyspace is not initialized",
@@ -451,6 +518,9 @@ impl FjallStoreInner {
                 Ok(partition) => {
                     match ks.delete_partition(partition.clone()) {
                         Ok(_) => {
+                            // Defensive cleanup: Ensure the map is removed from registry after successful deletion.
+                            // This handles the unlikely race condition where the map might be re-opened
+                            // by another thread after close_map() but before delete_partition() completes.
                             self.map_registry.remove(name);
                             Ok(())
                         }
@@ -461,8 +531,17 @@ impl FjallStoreInner {
                     }
                 }
                 Err(err) => {
-                    log::error!("Failed to open partition: {}", err);
-                    Err(to_nitrite_error(err))
+                    let err_msg = err.to_string();
+                    
+                    // If partition doesn't exist or was already deleted, that's OK
+                    if Self::is_partition_deleted_error(&err_msg) {
+                        self.map_registry.remove(name);
+                        log::debug!("Partition '{}' was already deleted", name);
+                        Ok(())
+                    } else {
+                        log::error!("Failed to open partition for removal: {}", err);
+                        Err(to_nitrite_error(err))
+                    }
                 }
             }
         } else {
