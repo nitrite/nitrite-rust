@@ -50,7 +50,10 @@ impl Scheduler {
                 self.guards.lock().push(guard);
             }
             Err(e) => {
-                log::error!("Failed to convert duration to chrono::Duration: {}, skipping task scheduling", e);
+                log::error!(
+                    "Failed to convert duration to chrono::Duration: {}, skipping task scheduling",
+                    e
+                );
             }
         }
     }
@@ -85,18 +88,18 @@ mod tests {
     #[test]
     #[retry]
     fn test_schedule_task() {
+        // Use local scheduler to avoid interference from other tests
+        // that may call stop_scheduled_tasks() on the global SCHEDULER
+        let scheduler = Scheduler::new();
         let flag = Arc::new(AtomicBool::new(false));
         let flag_clone = Arc::clone(&flag);
 
-        schedule_task(Duration::from_millis(50), move || {
+        scheduler.schedule(Duration::from_millis(50), move || {
             flag_clone.store(true, Ordering::Relaxed);
         });
 
-        awaitility::at_most(Duration::from_millis(200)).until(|| {
-            flag.load(Ordering::Relaxed)
-        });
+        awaitility::at_most(Duration::from_millis(1000)).until(|| flag.load(Ordering::Relaxed));
     }
-
     #[test]
     #[retry]
     fn test_stop_scheduled_tasks() {
@@ -169,14 +172,14 @@ mod tests {
         let scheduler = Scheduler::new();
         // Use a large but safe duration (1000 years = 31,536,000,000 seconds)
         let safe_max = Duration::from_secs(365 * 24 * 60 * 60 * 1000);
-        
+
         let flag = Arc::new(AtomicBool::new(false));
         let flag_clone = Arc::clone(&flag);
-        
+
         scheduler.schedule(safe_max, move || {
             flag_clone.store(true, Ordering::Relaxed);
         });
-        
+
         // Should handle large duration without panicking
         assert_eq!(scheduler.guards.lock().len(), 1);
     }
@@ -187,15 +190,15 @@ mod tests {
         // Create a duration that exceeds chrono's limits
         // chrono max is about i64::MAX milliseconds, so try u64::MAX seconds
         let out_of_range = Duration::from_secs(u64::MAX);
-        
+
         let flag = Arc::new(AtomicBool::new(false));
         let flag_clone = Arc::clone(&flag);
-        
+
         // This should not panic, but gracefully skip scheduling
         scheduler.schedule(out_of_range, move || {
             flag_clone.store(true, Ordering::Relaxed);
         });
-        
+
         // Guard should not be added due to conversion failure
         assert_eq!(scheduler.guards.lock().len(), 0);
     }
@@ -248,7 +251,7 @@ mod tests {
     fn bench_scheduler_guard_storage() {
         let scheduler = Scheduler::new();
         let start = std::time::Instant::now();
-        
+
         // Simulate adding guards (without actually scheduling to avoid wait times)
         for _ in 0..100 {
             let flag = Arc::new(AtomicBool::new(false));
@@ -257,14 +260,14 @@ mod tests {
                 flag_clone.store(true, Ordering::Relaxed);
             });
         }
-        
+
         let elapsed = start.elapsed();
         println!(
             "Scheduler guard storage (100 guards): {:?} ({:.3}µs per guard)",
             elapsed,
             elapsed.as_micros() as f64 / 100.0
         );
-        
+
         scheduler.stop();
     }
 }
