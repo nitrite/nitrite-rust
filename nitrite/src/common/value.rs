@@ -220,21 +220,37 @@ impl PartialOrd for Value {
 
 impl Ord for Value {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        if self.is_integer() && other.is_integer() {
-            let self_int = self.as_integer();
-            let other_int = other.as_integer();
+        // Handle numeric comparisons: integer-integer, float-float, and mixed integer-float
+        let self_is_numeric = self.is_integer() || self.is_decimal();
+        let other_is_numeric = other.is_integer() || other.is_decimal();
 
-            if let (Some(self_int), Some(other_int)) = (self_int, other_int) {
-                return num_cmp_int(self_int, other_int);
-            }
-        }
+        if self_is_numeric && other_is_numeric {
+            // Both are numeric - compare by converting to f64
+            let self_f64 = if self.is_integer() {
+                self.as_integer().map(|i| i as f64)
+            } else {
+                self.as_decimal()
+            };
 
-        if self.is_decimal() && other.is_decimal() {
-            let self_decimal = self.as_decimal();
-            let other_decimal = other.as_decimal();
+            let other_f64 = if other.is_integer() {
+                other.as_integer().map(|i| i as f64)
+            } else {
+                other.as_decimal()
+            };
 
-            if let (Some(self_decimal), Some(other_decimal)) = (self_decimal, other_decimal) {
-                return num_cmp_float(self_decimal, other_decimal);
+            if let (Some(s), Some(o)) = (self_f64, other_f64) {
+                // For numeric comparison, first compare by value
+                let value_cmp = num_cmp_float(s, o);
+                if value_cmp != std::cmp::Ordering::Equal {
+                    return value_cmp;
+                }
+                // If values are equal, further distinguish by type to ensure i32(5) != f64(5) for key identity
+                // Integers come before floats when values are equal
+                return match (self.is_integer(), other.is_integer()) {
+                    (true, false) => std::cmp::Ordering::Less,
+                    (false, true) => std::cmp::Ordering::Greater,
+                    _ => std::cmp::Ordering::Equal, // Both same category
+                };
             }
         }
 
