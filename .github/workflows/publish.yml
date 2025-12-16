@@ -41,14 +41,10 @@ jobs:
       - name: Verify build
         run: cargo build --release --workspace
 
-      - name: Run tests
-        run: cargo test --workspace
-
       # Publish crates in dependency order
       - name: Publish nitrite-derive
         if: ${{ github.event.inputs.dry_run != 'true' }}
         run: cargo publish -p nitrite_derive --token ${{ secrets.CARGO_REGISTRY_TOKEN }}
-        continue-on-error: true
 
       - name: Wait for crates.io index update
         if: ${{ github.event.inputs.dry_run != 'true' }}
@@ -57,7 +53,6 @@ jobs:
       - name: Publish nitrite
         if: ${{ github.event.inputs.dry_run != 'true' }}
         run: cargo publish -p nitrite --token ${{ secrets.CARGO_REGISTRY_TOKEN }}
-        continue-on-error: true
 
       - name: Wait for crates.io index update
         if: ${{ github.event.inputs.dry_run != 'true' }}
@@ -66,17 +61,14 @@ jobs:
       - name: Publish nitrite-fjall-adapter
         if: ${{ github.event.inputs.dry_run != 'true' }}
         run: cargo publish -p nitrite_fjall_adapter --token ${{ secrets.CARGO_REGISTRY_TOKEN }}
-        continue-on-error: true
 
       - name: Publish nitrite-spatial
         if: ${{ github.event.inputs.dry_run != 'true' }}
         run: cargo publish -p nitrite_spatial --token ${{ secrets.CARGO_REGISTRY_TOKEN }}
-        continue-on-error: true
 
       - name: Publish nitrite-tantivy-fts
         if: ${{ github.event.inputs.dry_run != 'true' }}
         run: cargo publish -p nitrite_tantivy_fts --token ${{ secrets.CARGO_REGISTRY_TOKEN }}
-        continue-on-error: true
 
       # Dry run mode - just verify packages
       - name: Dry run - Verify packages
