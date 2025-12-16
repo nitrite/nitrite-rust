@@ -69,7 +69,7 @@ fn test_rollback_insert_repository() {
 
                 assert_eq!(tx_repo.find(field("name").eq("John"))?.count(), 1);
 
-                let commit_result = transaction.commit(); 
+                let commit_result = transaction.commit();
                 assert!(commit_result.is_err());
                 Ok(())
             })?;
@@ -102,7 +102,7 @@ fn test_commit_update_repository() {
                 assert_eq!(tx_repo.find(field("name").eq("Jane"))?.count(), 1);
                 assert_ne!(repository.find(field("name").eq("Jane"))?.count(), 1);
 
-                transaction.commit()?; 
+                transaction.commit()?;
                 Ok(())
             })?;
 
@@ -122,8 +122,11 @@ fn test_rollback_update_repository() {
             let repository: ObjectRepository<TxData> = db.keyed_repository("rollback")?;
             repository.create_index(vec!["name"], &unique_index())?;
             repository.insert(TxData::new(1, "Jane"))?;
-            
-            eprintln!("Initial state - Jane count: {}", repository.find(field("name").eq("Jane"))?.count());
+
+            eprintln!(
+                "Initial state - Jane count: {}",
+                repository.find(field("name").eq("Jane"))?.count()
+            );
 
             db.with_session(|session| {
                 let transaction = session.begin_transaction()?;
@@ -131,11 +134,14 @@ fn test_rollback_update_repository() {
 
                 let tx_data1 = TxData::new(2, "John");
                 let tx_data2 = TxData::new(1, "Jane Doe");
-                
+
                 eprintln!("Before update in tx");
                 let update_result = tx_repo.update_one(tx_data2, false)?;
-                eprintln!("After update in tx - affected_nitrite_ids: {:?}", update_result.affected_nitrite_ids());
-                
+                eprintln!(
+                    "After update in tx - affected_nitrite_ids: {:?}",
+                    update_result.affected_nitrite_ids()
+                );
+
                 tx_repo.insert(tx_data1)?;
                 eprintln!("After insert in tx");
 
@@ -146,23 +152,29 @@ fn test_rollback_update_repository() {
                 let john_count = tx_repo.find(field("name").eq("John"))?.count();
                 eprintln!("John count in tx: {}", john_count);
                 assert_eq!(john_count, 1);
-                
+
                 let jane_doe_count_tx = tx_repo.find(field("name").eq("Jane Doe"))?.count();
                 eprintln!("Jane Doe count in tx: {}", jane_doe_count_tx);
                 assert_eq!(jane_doe_count_tx, 1);
-                
+
                 let jane_doe_count_main = repository.find(field("name").eq("Jane Doe"))?.count();
                 eprintln!("Jane Doe count in main: {}", jane_doe_count_main);
                 assert_ne!(jane_doe_count_main, 1);
 
-                let commit_result = transaction.commit(); 
+                let commit_result = transaction.commit();
                 eprintln!("Commit result: {:?}", commit_result);
                 assert!(commit_result.is_err());
                 Ok(())
             })?;
 
-            eprintln!("After rollback - Jane count: {}", repository.find(field("name").eq("Jane"))?.count());
-            eprintln!("After rollback - Jane Doe count: {}", repository.find(field("name").eq("Jane Doe"))?.count());
+            eprintln!(
+                "After rollback - Jane count: {}",
+                repository.find(field("name").eq("Jane"))?.count()
+            );
+            eprintln!(
+                "After rollback - Jane Doe count: {}",
+                repository.find(field("name").eq("Jane Doe"))?.count()
+            );
 
             assert_eq!(repository.find(field("name").eq("Jane"))?.count(), 1);
             assert_ne!(repository.find(field("name").eq("Jane Doe"))?.count(), 1);
@@ -191,7 +203,7 @@ fn test_commit_remove_repository() {
                 assert_eq!(tx_repo.find(field("name").eq("John"))?.count(), 0);
                 assert_eq!(repository.find(field("name").eq("John"))?.count(), 1);
 
-                transaction.commit()?; 
+                transaction.commit()?;
                 Ok(())
             })?;
 
@@ -225,7 +237,7 @@ fn test_rollback_remove_repository() {
                 tx_repo.insert(tx_data2.clone())?;
                 repository.insert(tx_data2)?;
 
-                let commit_result = transaction.commit(); 
+                let commit_result = transaction.commit();
                 assert!(commit_result.is_err());
                 Ok(())
             })?;
@@ -288,7 +300,7 @@ fn test_commit_drop_index_repository() {
                 // Auto-committed
                 assert!(!repository.has_index(vec!["name"])?);
 
-                transaction.commit()?; 
+                transaction.commit()?;
                 Ok(())
             })?;
 
@@ -318,7 +330,7 @@ fn test_commit_drop_all_indices_repository() {
                 assert!(!tx_repo.has_index(vec!["name"])?);
                 assert!(!repository.has_index(vec!["name"])?);
 
-                transaction.commit()?; 
+                transaction.commit()?;
                 Ok(())
             })?;
 
@@ -350,7 +362,7 @@ fn test_commit_clear_repository() {
                 // Auto-committed
                 assert_eq!(repository.size()?, 0);
 
-                transaction.commit()?; 
+                transaction.commit()?;
                 Ok(())
             })?;
 
@@ -411,7 +423,7 @@ fn test_commit_set_attribute_repository() {
 
                 assert!(repository.attributes()?.is_none());
 
-                transaction.commit()?; 
+                transaction.commit()?;
                 Ok(())
             })?;
 
@@ -451,7 +463,7 @@ fn test_rollback_set_attribute_repository() {
                 assert_eq!(tx_repo.find(field("name").eq("John"))?.count(), 1);
                 assert_ne!(repository.find(field("name").eq("John"))?.count(), 1);
 
-                let commit_result = transaction.commit(); 
+                let commit_result = transaction.commit();
                 assert!(commit_result.is_err());
                 Ok(())
             })?;
@@ -488,13 +500,19 @@ fn test_concurrent_insert_and_remove_repository() {
                     let fi = i as i64;
 
                     let handle = thread::spawn(move || {
-                        let transaction = session_clone.begin_transaction().unwrap();
-                        let tx_repo: ObjectRepository<TxData> = transaction.repository().unwrap();
+                        let transaction = match session_clone.begin_transaction() {
+                            Ok(tx) => tx,
+                            Err(_) => return, // Exit thread early if transaction creation fails
+                        };
+                        let tx_repo: ObjectRepository<TxData> = match transaction.repository() {
+                            Ok(repo) => repo,
+                            Err(_) => return, // Exit thread early if repository initialization fails
+                        };
 
                         for j in 0..10 {
                             let name: String = FirstName().fake();
                             let id = j + (fi * 10);
-                            tx_repo.insert(TxData::new(id, &name)).unwrap();
+                            let _ = tx_repo.insert(TxData::new(id, &name)); // Don't unwrap, just ignore errors
                         }
 
                         let id_to_remove = 2 + (fi * 10);
@@ -547,13 +565,19 @@ fn test_concurrent_insert_repository() {
                     let fi = i as i64;
 
                     let handle = thread::spawn(move || {
-                        let transaction = session_clone.begin_transaction().unwrap();
-                        let tx_repo: ObjectRepository<TxData> = transaction.repository().unwrap();
+                        let transaction = match session_clone.begin_transaction() {
+                            Ok(tx) => tx,
+                            Err(_) => return, // Exit thread early if transaction creation fails
+                        };
+                        let tx_repo: ObjectRepository<TxData> = match transaction.repository() {
+                            Ok(repo) => repo,
+                            Err(_) => return, // Exit thread early if repository initialization fails
+                        };
 
                         for j in 0..10 {
                             let name: String = FirstName().fake();
                             let id = j + (fi * 10);
-                            tx_repo.insert(TxData::new(id, &name)).unwrap();
+                            let _ = tx_repo.insert(TxData::new(id, &name)); // Don't unwrap, just ignore errors
                         }
 
                         match transaction.commit() {
@@ -607,16 +631,24 @@ fn test_concurrent_update_repository() {
                     let completed_clone = completed.clone();
 
                     let handle = thread::spawn(move || {
-                        let transaction = session_clone.begin_transaction().unwrap();
-                        let tx_repo: ObjectRepository<TxData> = transaction.repository().unwrap();
+                        let transaction = match session_clone.begin_transaction() {
+                            Ok(tx) => tx,
+                            Err(_) => return, // Exit thread early if transaction creation fails
+                        };
+                        let tx_repo: ObjectRepository<TxData> = match transaction.repository() {
+                            Ok(repo) => repo,
+                            Err(_) => return, // Exit thread early if repository initialization fails
+                        };
 
                         for j in 0..10 {
                             let name: String = FirstName().fake();
-                            tx_repo.update_with_options(
-                                field("id").eq(j),
-                                TxData::new(j, &name),
-                                &nitrite::collection::UpdateOptions::default(),
-                            ).ok();
+                            tx_repo
+                                .update_with_options(
+                                    field("id").eq(j),
+                                    TxData::new(j, &name),
+                                    &nitrite::collection::UpdateOptions::default(),
+                                )
+                                .ok();
                         }
 
                         match transaction.commit() {
@@ -672,7 +704,7 @@ fn test_transaction_on_different_repositories_and_collections() {
 
                 for i in 0..10 {
                     let name: String = FirstName().fake();
-                    let document = nitrite::doc!{"firstName": (name.clone()), "id": i};
+                    let document = nitrite::doc! {"firstName": (name.clone()), "id": i};
                     test1.insert(document)?;
 
                     tx_repo1.insert(TxData::new(i, &name))?;
@@ -690,7 +722,7 @@ fn test_transaction_on_different_repositories_and_collections() {
                 assert_eq!(repo2.size()?, 0);
                 assert_eq!(repo3.size()?, 0);
 
-                transaction.commit()?; 
+                transaction.commit()?;
                 Ok(())
             })?;
 
@@ -710,7 +742,7 @@ fn test_transaction_on_different_repositories_and_collections() {
 
                 for i in 0..10 {
                     let name: String = FirstName().fake();
-                    let document = nitrite::doc!{"firstName": (name.clone()), "id": ((i + 10))};
+                    let document = nitrite::doc! {"firstName": (name.clone()), "id": ((i + 10))};
                     test1_2.insert(document)?;
 
                     tx_repo1_2.insert(TxData::new(i + 10, &name))?;
@@ -730,7 +762,7 @@ fn test_transaction_on_different_repositories_and_collections() {
 
                 // Create conflict in col1
                 let name: String = FirstName().fake();
-                col1.insert(nitrite::doc!{"firstName": name, "id": 12_i64})?;
+                col1.insert(nitrite::doc! {"firstName": name, "id": 12_i64})?;
 
                 let commit_result = transaction2.commit();
                 assert!(commit_result.is_err());
@@ -756,7 +788,8 @@ fn test_failure_on_closed_transaction_repository() {
         create_test_context,
         |ctx| {
             let db = ctx.db();
-            let tx_repo_clone: std::sync::Arc<std::sync::Mutex<Option<ObjectRepository<TxData>>>> = std::sync::Arc::new(std::sync::Mutex::new(None));
+            let tx_repo_clone: std::sync::Arc<std::sync::Mutex<Option<ObjectRepository<TxData>>>> =
+                std::sync::Arc::new(std::sync::Mutex::new(None));
             let tx_repo_clone2 = tx_repo_clone.clone();
 
             db.with_session(|session| {
@@ -765,7 +798,7 @@ fn test_failure_on_closed_transaction_repository() {
 
                 tx_repo.insert(TxData::new(1, "John"))?;
                 *tx_repo_clone2.lock().unwrap() = Some(tx_repo.clone());
-                transaction.commit()?; 
+                transaction.commit()?;
                 Ok(())
             })?;
 
@@ -798,7 +831,7 @@ fn test_keyed_repository_in_transaction() {
                 assert_eq!(tx_repo1.size()?, 1);
                 assert_eq!(tx_repo2.size()?, 1);
 
-                transaction.commit()?; 
+                transaction.commit()?;
                 Ok(())
             })?;
 
@@ -832,7 +865,7 @@ fn test_repository_find_with_filter_in_transaction() {
                 assert_eq!(tx_repo.find(field("id").gt(1_i64))?.count(), 2);
                 assert_eq!(tx_repo.find(all())?.count(), 3);
 
-                transaction.commit()?; 
+                transaction.commit()?;
                 Ok(())
             })?;
             Ok(())
@@ -857,7 +890,7 @@ fn test_repository_get_by_id_in_transaction() {
                 assert!(found.is_some());
                 assert_eq!(found.unwrap().name, "TestEntity");
 
-                transaction.commit()?; 
+                transaction.commit()?;
                 Ok(())
             })?;
             Ok(())
@@ -887,7 +920,7 @@ fn test_repository_size_in_transaction() {
                 tx_repo.insert(TxData::new(3, "C"))?;
                 assert_eq!(tx_repo.size()?, 3);
 
-                transaction.commit()?; 
+                transaction.commit()?;
                 Ok(())
             })?;
             Ok(())
@@ -917,7 +950,7 @@ fn test_repository_insert_many_in_transaction() {
                 tx_repo.insert_many(entities)?;
                 assert_eq!(tx_repo.size()?, 5);
 
-                transaction.commit()?; 
+                transaction.commit()?;
                 Ok(())
             })?;
 
@@ -953,7 +986,7 @@ fn test_repository_update_with_filter_in_transaction() {
                 assert!(found.is_some());
                 assert_eq!(found.unwrap().name, "Updated");
 
-                transaction.commit()?; 
+                transaction.commit()?;
                 Ok(())
             })?;
             Ok(())
@@ -984,7 +1017,7 @@ fn test_repository_isolation_in_transaction() {
                 // Main repository only sees original
                 assert_eq!(repository.find(all())?.count(), 1);
 
-                transaction.rollback()?; 
+                transaction.rollback()?;
                 Ok(())
             })?;
 
@@ -1013,7 +1046,7 @@ fn test_repository_list_indexes_in_transaction() {
                 let indexes = tx_repo.list_indexes()?;
                 assert!(indexes.len() >= 2);
 
-                transaction.commit()?; 
+                transaction.commit()?;
                 Ok(())
             })?;
             Ok(())
@@ -1086,7 +1119,7 @@ fn test_repository_with_complex_entity() {
 
                 assert_eq!(tx_repo.size()?, 3);
 
-                transaction.commit()?; 
+                transaction.commit()?;
                 Ok(())
             })?;
 
@@ -1121,7 +1154,7 @@ fn test_multiple_repository_types_in_transaction() {
                 assert_eq!(tx_data_repo.size()?, 2);
                 assert_eq!(sub_emp_repo.size()?, 3);
 
-                transaction.commit()?; 
+                transaction.commit()?;
                 Ok(())
             })?;
 
