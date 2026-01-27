@@ -1818,9 +1818,9 @@ dependencies = [
 
 [[package]]
 name = "lru"
-version = "0.16.2"
+version = "0.16.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "96051b46fc183dc9cd4a223960ef37b9af631b55191852a8274bfef064cda20f"
+checksum = "a1dc47f592c06f33f8e3aea9591776ec7c9f9e4124778ff8a3c3b87159f7e593"
 dependencies = [
  "hashbrown 0.16.1",
 ]
@@ -1930,7 +1930,7 @@ dependencies = [
  "indexmap",
  "itertools 0.14.0",
  "log",
- "lru 0.16.2",
+ "lru 0.16.3",
  "once_cell",
  "parking_lot 0.12.5",
  "rand 0.8.5",
@@ -1989,7 +1989,7 @@ dependencies = [
  "dashmap",
  "fjall",
  "log",
- "lru 0.16.2",
+ "lru 0.16.3",
  "nitrite",
  "parking_lot 0.12.5",
  "thiserror",

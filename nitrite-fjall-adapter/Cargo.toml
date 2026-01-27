@@ -17,7 +17,7 @@ log = "0.4.14"
 cargo_toml = "0.22.1"
 dashmap = "6.1.0"
 crossbeam = "0.8.4"
-lru = "0.16.0"
+lru = "0.16.3"
 parking_lot = "0.12.4"
 thiserror = "2.0"
 
