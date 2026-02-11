@@ -364,7 +364,7 @@ mod tests {
         let uuid = uuid::Uuid::new_v4();
         let fields = Fields::with_names(vec!["content"]).unwrap();
         IndexDescriptor::new(
-            "TantivyFullText",
+            "tantivy-fts",
             fields,
             &format!("test_collection_{}", uuid),
         )
@@ -403,7 +403,7 @@ mod tests {
     #[test]
     fn test_derive_index_map_name_special_chars() {
         let fields = Fields::with_names(vec!["my_field"]).unwrap();
-        let descriptor = IndexDescriptor::new("TantivyFullText", fields, "my_collection");
+        let descriptor = IndexDescriptor::new("tantivy-fts", fields, "my_collection");
         let name = derive_index_map_name(&descriptor);
 
         assert!(name.contains("my_collection"));

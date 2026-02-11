@@ -16,7 +16,7 @@ use nitrite::filter::{Filter, FilterProvider};
 use parking_lot::RwLock;
 
 /// The index type name for FTS indexes.
-pub const FTS_INDEX: &str = "TantivyFullText";
+pub const FTS_INDEX: &str = "tantivy-fts";
 
 /// Base trait for FTS filters.
 pub trait FtsFilter: Send + Sync {
@@ -528,7 +528,7 @@ mod tests {
 
     #[test]
     fn test_fts_index_constant() {
-        assert_eq!(FTS_INDEX, "TantivyFullText");
+        assert_eq!(FTS_INDEX, "tantivy-fts");
     }
 
     #[test]

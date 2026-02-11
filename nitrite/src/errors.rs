@@ -630,8 +630,8 @@ mod tests {
     #[test]
     fn test_extension_errors() {
         // Extensions can use the Extension variant with their own name
-        let spatial_ext = NitriteError::new("Spatial index error", ErrorKind::Extension("Spatial".to_string()));
-        assert_eq!(spatial_ext.kind(), &ErrorKind::Extension("Spatial".to_string()));
+        let spatial_ext = NitriteError::new("Spatial index error", ErrorKind::Extension("spatial".to_string()));
+        assert_eq!(spatial_ext.kind(), &ErrorKind::Extension("spatial".to_string()));
         
         let fulltext_ext = NitriteError::new("Full-text search error", ErrorKind::Extension("FullText".to_string()));
         assert_eq!(fulltext_ext.kind(), &ErrorKind::Extension("FullText".to_string()));

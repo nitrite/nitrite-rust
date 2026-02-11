@@ -47,7 +47,7 @@ impl SpatialIndex {
             DiskRTree::open(&rtree_path).map_err(|e| {
                 NitriteError::new(
                     &format!("Failed to open spatial index: {}", e),
-                    ErrorKind::Extension("Spatial".to_string()),
+                    ErrorKind::Extension("spatial".to_string()),
                 )
             })?
         } else {
@@ -55,7 +55,7 @@ impl SpatialIndex {
             DiskRTree::create(&rtree_path).map_err(|e| {
                 NitriteError::new(
                     &format!("Failed to create spatial index: {}", e),
-                    ErrorKind::Extension("Spatial".to_string()),
+                    ErrorKind::Extension("spatial".to_string()),
                 )
             })?
         };
@@ -95,7 +95,7 @@ impl SpatialIndex {
         self.inner.rtree.add(&bbox, nitrite_id).map_err(|e| {
             NitriteError::new(
                 &format!("Failed to write to spatial index: {}", e),
-                ErrorKind::Extension("Spatial".to_string()),
+                ErrorKind::Extension("spatial".to_string()),
             )
         })
     }
@@ -126,7 +126,7 @@ impl SpatialIndex {
         self.inner.rtree.remove(&bbox, nitrite_id).map_err(|e| {
             NitriteError::new(
                 &format!("Failed to remove from spatial index: {}", e),
-                ErrorKind::Extension("Spatial".to_string()),
+                ErrorKind::Extension("spatial".to_string()),
             )
         })?;
 
@@ -194,7 +194,7 @@ impl SpatialIndex {
         let candidate_ids = candidate_ids.map_err(|e| {
             NitriteError::new(
                 &format!("Failed to query spatial index: {}", e),
-                ErrorKind::Extension("Spatial".to_string()),
+                ErrorKind::Extension("spatial".to_string()),
             )
         })?;
 
@@ -237,7 +237,7 @@ impl SpatialIndex {
             .map_err(|e| {
                 NitriteError::new(
                     &format!("Failed to execute KNN query on spatial index: {}", e),
-                    ErrorKind::Extension("Spatial".to_string()),
+                    ErrorKind::Extension("spatial".to_string()),
                 )
             })?;
 
@@ -280,7 +280,7 @@ impl SpatialIndex {
                     value_to_geometry(&geom_value).map(Some).ok_or_else(|| {
                         NitriteError::new(
                             "Failed to convert stored value to geometry",
-                            ErrorKind::Extension("Spatial".to_string()),
+                            ErrorKind::Extension("spatial".to_string()),
                         )
                     })
                 }
@@ -295,7 +295,7 @@ impl SpatialIndex {
         self.inner.rtree.close().map_err(|e| {
             NitriteError::new(
                 &format!("Failed to close spatial index: {}", e),
-                ErrorKind::Extension("Spatial".to_string()),
+                ErrorKind::Extension("spatial".to_string()),
             )
         })
     }
@@ -304,7 +304,7 @@ impl SpatialIndex {
         self.inner.rtree.drop_tree().map_err(|e| {
             NitriteError::new(
                 &format!("Failed to drop spatial index: {}", e),
-                ErrorKind::Extension("Spatial".to_string()),
+                ErrorKind::Extension("spatial".to_string()),
             )
         })
     }

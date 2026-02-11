@@ -288,7 +288,7 @@ mod tests {
     #[test]
     fn test_fts_indexer_index_type() {
         let indexer = FtsIndexer::new();
-        assert_eq!(indexer.index_type(), "TantivyFullText");
+        assert_eq!(indexer.index_type(), "tantivy-fts");
     }
 
     #[test]
@@ -379,7 +379,7 @@ mod tests {
         let indexer = FtsIndexer::new();
         let uuid = uuid::Uuid::new_v4();
         let fields = Fields::with_names(vec!["content"]).unwrap();
-        let descriptor = IndexDescriptor::new("TantivyFullText", fields, &format!("test_{}", uuid));
+        let descriptor = IndexDescriptor::new("tantivy-fts", fields, &format!("test_{}", uuid));
 
         // First call creates the index
         let index1 = indexer.get_or_create_index(&descriptor);
@@ -395,10 +395,10 @@ mod tests {
         let indexer = FtsIndexer::new();
 
         let fields1 = Fields::with_names(vec!["content"]).unwrap();
-        let desc1 = IndexDescriptor::new("TantivyFullText", fields1, "collection1");
+        let desc1 = IndexDescriptor::new("tantivy-fts", fields1, "collection1");
 
         let fields2 = Fields::with_names(vec!["body"]).unwrap();
-        let desc2 = IndexDescriptor::new("TantivyFullText", fields2, "collection2");
+        let desc2 = IndexDescriptor::new("tantivy-fts", fields2, "collection2");
 
         let index1 = indexer.get_or_create_index(&desc1);
         let index2 = indexer.get_or_create_index(&desc2);
@@ -415,7 +415,7 @@ mod tests {
         let uuid = uuid::Uuid::new_v4();
         let fields = Fields::with_names(vec!["content"]).unwrap();
         let descriptor =
-            IndexDescriptor::new("TantivyFullText", fields.clone(), &format!("test_{}", uuid));
+            IndexDescriptor::new("tantivy-fts", fields.clone(), &format!("test_{}", uuid));
         let config = NitriteConfig::default();
 
         let nitrite_id = NitriteId::new();
@@ -438,7 +438,7 @@ mod tests {
         let uuid = uuid::Uuid::new_v4();
         let fields = Fields::with_names(vec!["content"]).unwrap();
         let descriptor =
-            IndexDescriptor::new("TantivyFullText", fields.clone(), &format!("test_{}", uuid));
+            IndexDescriptor::new("tantivy-fts", fields.clone(), &format!("test_{}", uuid));
         let config = NitriteConfig::default();
 
         let nitrite_id = NitriteId::new();
@@ -466,7 +466,7 @@ mod tests {
         let indexer = FtsIndexer::new();
         let uuid = uuid::Uuid::new_v4();
         let fields = Fields::with_names(vec!["content"]).unwrap();
-        let descriptor = IndexDescriptor::new("TantivyFullText", fields, &format!("test_{}", uuid));
+        let descriptor = IndexDescriptor::new("tantivy-fts", fields, &format!("test_{}", uuid));
         let config = NitriteConfig::default();
 
         // Create the index first
@@ -482,7 +482,7 @@ mod tests {
         let indexer = FtsIndexer::new();
         let uuid = uuid::Uuid::new_v4();
         let fields = Fields::with_names(vec!["content"]).unwrap();
-        let descriptor = IndexDescriptor::new("TantivyFullText", fields, &format!("test_{}", uuid));
+        let descriptor = IndexDescriptor::new("tantivy-fts", fields, &format!("test_{}", uuid));
         let config = NitriteConfig::default();
 
         // Dropping a nonexistent index should succeed (no-op)

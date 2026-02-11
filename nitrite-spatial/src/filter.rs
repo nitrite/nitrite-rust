@@ -28,7 +28,7 @@ use crate::geometry::{create_geodesic_circle, GeoPoint, Geometry, Point};
 use crate::SpatialError;
 
 /// The index type name for spatial indexes.
-pub const SPATIAL_INDEX: &str = "Spatial";
+pub const SPATIAL_INDEX: &str = "spatial";
 
 /// Base trait for spatial filters.
 pub trait SpatialFilterOps {
