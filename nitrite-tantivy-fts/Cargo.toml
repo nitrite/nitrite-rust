@@ -1,6 +1,6 @@
 [package]
 name = "nitrite_tantivy_fts"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
 description = "Full-text search support for Nitrite database using Tantivy"
 license = "Apache-2.0"
@@ -11,7 +11,7 @@ categories = ["database", "text-processing"]
 
 [dependencies]
 # Core nitrite dependency
-nitrite = { version = "0.1.0", path = "../nitrite" }
+nitrite = { version = "0.2.0", path = "../nitrite" }
 
 # Full-text search engine
 tantivy = "0.25.0"

@@ -1,6 +1,6 @@
 [package]
 name = "nitrite_fjall_adapter"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
 description = "Fjall storage adapter for Nitrite database - persistent LSM-tree storage"
 license = "Apache-2.0"
@@ -10,7 +10,7 @@ keywords = ["database", "storage", "fjall", "lsm-tree"]
 categories = ["database"]
 
 [dependencies]
-nitrite = { version = "0.1.0", path = "../nitrite" }
+nitrite = { version = "0.2.0", path = "../nitrite" }
 fjall = { version = "2.6.3", features = ["bytes"] }
 bincode = { version = "2.0.1", features = ["serde"] }
 log = "0.4.14"

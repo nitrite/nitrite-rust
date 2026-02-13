@@ -1,7 +1,7 @@
 [package]
 name = "nitrite_derive"
 description = "Derive macros for the nitrite crate"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
 license = "Apache-2.0"
 repository = "https://github.com/nitrite/nitrite-rust"

@@ -36,7 +36,7 @@ mod tests {
         let cargo_toml = r#"
         [package]
         name = "nitrite_fjall_adapter"
-        version = "0.1.0"
+        version = "0.2.0"
         edition = "2021"
 
         [dependencies]
@@ -62,7 +62,7 @@ mod tests {
         let cargo_toml = r#"
         [package]
         name = "nitrite_fjall_adapter"
-        version = "0.1.0"
+        version = "0.2.0"
         edition = "2021"
 
         [dependencies]
@@ -88,7 +88,7 @@ mod tests {
         let cargo_toml = r#"
         [package]
         name = "nitrite_fjall_adapter"
-        version = "0.1.0"
+        version = "0.2.0"
         edition = "2021"
 
         [dependencies]
@@ -115,7 +115,7 @@ mod tests {
         let cargo_toml = r#"
         [package]
         name = "nitrite_fjall_adapter"
-        version = "0.1.0"
+        version = "0.2.0"
         edition = "2021"
 
         [dependencies]
@@ -144,7 +144,7 @@ mod tests {
             let cargo_toml = r#"
             [package]
             name = "nitrite_fjall_adapter"
-            version = "0.1.0"
+            version = "0.2.0"
 
             [dependencies]
             fjall = "2.6.3"
@@ -176,7 +176,7 @@ mod tests {
         let cargo_toml = r#"
         [package]
         name = "nitrite_fjall_adapter"
-        version = "0.1.0"
+        version = "0.2.0"
         edition = "2021"
 
         [dependencies]

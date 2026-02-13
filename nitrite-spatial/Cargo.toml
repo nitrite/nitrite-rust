@@ -1,6 +1,6 @@
 [package]
 name = "nitrite_spatial"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
 description = "Spatial indexing support for Nitrite database using R-Tree"
 license = "Apache-2.0"
@@ -11,7 +11,7 @@ categories = ["database", "science::geo"]
 
 [dependencies]
 # Core nitrite dependency for error compatibility
-nitrite = { version = "0.1.0", path = "../nitrite" }
+nitrite = { version = "0.2.0", path = "../nitrite" }
 
 # Spatial indexing
 rstar = { version = "0.12", features = ["serde"] }
