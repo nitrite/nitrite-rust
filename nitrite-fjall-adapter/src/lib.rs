@@ -4,6 +4,7 @@ mod config;
 mod map;
 mod module;
 mod store;
+mod tx_scope;
 mod version;
 mod wrapper;
 
@@ -14,16 +15,15 @@ pub use module::*;
 mod tests {
     use crate::map::FjallMap;
     use crate::store::FjallStore;
-    use fjall::{Keyspace, PartitionHandle};
+    use fjall::{TxKeyspace, TxPartitionHandle};
     use nitrite::common::NitritePluginProvider;
     use nitrite::store::NitriteMapProvider;
-    use std::mem;
 
     #[derive(Clone)]
     pub struct Context {
         path: String,
-        keyspace: Option<Keyspace>,
-        partition_handle: Option<PartitionHandle>,
+        keyspace: Option<TxKeyspace>,
+        partition_handle: Option<TxPartitionHandle>,
         fjall_store: Option<FjallStore>,
         fjall_map: Option<FjallMap>,
     }
@@ -31,8 +31,8 @@ mod tests {
     impl Context {
         pub fn new(
             path: String,
-            keyspace: Option<Keyspace>,
-            partition_handle: Option<PartitionHandle>,
+            keyspace: Option<TxKeyspace>,
+            partition_handle: Option<TxPartitionHandle>,
             fjall_store: Option<FjallStore>,
             fjall_map: Option<FjallMap>,
         ) -> Self {
@@ -49,13 +49,13 @@ mod tests {
             self.path.clone()
         }
 
-        pub fn keyspace(&self) -> Result<Keyspace, String> {
+        pub fn keyspace(&self) -> Result<TxKeyspace, String> {
             self.keyspace
                 .clone()
                 .ok_or_else(|| "Keyspace not available".to_string())
         }
 
-        pub fn partition_handle(&self) -> Result<PartitionHandle, String> {
+        pub fn partition_handle(&self) -> Result<TxPartitionHandle, String> {
             self.partition_handle
                 .clone()
                 .ok_or_else(|| "Partition handle not available".to_string())

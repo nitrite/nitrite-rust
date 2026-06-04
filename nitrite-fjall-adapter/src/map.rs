@@ -1,7 +1,7 @@
 use crate::config::FjallConfig;
 use crate::store::FjallStore;
 use crate::wrapper::FjallValue;
-use fjall::{GarbageCollection, Partition};
+use fjall::{GarbageCollection, TxPartitionHandle};
 use nitrite::common::{async_task, AttributeAware, Attributes, Key, Value, META_MAP_NAME};
 use nitrite::errors::{ErrorKind, NitriteError, NitriteResult};
 use nitrite::store::{
@@ -52,7 +52,7 @@ impl FjallMap {
     #[inline]
     pub fn new(
         name: String,
-        partition: Partition,
+        partition: TxPartitionHandle,
         store: FjallStore,
         fjall_config: FjallConfig,
     ) -> FjallMap {
@@ -380,7 +380,7 @@ impl FjallMap {
 /// Thread-safe: Uses AtomicBool for state flags with Relaxed ordering for performance.
 struct FjallMapInner {
     name: String,
-    partition: Partition,
+    partition: TxPartitionHandle,
     closed: AtomicBool,
     dropped: AtomicBool,
     store: FjallStore,
@@ -399,7 +399,7 @@ impl FjallMapInner {
     /// Returns: A new `FjallMapInner` with closed=false, dropped=false
     fn new(
         name: String,
-        partition: Partition,
+        partition: TxPartitionHandle,
         store: FjallStore,
         fjall_config: FjallConfig,
     ) -> FjallMapInner {
@@ -438,6 +438,15 @@ impl FjallMapInner {
         }
 
         Ok(())
+    }
+
+    /// Builds a `BackendError` for a failed Fjall operation, logging it as well.
+    fn backend_err(op: &str, err: impl std::fmt::Display) -> NitriteError {
+        log::error!("Failed to {} FjallMap: {}", op, err);
+        NitriteError::new(
+            &format!("Failed to {} FjallMap: {}", op, err),
+            ErrorKind::BackendError,
+        )
     }
 
     fn get_attributes(&self) -> NitriteResult<Option<Attributes>> {
@@ -481,17 +490,15 @@ impl FjallMapInner {
 
     fn contains_key(&self, key: &Key) -> NitriteResult<bool> {
         self.check_opened()?;
-        let result = self.partition.contains_key(FjallValue::new(key.clone()));
-        match result {
-            Ok(value) => Ok(value),
-            Err(err) => {
-                log::error!("Failed to check key in FjallMap: {}", err);
-                Err(NitriteError::new(
-                    &format!("Failed to check key in FjallMap: {}", err),
-                    ErrorKind::BackendError,
-                ))
-            }
-        }
+        let fjall_key = FjallValue::new(key.clone());
+        // Inside an atomic scope, read through the active transaction so the check observes
+        // this transaction's own pending writes (read-your-writes); otherwise read the latest
+        // committed state directly.
+        crate::tx_scope::with_active(|tx| match tx {
+            Some(tx) => tx.contains_key(&self.partition, fjall_key),
+            None => self.partition.contains_key(fjall_key),
+        })
+        .map_err(|err| Self::backend_err("check key in", err))
     }
 
     fn get(&self, key: &Key) -> NitriteResult<Option<Value>> {
@@ -499,54 +506,49 @@ impl FjallMapInner {
 
         // Use normalized numeric types for keys to ensure consistent index behavior
         let normalized_key = FjallValue::try_from_value_normalized(key)?;
-        let result = self.partition.get(normalized_key);
-        match result {
-            Ok(value) => {
-                if let Some(value) = value {
-                    let fjall_value = FjallValue::from(value);
-                    let value: Value = fjall_value.into();
-                    Ok(Some(value))
-                } else {
-                    Ok(None)
-                }
-            }
-            Err(err) => {
-                log::error!("Failed to get value from FjallMap: {}", err);
-                Err(NitriteError::new(
-                    &format!("Failed to get value from FjallMap: {}", err),
-                    ErrorKind::BackendError,
-                ))
-            }
-        }
+        // Read through the active transaction when in an atomic scope (read-your-writes),
+        // otherwise read the latest committed state directly.
+        let result = crate::tx_scope::with_active(|tx| match tx {
+            Some(tx) => tx.get(&self.partition, normalized_key),
+            None => self.partition.get(normalized_key),
+        })
+        .map_err(|err| Self::backend_err("get value from", err))?;
+
+        Ok(result.map(|value| FjallValue::from(value).into()))
     }
 
     fn clear(&self) -> NitriteResult<()> {
         self.check_opened()?;
-        for result in self.partition.range::<Vec<u8>, RangeFull>(..) {
-            match result {
-                Ok((key, _)) => {
-                    let remove_result = self.partition.remove(&*key);
-                    match remove_result {
-                        Ok(_) => {}
-                        Err(err) => {
-                            log::error!("Failed to remove item from FjallMap: {}", err);
-                            return Err(NitriteError::new(
-                                &format!("Failed to remove item from FjallMap: {}", err),
-                                ErrorKind::BackendError,
-                            ));
+
+        // Collect every key (observing pending writes when in an atomic scope), then delete
+        // them inside a single atomic write transaction so the clear is all-or-nothing.
+        let keys: Vec<Vec<u8>> = crate::tx_scope::with_active(
+            |tx| -> NitriteResult<Vec<Vec<u8>>> {
+                let mut keys = Vec::new();
+                match tx {
+                    Some(tx) => {
+                        for result in tx.range::<Vec<u8>, RangeFull>(&self.partition, ..) {
+                            let (key, _) = result.map_err(|err| Self::backend_err("clear", err))?;
+                            keys.push(key.to_vec());
+                        }
+                    }
+                    None => {
+                        for result in self.partition.inner().range::<Vec<u8>, RangeFull>(..) {
+                            let (key, _) = result.map_err(|err| Self::backend_err("clear", err))?;
+                            keys.push(key.to_vec());
                         }
                     }
                 }
-                Err(err) => {
-                    log::error!("Failed to clear FjallMap: {}", err);
-                    return Err(NitriteError::new(
-                        &format!("Failed to clear FjallMap: {}", err),
-                        ErrorKind::BackendError,
-                    ));
-                }
+                Ok(keys)
+            },
+        )?;
+
+        self.store.write_in_tx(|tx| {
+            for key in keys {
+                tx.remove(&self.partition, key);
             }
-        }
-        Ok(())
+            Ok(())
+        })
     }
 
     fn is_closed(&self) -> NitriteResult<bool> {
@@ -561,18 +563,14 @@ impl FjallMapInner {
 
     fn remove(&self, key: &Key) -> NitriteResult<Option<Value>> {
         self.check_opened()?;
+        // Read the current value first (through the active transaction if any), then delete it
+        // within an atomic write transaction.
         let value = self.get(key)?;
-        // Use normalized numeric types for keys to ensure consistent index behavior
         let normalized_key = FjallValue::try_from_value_normalized(key)?;
-        let result = self.partition.remove(normalized_key);
-        // Use if let Err(e) pattern instead of is_err().err().unwrap()
-        if let Err(err) = result {
-            log::error!("Failed to remove item from FjallMap: {}", err);
-            return Err(NitriteError::new(
-                &format!("Failed to remove item from FjallMap: {}", err),
-                ErrorKind::BackendError,
-            ));
-        }
+        self.store.write_in_tx(|tx| {
+            tx.remove(&self.partition, normalized_key);
+            Ok(())
+        })?;
         Ok(value)
     }
 
@@ -581,26 +579,17 @@ impl FjallMapInner {
         // Use normalized numeric types for keys to ensure consistent index behavior
         // across different numeric types (e.g., I64 vs U64)
         let normalized_key = FjallValue::try_from_value_normalized(&key)?;
-        let result = self
-            .partition
-            .insert(normalized_key, FjallValue::new(value));
-
-        // Use if-let pattern for efficient error handling
-        if let Err(err) = result {
-            log::error!("Failed to put item in FjallMap: {}", err);
-            return Err(NitriteError::new(
-                &format!("Failed to put item in FjallMap: {}", err),
-                ErrorKind::BackendError,
-            ));
-        }
-        Ok(())
+        self.store.write_in_tx(|tx| {
+            tx.insert(&self.partition, normalized_key, FjallValue::new(value));
+            Ok(())
+        })
     }
 
-    /// Atomically inserts multiple key-value pairs using Fjall's batch API.
-    /// This is more efficient than individual inserts as it:
-    /// - Reduces journal writes
-    /// - Minimizes fsync overhead
-    /// - Provides atomicity for all entries
+    /// Inserts multiple key-value pairs as part of one atomic write transaction.
+    ///
+    /// Every entry lands in the same transaction as the rest of the enclosing atomic scope, so
+    /// a batch document insert and all of its index updates are persisted together or not at
+    /// all. When called outside a scope a one-shot transaction is used for the whole batch.
     fn put_all(&self, entries: Vec<(Key, Value)>) -> NitriteResult<()> {
         self.check_opened()?;
 
@@ -608,139 +597,78 @@ impl FjallMapInner {
             return Ok(());
         }
 
-        // Get the keyspace from the store for batch operations
-        let keyspace = self.store.keyspace().ok_or_else(|| {
-            NitriteError::new(
-                "Keyspace not initialized for batch operation",
-                ErrorKind::StoreNotInitialized,
-            )
-        })?;
-
-        // Create a batch with capacity hint for better performance
-        let mut batch = keyspace.batch();
-
-        // Add all entries to the batch
-        for (key, value) in entries {
-            let normalized_key = FjallValue::try_from_value_normalized(&key)?;
-            batch.insert(&self.partition, normalized_key, FjallValue::new(value));
-        }
-
-        // Commit the batch atomically
-        batch.commit().map_err(|err| {
-            log::error!("Failed to commit batch in FjallMap: {}", err);
-            NitriteError::new(
-                &format!("Failed to commit batch in FjallMap: {}", err),
-                ErrorKind::BackendError,
-            )
-        })?;
-
-        Ok(())
+        self.store.write_in_tx(|tx| {
+            for (key, value) in entries {
+                let normalized_key = FjallValue::try_from_value_normalized(&key)?;
+                tx.insert(&self.partition, normalized_key, FjallValue::new(value));
+            }
+            Ok(())
+        })
     }
 
     fn size(&self) -> NitriteResult<u64> {
         self.check_opened()?;
-        let result = self.partition.len();
-        match result {
-            Ok(value) => Ok(value as u64),
-            Err(err) => {
-                log::error!("Failed to get size of FjallMap: {}", err);
-                Err(NitriteError::new(
-                    &format!("Failed to get size of FjallMap: {}", err),
-                    ErrorKind::BackendError,
-                ))
-            }
-        }
+        let result = crate::tx_scope::with_active(|tx| match tx {
+            Some(tx) => tx.len(&self.partition),
+            None => self.partition.inner().len(),
+        })
+        .map_err(|err| Self::backend_err("get size of", err))?;
+        Ok(result as u64)
     }
 
     fn put_if_absent(&self, key: Key, value: Value) -> NitriteResult<Option<Value>> {
         self.check_opened()?;
         // Use normalized numeric types for keys to ensure consistent index behavior
         let normalized_key = FjallValue::try_from_value_normalized(&key)?;
-        let existing_result = self.partition.get(normalized_key.clone());
-        match existing_result {
-            Ok(opt) => {
-                if opt.is_none() {
-                    let result = self
-                        .partition
-                        .insert(normalized_key, FjallValue::new(value));
-
-                    // Use if let Err(e) pattern instead of is_err().err().unwrap()
-                    if let Err(err) = result {
-                        log::error!("Failed to put item in FjallMap: {}", err);
-                        return Err(NitriteError::new(
-                            &format!("Failed to put item in FjallMap: {}", err),
-                            ErrorKind::BackendError,
-                        ));
-                    }
-                }
-                Ok(opt.map(|value| FjallValue::from(value).into()))
+        // The read and the conditional insert run in one transaction so the check and the
+        // write are atomic and read-your-writes consistent.
+        self.store.write_in_tx(|tx| {
+            let existing = tx
+                .get(&self.partition, normalized_key.clone())
+                .map_err(|err| Self::backend_err("get item from", err))?;
+            if existing.is_none() {
+                tx.insert(&self.partition, normalized_key, FjallValue::new(value));
             }
-            Err(err) => {
-                log::error!("Failed to get item from FjallMap: {}", err);
-                Err(NitriteError::new(
-                    &format!("Failed to get item from FjallMap: {}", err),
-                    ErrorKind::BackendError,
-                ))
-            }
-        }
+            Ok(existing.map(|value| FjallValue::from(value).into()))
+        })
     }
 
     fn first_key(&self) -> NitriteResult<Option<Key>> {
         self.check_opened()?;
-        let result = self.partition.first_key_value();
-        match result {
-            Ok(value) => {
-                if let Some(value) = value {
-                    Ok(Some(FjallValue::from(value.0).into()))
-                } else {
-                    Ok(None)
-                }
-            }
-            Err(err) => {
-                log::error!("Failed to get first key from FjallMap: {}", err);
-                Err(NitriteError::new(
-                    &format!("Failed to get first key from FjallMap: {}", err),
-                    ErrorKind::BackendError,
-                ))
-            }
-        }
+        let result = crate::tx_scope::with_active(|tx| match tx {
+            Some(tx) => tx.first_key_value(&self.partition),
+            None => self.partition.first_key_value(),
+        })
+        .map_err(|err| Self::backend_err("get first key from", err))?;
+        Ok(result.map(|(key, _)| FjallValue::from(key).into()))
     }
 
     fn last_key(&self) -> NitriteResult<Option<Key>> {
         self.check_opened()?;
-        let result = self.partition.last_key_value();
-        match result {
-            Ok(value) => {
-                if let Some(value) = value {
-                    Ok(Some(FjallValue::from(value.0).into()))
-                } else {
-                    Ok(None)
-                }
-            }
-            Err(err) => {
-                log::error!("Failed to get last key from FjallMap: {}", err);
-                Err(NitriteError::new(
-                    &format!("Failed to get last key from FjallMap: {}", err),
-                    ErrorKind::BackendError,
-                ))
-            }
-        }
+        let result = crate::tx_scope::with_active(|tx| match tx {
+            Some(tx) => tx.last_key_value(&self.partition),
+            None => self.partition.last_key_value(),
+        })
+        .map_err(|err| Self::backend_err("get last key from", err))?;
+        Ok(result.map(|(key, _)| FjallValue::from(key).into()))
     }
 
     fn higher_key(&self, key: &Key) -> NitriteResult<Option<Key>> {
         self.check_opened()?;
         let normalized_key = FjallValue::try_from_value_normalized(key)?;
-        let mut range = self.partition.range((Excluded(normalized_key), Unbounded));
-        let higher = range.next();
-        match higher {
+        let next = crate::tx_scope::with_active(|tx| match tx {
+            Some(tx) => tx
+                .range(&self.partition, (Excluded(normalized_key), Unbounded))
+                .next(),
+            None => self
+                .partition
+                .inner()
+                .range((Excluded(normalized_key), Unbounded))
+                .next(),
+        });
+        match next {
             Some(Ok((key, _))) => Ok(Some(FjallValue::from(key).into())),
-            Some(Err(err)) => {
-                log::error!("Failed to get higher key from FjallMap: {}", err);
-                Err(NitriteError::new(
-                    &format!("Failed to get higher key from FjallMap: {}", err),
-                    ErrorKind::BackendError,
-                ))
-            }
+            Some(Err(err)) => Err(Self::backend_err("get higher key from", err)),
             None => Ok(None),
         }
     }
@@ -748,17 +676,19 @@ impl FjallMapInner {
     fn ceiling_key(&self, key: &Key) -> NitriteResult<Option<Key>> {
         self.check_opened()?;
         let normalized_key = FjallValue::try_from_value_normalized(key)?;
-        let mut range = self.partition.range((Included(normalized_key), Unbounded));
-        let ceiling = range.next();
-        match ceiling {
+        let next = crate::tx_scope::with_active(|tx| match tx {
+            Some(tx) => tx
+                .range(&self.partition, (Included(normalized_key), Unbounded))
+                .next(),
+            None => self
+                .partition
+                .inner()
+                .range((Included(normalized_key), Unbounded))
+                .next(),
+        });
+        match next {
             Some(Ok((key, _))) => Ok(Some(FjallValue::from(key).into())),
-            Some(Err(err)) => {
-                log::error!("Failed to get ceiling key from FjallMap: {}", err);
-                Err(NitriteError::new(
-                    &format!("Failed to get ceiling key from FjallMap: {}", err),
-                    ErrorKind::BackendError,
-                ))
-            }
+            Some(Err(err)) => Err(Self::backend_err("get ceiling key from", err)),
             None => Ok(None),
         }
     }
@@ -766,17 +696,19 @@ impl FjallMapInner {
     fn lower_key(&self, key: &Key) -> NitriteResult<Option<Key>> {
         self.check_opened()?;
         let normalized_key = FjallValue::try_from_value_normalized(key)?;
-        let mut range = self.partition.range((Unbounded, Excluded(normalized_key)));
-        let lower = range.next_back();
-        match lower {
+        let prev = crate::tx_scope::with_active(|tx| match tx {
+            Some(tx) => tx
+                .range(&self.partition, (Unbounded, Excluded(normalized_key)))
+                .next_back(),
+            None => self
+                .partition
+                .inner()
+                .range((Unbounded, Excluded(normalized_key)))
+                .next_back(),
+        });
+        match prev {
             Some(Ok((key, _))) => Ok(Some(FjallValue::from(key).into())),
-            Some(Err(err)) => {
-                log::error!("Failed to get lower key from FjallMap: {}", err);
-                Err(NitriteError::new(
-                    &format!("Failed to get lower key from FjallMap: {}", err),
-                    ErrorKind::BackendError,
-                ))
-            }
+            Some(Err(err)) => Err(Self::backend_err("get lower key from", err)),
             None => Ok(None),
         }
     }
@@ -784,34 +716,30 @@ impl FjallMapInner {
     fn floor_key(&self, key: &Key) -> NitriteResult<Option<Key>> {
         self.check_opened()?;
         let normalized_key = FjallValue::try_from_value_normalized(key)?;
-        let mut range = self.partition.range((Unbounded, Included(normalized_key)));
-        let floor = range.next_back();
-        match floor {
+        let prev = crate::tx_scope::with_active(|tx| match tx {
+            Some(tx) => tx
+                .range(&self.partition, (Unbounded, Included(normalized_key)))
+                .next_back(),
+            None => self
+                .partition
+                .inner()
+                .range((Unbounded, Included(normalized_key)))
+                .next_back(),
+        });
+        match prev {
             Some(Ok((key, _))) => Ok(Some(FjallValue::from(key).into())),
-            Some(Err(err)) => {
-                log::error!("Failed to get floor key from FjallMap: {}", err);
-                Err(NitriteError::new(
-                    &format!("Failed to get floor key from FjallMap: {}", err),
-                    ErrorKind::BackendError,
-                ))
-            }
+            Some(Err(err)) => Err(Self::backend_err("get floor key from", err)),
             None => Ok(None),
         }
     }
 
     fn is_empty(&self) -> NitriteResult<bool> {
         self.check_opened()?;
-        let result = self.partition.is_empty();
-        match result {
-            Ok(value) => Ok(value),
-            Err(err) => {
-                log::error!("Failed to check if FjallMap is empty: {}", err);
-                Err(NitriteError::new(
-                    &format!("Failed to check if FjallMap is empty: {}", err),
-                    ErrorKind::BackendError,
-                ))
-            }
-        }
+        crate::tx_scope::with_active(|tx| match tx {
+            Some(tx) => tx.first_key_value(&self.partition).map(|kv| kv.is_none()),
+            None => self.partition.inner().is_empty(),
+        })
+        .map_err(|err| Self::backend_err("check if empty", err))
     }
 
     fn get_store(&self) -> NitriteResult<NitriteStore> {
@@ -850,18 +778,20 @@ impl FjallMapInner {
 
     pub fn collect_garbage(&self) -> NitriteResult<()> {
         if self.fjall_config.kv_separated() {
+            // Garbage collection lives on the underlying (non-transactional) partition handle.
+            let partition = self.partition.inner();
             // Use if let pattern instead of repeated error handling
-            if let Err(err) = self.partition.gc_scan() {
+            if let Err(err) = partition.gc_scan() {
                 return Self::handle_gc_error(err, "collect garbage (scan)");
             }
 
             let space_amp_factor = self.fjall_config.space_amp_factor();
-            if let Err(err) = self.partition.gc_with_space_amp_target(space_amp_factor) {
+            if let Err(err) = partition.gc_with_space_amp_target(space_amp_factor) {
                 return Self::handle_gc_error(err, "collect garbage (space amp)");
             }
 
             let stale_threshold = self.fjall_config.staleness_threshold();
-            if let Err(err) = self.partition.gc_with_staleness_threshold(stale_threshold) {
+            if let Err(err) = partition.gc_with_staleness_threshold(stale_threshold) {
                 return Self::handle_gc_error(err, "collect garbage (staleness)");
             }
         } else {

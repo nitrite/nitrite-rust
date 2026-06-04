@@ -355,62 +355,105 @@ impl NitriteTransaction {
         }
     }
 
-    /// Two-phase commit implementation
+    /// Two-phase commit implementation.
+    ///
+    /// All of the transaction's buffered commit commands across every touched collection
+    /// are executed inside a single store-level atomic scope (see
+    /// [`NitriteStore::with_atomic`]). On a backend that supports atomic, cross-map write
+    /// scopes (e.g. the Fjall adapter) this makes the whole transaction crash-atomic: every
+    /// data- and index-partition write lands together or not at all, closing the
+    /// cross-partition consistency gap. On backends without atomic support the scope is a
+    /// transparent pass-through and behaviour is unchanged.
+    ///
+    /// Because the atomic scope may replay the work on a serialization conflict, the commit
+    /// commands are snapshotted (not drained) before execution and the journals are only
+    /// finalized after the scope commits successfully.
     fn perform_commit(&self) -> NitriteResult<()> {
-        let contexts = self.contexts.lock();
-        let mut commit_error: Option<NitriteError> = None;
+        // NOTE: We don't acquire the collection lock here because:
+        // 1. Each commit command (insert/update/remove) will acquire its own lock
+        // 2. The individual operations are already atomic
+        // 3. Acquiring the lock here and then calling methods that also lock
+        //    would cause a deadlock since parking_lot::RwLock is not reentrant
 
-        for (collection_name, context) in contexts.iter() {
-            // NOTE: We don't acquire the collection lock here because:
-            // 1. Each commit command (insert/update/remove) will acquire its own lock
-            // 2. The individual operations are already atomic
-            // 3. Acquiring the lock here and then calling methods that also lock
-            //    would cause a deadlock since parking_lot::RwLock is not reentrant
+        // Snapshot the buffered commands without draining, so the atomic scope can replay
+        // them if it has to retry on a serialization conflict. JournalEntry is cheap to
+        // clone (Arc-wrapped commands).
+        let plan: Vec<(String, Vec<JournalEntry>)> = {
+            let contexts = self.contexts.lock();
+            contexts
+                .iter()
+                .map(|(name, context)| {
+                    let journal = context.journal.lock();
+                    (name.clone(), journal.iter().cloned().collect())
+                })
+                .collect()
+        };
 
-            let mut undo_stack = Vec::new();
-            let mut journal = context.journal.lock();
-            let mut had_error = false;
+        // Phase 1+2: execute all commit commands atomically, building the undo registry.
+        // with_atomic re-runs this closure on conflict, so it must stay side-effect free
+        // apart from the (idempotent) storage writes performed by the commit commands.
+        // The undo information escapes the closure via `undo_cell` so it is still available
+        // on the failure path (where it drives the logical rollback for non-atomic backends).
+        let supports_atomic = self.db.store().supports_atomic();
+        let undo_cell: Mutex<HashMap<String, Vec<UndoEntry>>> = Mutex::new(HashMap::new());
 
-            // Phase 1: Execute all commit commands
-            while let Some(entry) = journal.pop_front() {
-                if let Some(commit_cmd) = &entry.commit {
-                    if let Err(e) = commit_cmd() {
-                        commit_error = Some(NitriteError::new(
-                            &format!("Failed to execute commit: {}", e.message()),
-                            ErrorKind::InvalidOperation,
-                        ));
-                        had_error = true;
-                        break;
-                    }
+        let outcome = self.db.store().with_atomic(|| {
+            let mut undo_registry: HashMap<String, Vec<UndoEntry>> = HashMap::new();
+            for (collection_name, entries) in &plan {
+                let mut undo_stack = Vec::new();
+                for entry in entries {
+                    if let Some(commit_cmd) = &entry.commit {
+                        if let Err(e) = commit_cmd() {
+                            // Preserve the partial undo for the failing collection so a
+                            // non-atomic backend can still undo what was applied.
+                            undo_registry.insert(collection_name.clone(), undo_stack);
+                            *undo_cell.lock() = undo_registry;
+                            return Err(NitriteError::new(
+                                &format!("Failed to execute commit: {}", e.message()),
+                                ErrorKind::InvalidOperation,
+                            ));
+                        }
 
-                    // Phase 2: Record undo information for successful commits
-                    if let Some(rollback_cmd) = &entry.rollback {
-                        let undo = UndoEntry {
-                            collection_name: collection_name.clone(),
-                            rollback: Arc::new(rollback_cmd.clone()),
-                        };
-                        undo_stack.push(undo);
+                        // Record undo information for successful commits.
+                        if let Some(rollback_cmd) = &entry.rollback {
+                            undo_stack.push(UndoEntry {
+                                collection_name: collection_name.clone(),
+                                rollback: Arc::new(rollback_cmd.clone()),
+                            });
+                        }
                     }
                 }
+                undo_registry.insert(collection_name.clone(), undo_stack);
             }
+            *undo_cell.lock() = undo_registry;
+            Ok(())
+        });
 
-            // Always save the undo stack so rollback can undo committed entries
-            context.set_inactive();
-            self.undo_registry
-                .lock()
-                .insert(collection_name.clone(), undo_stack);
-
-            // If there was an error, stop processing further collections
-            if had_error {
-                break;
+        match outcome {
+            Ok(()) => {
+                // The atomic scope committed durably. Finalize the bookkeeping that must run
+                // exactly once: drain the journals, deactivate the contexts, and publish the
+                // undo registry so a later explicit rollback can still undo the entries.
+                let contexts = self.contexts.lock();
+                for (_, context) in contexts.iter() {
+                    context.journal.lock().clear();
+                    context.set_inactive();
+                }
+                drop(contexts);
+                *self.undo_registry.lock() = undo_cell.into_inner();
+                Ok(())
+            }
+            Err(e) => {
+                // On an atomic backend with_atomic has already discarded every storage write,
+                // so the logical undo must NOT run again — leave the undo registry empty. On a
+                // non-atomic backend publish the partial undo so perform_rollback can undo the
+                // writes that were already applied.
+                if !supports_atomic {
+                    *self.undo_registry.lock() = undo_cell.into_inner();
+                }
+                Err(e)
             }
         }
-
-        if let Some(e) = commit_error {
-            return Err(e);
-        }
-
-        Ok(())
     }
 
     /// Rolls back the transaction, undoing all pending operations.

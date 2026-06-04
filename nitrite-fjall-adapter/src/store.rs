@@ -4,7 +4,7 @@ use crate::version::fjall_version;
 use crate::wrapper::to_nitrite_error;
 use crossbeam::sync::WaitGroup;
 use dashmap::DashMap;
-use fjall::{GarbageCollection, Keyspace, PersistMode};
+use fjall::{GarbageCollection, PersistMode, TxKeyspace, WriteTransaction};
 use nitrite::common::{
     async_task, NitriteEventBus, NitritePlugin, NitritePluginProvider, SubscriberRef,
     COLLECTION_CATALOG,
@@ -108,11 +108,27 @@ impl FjallStore {
             .replace("\x00K\x00", "_K_")   // Restore _K_ markers
     }
 
-    /// Returns a clone of the Keyspace if it's initialized, or None if not.
-    /// This is used internally for batch operations that require keyspace access.
-    #[inline]
-    pub(crate) fn keyspace(&self) -> Option<Keyspace> {
+    /// Returns a clone of the transactional Keyspace if it's initialized, or None if not.
+    /// Used by the adapter's tests to open partitions in the store's keyspace.
+    #[cfg(test)]
+    pub(crate) fn keyspace(&self) -> Option<TxKeyspace> {
         self.inner.keyspace.get().cloned()
+    }
+
+    /// Runs `f` with a write transaction that participates in the current atomic scope.
+    ///
+    /// If an ambient write transaction is already active on this thread (the caller is inside
+    /// an atomic scope opened by [`FjallStoreInner::run_atomic`]), `f` is invoked with that
+    /// transaction so the write joins the enclosing transaction and is committed atomically
+    /// with the rest of the scope. Otherwise a fresh single-writer transaction is opened just
+    /// for this call, `f` is run against it, and it is committed (durably, per
+    /// [`FjallConfig::durability_on_commit`]) before returning — so even a write issued outside
+    /// any atomic scope (e.g. a catalog or metadata write) is still atomic and crash-safe.
+    pub(crate) fn write_in_tx<R, F>(&self, f: F) -> NitriteResult<R>
+    where
+        F: FnOnce(&mut WriteTransaction<'_>) -> NitriteResult<R>,
+    {
+        self.inner.write_in_tx(f)
     }
 }
 
@@ -174,6 +190,14 @@ impl NitriteStoreProvider for FjallStore {
         self.inner.commit()
     }
 
+    fn supports_atomic(&self) -> bool {
+        true
+    }
+
+    fn run_atomic(&self, op: &mut dyn FnMut() -> NitriteResult<()>) -> NitriteResult<()> {
+        self.inner.run_atomic(op)
+    }
+
     fn compact(&self) -> NitriteResult<()> {
         self.inner.compact()
     }
@@ -224,7 +248,7 @@ impl NitriteStoreProvider for FjallStore {
 }
 
 struct FjallStoreInner {
-    keyspace: OnceLock<Keyspace>,
+    keyspace: OnceLock<TxKeyspace>,
     closed: AtomicBool,
     event_bus: NitriteEventBus<StoreEventInfo, StoreEventListener>,
     store_config: FjallConfig,
@@ -266,10 +290,10 @@ impl FjallStoreInner {
     /// partition deletion. The sleep is brief (50ms) and only occurs on retry paths.
     fn open_partition_with_retry(
         &self,
-        ks: &Keyspace,
+        ks: &TxKeyspace,
         name: &str,
         config: &fjall::PartitionCreateOptions,
-    ) -> NitriteResult<fjall::PartitionHandle> {
+    ) -> NitriteResult<fjall::TxPartitionHandle> {
         // Clone config once to avoid multiple clones in retry paths
         let config_clone = config.clone();
         
@@ -333,15 +357,54 @@ impl FjallStoreInner {
 
         temp_registry.clear();
         self.map_registry.clear();
+
+        // Drain background work before returning so that a subsequent open() of the same path
+        // observes a settled, fully consistent on-disk state (the close/reopen-under-load fix).
+        self.drain()?;
+
         self.closed
             .store(true, std::sync::atomic::Ordering::Relaxed);
         self.event_bus.close()?;
         Ok(())
     }
 
+    /// Maximum time `drain` waits for in-flight compactions to finalize, in milliseconds.
+    const DRAIN_MAX_WAIT_MS: u64 = 5_000;
+
+    /// Poll interval used by `drain` while waiting for compactions to settle, in milliseconds.
+    const DRAIN_POLL_MS: u64 = 5;
+
+    /// Flushes pending writes durably and waits (bounded) for background work to settle.
+    ///
+    /// This first syncs the journal (`PersistMode::SyncAll`) so every committed write is
+    /// durable and recoverable, then waits for any in-flight compactions to finish. Without
+    /// this, `close()` could return while flush/compaction workers were still finalizing
+    /// SSTables, so a fast reopen of the same path under load could observe a torn on-disk
+    /// state. Atomic transactions already make recovery consistent, and this drain removes the
+    /// remaining close/reopen race.
+    fn drain(&self) -> NitriteResult<()> {
+        if let Some(ks) = self.keyspace.get() {
+            ks.persist(PersistMode::SyncAll).map_err(|err| {
+                log::error!("Failed to persist keyspace during drain: {}", err);
+                to_nitrite_error(err)
+            })?;
+
+            // `active_compactions` lives on the underlying keyspace.
+            let inner = ks.inner();
+            let mut waited = 0u64;
+            while inner.active_compactions() > 0 && waited < Self::DRAIN_MAX_WAIT_MS {
+                std::thread::sleep(std::time::Duration::from_millis(Self::DRAIN_POLL_MS));
+                waited += Self::DRAIN_POLL_MS;
+            }
+        }
+        Ok(())
+    }
+
     fn open_or_create(&self) -> NitriteResult<()> {
         let config = self.store_config.keyspace_config();
-        let result = Keyspace::open(config);
+        // Open a transactional keyspace so a logical write can span the data partition and all
+        // of its index partitions inside one atomic, cross-partition Fjall transaction.
+        let result = config.open_transactional();
         match result {
             Ok(keyspace) => {
                 self.keyspace.get_or_init(|| keyspace);
@@ -390,6 +453,89 @@ impl FjallStoreInner {
         }
     }
 
+    /// Opens a fresh single-writer transaction on `ks`, applying the configured durability.
+    ///
+    /// With [`FjallConfig::durability_on_commit`] enabled (the default) the transaction is
+    /// committed with `PersistMode::SyncAll`, so the write is fsynced before the commit
+    /// returns. Otherwise the keyspace's default (buffered) durability is kept and the write
+    /// becomes durable via the periodic journal flush or on drop.
+    fn new_write_tx<'a>(&self, ks: &'a TxKeyspace) -> WriteTransaction<'a> {
+        let tx = ks.write_tx();
+        if self.store_config.durability_on_commit() {
+            tx.durability(Some(PersistMode::SyncAll))
+        } else {
+            tx
+        }
+    }
+
+    /// Runs `op` inside one atomic, cross-partition Fjall transaction.
+    ///
+    /// All writes `op` performs (which route through [`FjallStore::write_in_tx`]) land in this
+    /// single transaction and are committed together, so the data partition and every index
+    /// partition recover as a unit. If `op` fails the transaction is dropped and every buffered
+    /// write is discarded. Nested scopes join the already-active transaction.
+    fn run_atomic(&self, op: &mut dyn FnMut() -> NitriteResult<()>) -> NitriteResult<()> {
+        // Already inside an atomic scope: join it (do not open a second transaction).
+        if crate::tx_scope::in_scope() {
+            return op();
+        }
+
+        let ks = match self.keyspace.get() {
+            Some(ks) => ks,
+            // No keyspace yet: nothing can be written, so just run the operation.
+            None => return op(),
+        };
+
+        let mut tx = self.new_write_tx(ks);
+        let result = crate::tx_scope::run_with_active(&mut tx, op);
+        match result {
+            Ok(()) => tx.commit().map_err(|err| {
+                log::error!("Failed to commit write transaction: {}", err);
+                to_nitrite_error(err)
+            }),
+            Err(e) => {
+                // Dropping the transaction discards all of its buffered writes.
+                drop(tx);
+                Err(e)
+            }
+        }
+    }
+
+    fn write_in_tx<R, F>(&self, f: F) -> NitriteResult<R>
+    where
+        F: FnOnce(&mut WriteTransaction<'_>) -> NitriteResult<R>,
+    {
+        // Inside an atomic scope: use the active transaction so this write joins it.
+        if crate::tx_scope::in_scope() {
+            return crate::tx_scope::with_active(|tx| {
+                let tx = tx.expect("in_scope() implies an active transaction");
+                f(tx)
+            });
+        }
+
+        // Outside any scope: open a one-shot transaction so the write stays atomic + durable.
+        let ks = self.keyspace.get().ok_or_else(|| {
+            NitriteError::new(
+                "Keyspace is not initialized",
+                ErrorKind::StoreNotInitialized,
+            )
+        })?;
+        let mut tx = self.new_write_tx(ks);
+        match f(&mut tx) {
+            Ok(value) => {
+                tx.commit().map_err(|err| {
+                    log::error!("Failed to commit write transaction: {}", err);
+                    to_nitrite_error(err)
+                })?;
+                Ok(value)
+            }
+            Err(e) => {
+                drop(tx);
+                Err(e)
+            }
+        }
+    }
+
     fn compact(&self) -> NitriteResult<()> {
         if let Some(ks) = self.keyspace.get() {
             let partitions = ks.list_partitions();
@@ -411,6 +557,9 @@ impl FjallStoreInner {
                     let partition = cloned_keyspace.open_partition(&cloned_map, cloned_options);
                     match partition {
                         Ok(partition) => {
+                            // Garbage-collection lives on the underlying (non-transactional)
+                            // partition handle, reached via `inner()`.
+                            let partition = partition.inner();
                             let result = partition.gc_scan();
                             if let Err(err) = result {
                                 log::error!("Failed to compact partition: {}", err);
@@ -591,14 +740,15 @@ impl FjallStoreInner {
 impl Drop for FjallStoreInner {
     fn drop(&mut self) {
         if self.store_config.commit_before_close() {
-            match self.commit() {
+            // Drain (persist + wait for compactions) so the data is durable and the on-disk
+            // state is settled before the keyspace is dropped.
+            match self.drain() {
                 Ok(_) => {
-                    log::debug!("Successfully committed keyspace during drop");
+                    log::debug!("Successfully drained keyspace during drop");
                 }
                 Err(e) => {
-                    // Use if let pattern to avoid unwrap in Drop impl
-                    // Drop should never panic - always log errors gracefully
-                    log::error!("Failed to commit keyspace: {}", e);
+                    // Drop should never panic - always log errors gracefully.
+                    log::error!("Failed to drain keyspace during drop: {}", e);
                 }
             }
         }

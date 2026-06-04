@@ -242,6 +242,26 @@ impl FjallConfig {
         self.inner.set_commit_before_close(v)
     }
 
+    /// Returns whether each atomic write scope is fsynced on commit (`Durability::OnCommit`).
+    ///
+    /// When `true` (the default) every committed write is made durable immediately by syncing
+    /// the journal, so an acknowledged write survives a process crash or power loss without
+    /// waiting for the periodic flush or a clean drop. When `false` the store uses
+    /// `Durability::Periodic` — commits are buffered and made durable by the background
+    /// journal flush (`fsync_frequency`) or on drop — which is faster for bulk imports but can
+    /// lose the most recent commits on an unclean stop.
+    #[inline]
+    pub fn durability_on_commit(&self) -> bool {
+        self.inner.durability_on_commit()
+    }
+
+    /// Sets whether each atomic write scope is fsynced on commit (`Durability::OnCommit`).
+    #[inline]
+    #[allow(dead_code)]
+    pub(crate) fn set_durability_on_commit(&self, v: bool) {
+        self.inner.set_durability_on_commit(v)
+    }
+
     /// Returns bloom filter bits.
     #[inline]
     pub fn bloom_filter_bits(&self) -> i8 {
@@ -397,6 +417,7 @@ struct FjallConfigInner {
     fsync_frequency: AtomicU16,
     event_listeners: Atomic<Vec<StoreEventListener>>,
     commit_before_close: AtomicBool,
+    durability_on_commit: AtomicBool,
 
     bloom_filter_bits: AtomicI8,
     compression_type: Atomic<CompressionType>,
@@ -451,6 +472,9 @@ impl FjallConfigInner {
             fsync_frequency: AtomicU16::new(0),
             event_listeners: atomic(Vec::new()),
             commit_before_close: AtomicBool::new(true),
+            // Durability::OnCommit by default: fsync each committed write scope so an
+            // acknowledged write is crash-safe without relying on the periodic flush or drop.
+            durability_on_commit: AtomicBool::new(true),
             // Enable bloom filter by default with 10 bits per key for efficient lookups
             bloom_filter_bits: AtomicI8::new(10),
             compression_type: atomic(CompressionType::Lz4),
@@ -582,6 +606,18 @@ impl FjallConfigInner {
     pub(crate) fn set_commit_before_close(&self, commit_before_close: bool) {
         self.commit_before_close
             .store(commit_before_close, Ordering::Relaxed)
+    }
+
+    #[inline]
+    pub fn durability_on_commit(&self) -> bool {
+        self.durability_on_commit.load(Ordering::Relaxed)
+    }
+
+    #[inline]
+    #[allow(dead_code)]
+    pub(crate) fn set_durability_on_commit(&self, durability_on_commit: bool) {
+        self.durability_on_commit
+            .store(durability_on_commit, Ordering::Relaxed)
     }
 
     #[inline]

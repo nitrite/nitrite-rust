@@ -115,6 +115,10 @@ pub enum ErrorKind {
     StoreNotInitialized,
     /// Store has already been closed
     StoreAlreadyClosed,
+    /// An atomic store transaction could not be committed because a concurrent
+    /// transaction conflicted with it (serializable-snapshot-isolation conflict).
+    /// The operation may be retried.
+    TransactionConflict,
 
     // Migration Errors - actively used in migration operations
     /// Error during schema migration
@@ -167,6 +171,7 @@ impl Display for ErrorKind {
             ErrorKind::BackendError => write!(f, "Backend error"),
             ErrorKind::StoreNotInitialized => write!(f, "Store not initialized"),
             ErrorKind::StoreAlreadyClosed => write!(f, "Store already closed"),
+            ErrorKind::TransactionConflict => write!(f, "Transaction conflict"),
             ErrorKind::MigrationError => write!(f, "Migration error"),
             ErrorKind::Extension(name) => write!(f, "{} error", name),
             ErrorKind::InternalError => write!(f, "Internal error"),

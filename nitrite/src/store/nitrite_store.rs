@@ -1,5 +1,5 @@
 use crate::common::{NitritePlugin, SubscriberRef};
-use crate::errors::NitriteResult;
+use crate::errors::{ErrorKind, NitriteError, NitriteResult};
 use crate::nitrite_config::NitriteConfig;
 use crate::store::{NitriteMap, StoreCatalog, StoreConfig, StoreEventListener};
 use crate::NitritePluginProvider;
@@ -119,6 +119,46 @@ pub trait NitriteStoreProvider: NitritePluginProvider + Send + Sync {
     /// * `Ok(())` if the compaction was successful
     /// * `Err(NitriteError)` if the operation fails
     fn compact(&self) -> NitriteResult<()>;
+
+    /// Reports whether this store provides atomic, cross-map write scopes.
+    ///
+    /// When `true`, a logical write (an explicit transaction commit, or a single
+    /// collection insert/update/remove and all of its index updates) can be wrapped in
+    /// [`run_atomic`](Self::run_atomic) so that every touched map is persisted together or
+    /// not at all. Stores that do not support this (e.g. the in-memory store) leave the
+    /// default `false` and rely on the transaction layer's logical undo for rollback.
+    ///
+    /// # Returns
+    /// * `true` if atomic write scopes are supported, `false` otherwise (default)
+    fn supports_atomic(&self) -> bool {
+        false
+    }
+
+    /// Runs `op` inside a single atomic, cross-map write scope.
+    ///
+    /// While `op` runs, every write (and every read that needs read-your-writes semantics)
+    /// it performs on the current thread is routed through one store-level transaction. If
+    /// `op` returns `Ok`, the scope is committed durably; if it returns `Err` (or panics),
+    /// the scope is discarded so no partial write survives. Scopes nest: when an atomic
+    /// scope is already active on the thread, `op` joins it and only the outermost scope
+    /// commits.
+    ///
+    /// The transaction is owned on this call's stack for the duration of `op`, so it never
+    /// escapes the scope; this is what lets backends with non-`'static` transaction handles
+    /// (such as Fjall's single-writer transaction) expose an ambient scope safely.
+    ///
+    /// The default implementation simply runs `op` with no wrapping, preserving existing
+    /// behaviour for stores that do not support atomic scopes.
+    ///
+    /// # Arguments
+    /// * `op` - the work to perform atomically
+    ///
+    /// # Returns
+    /// * `Ok(())` if `op` succeeded and the scope committed
+    /// * `Err(NitriteError)` if `op` failed (scope discarded) or the commit failed
+    fn run_atomic(&self, op: &mut dyn FnMut() -> NitriteResult<()>) -> NitriteResult<()> {
+        op()
+    }
 
     /// Performs cleanup before closing the store.
     ///
@@ -284,6 +324,59 @@ impl NitriteStore {
     /// - The same store can be safely shared across multiple threads
     pub fn new<T: NitriteStoreProvider + 'static>(inner: T) -> Self {
         NitriteStore { inner: Arc::new(inner) }
+    }
+
+    /// Runs `op` inside a single atomic, cross-map write scope.
+    ///
+    /// All writes (and reads) performed by `op` on the current thread are routed through
+    /// one store-level transaction, so every touched map is persisted together or not at
+    /// all. The scope nests safely: if `op` itself performs writes that are also wrapped
+    /// in `with_atomic`, the inner scopes join this one and only the outermost scope
+    /// commits.
+    ///
+    /// Stores that do not support atomic scopes ([`NitriteStoreProvider::supports_atomic`]
+    /// is `false`) run `op` directly with no wrapping, preserving existing behaviour.
+    ///
+    /// # Arguments
+    /// * `op` - the work to perform atomically
+    ///
+    /// # Returns
+    /// * `Ok(value)` produced by a successfully committed `op`
+    /// * `Err(NitriteError)` if `op` failed (scope discarded) or the commit failed
+    pub fn with_atomic<T, F>(&self, op: F) -> NitriteResult<T>
+    where
+        F: Fn() -> NitriteResult<T>,
+    {
+        if !self.inner.supports_atomic() {
+            return op();
+        }
+
+        // `op` yields a value, but `run_atomic` only carries success/failure (so it knows
+        // whether to commit or discard). Capture the real `op` result here and signal
+        // failure to `run_atomic` by returning `Err`, so a failing `op` discards the scope.
+        let mut captured: Option<NitriteResult<T>> = None;
+        let run_result = self.inner.run_atomic(&mut || {
+            let result = op();
+            let signal = match &result {
+                Ok(_) => Ok(()),
+                Err(e) => Err(NitriteError::new(e.message(), e.kind().clone())),
+            };
+            captured = Some(result);
+            signal
+        });
+
+        match (run_result, captured) {
+            // Committed successfully: return whatever `op` produced.
+            (Ok(()), Some(result)) => result,
+            // `op` failed: the scope was discarded; surface `op`'s original error.
+            (Err(_), Some(result @ Err(_))) => result,
+            // `op` succeeded but the commit itself failed: surface the commit error.
+            (Err(e), Some(Ok(_))) => Err(e),
+            // `op` never ran (should not happen with the default/Fjall providers).
+            (run_result, None) => run_result.map(|()| {
+                unreachable!("run_atomic returned without invoking the operation")
+            }),
+        }
     }
 }
 
