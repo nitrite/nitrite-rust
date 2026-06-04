@@ -123,7 +123,8 @@ impl FjallStore {
     /// with the rest of the scope. Otherwise a fresh single-writer transaction is opened just
     /// for this call, `f` is run against it, and it is committed (durably, per
     /// [`FjallConfig::durability_on_commit`]) before returning — so even a write issued outside
-    /// any atomic scope (e.g. a catalog or metadata write) is still atomic and crash-safe.
+    /// any atomic scope (e.g. a catalog or metadata write) is still applied atomically (and, in
+    /// `Durability::OnCommit` mode, fsynced before returning).
     pub(crate) fn write_in_tx<R, F>(&self, f: F) -> NitriteResult<R>
     where
         F: FnOnce(&mut WriteTransaction<'_>) -> NitriteResult<R>,
@@ -455,10 +456,11 @@ impl FjallStoreInner {
 
     /// Opens a fresh single-writer transaction on `ks`, applying the configured durability.
     ///
-    /// With [`FjallConfig::durability_on_commit`] enabled (the default) the transaction is
-    /// committed with `PersistMode::SyncAll`, so the write is fsynced before the commit
-    /// returns. Otherwise the keyspace's default (buffered) durability is kept and the write
-    /// becomes durable via the periodic journal flush or on drop.
+    /// With [`FjallConfig::durability_on_commit`] enabled (`Durability::OnCommit`) the
+    /// transaction is committed with `PersistMode::SyncAll`, so the write is fsynced before the
+    /// commit returns. Otherwise (the default, `Durability::Periodic`) the keyspace's buffered
+    /// durability is kept and the write becomes durable via the periodic journal flush or on a
+    /// clean close.
     fn new_write_tx<'a>(&self, ks: &'a TxKeyspace) -> WriteTransaction<'a> {
         let tx = ks.write_tx();
         if self.store_config.durability_on_commit() {
@@ -628,7 +630,7 @@ impl FjallStoreInner {
             let config = self.store_config.partition_config();
             
             // Try to open the partition - with retry logic for deleted partitions
-            let partition = self.open_partition_with_retry(&ks, name, &config)?;
+            let partition = self.open_partition_with_retry(ks, name, &config)?;
 
             let fjall_map = FjallMap::new(
                 name.to_string(),
@@ -756,6 +758,7 @@ impl Drop for FjallStoreInner {
 }
 
 #[cfg(test)]
+#[allow(clippy::assertions_on_constants)] // tests use assert!(true) as "reached without panic" markers
 mod tests {
     use super::*;
     use crate::tests::{run_test, Context};

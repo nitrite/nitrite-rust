@@ -697,7 +697,7 @@ mod tests {
         
         // Create multiple keyed repositories with different types but same key
         for i in 0..5 {
-            let keyed_repo_name = format!("{}{}{}", format!("repo_eff{}", i), KEY_OBJ_SEPARATOR, "key_same");
+            let keyed_repo_name = format!("repo_eff{}{}{}", i, KEY_OBJ_SEPARATOR, "key_same");
             catalog.write_keyed_repository_entry(&keyed_repo_name).unwrap();
         }
         
@@ -718,7 +718,7 @@ mod tests {
         for i in 0..50 {
             let repo_num = i / 5;
             let key_num = i % 5;
-            let keyed_repo_name = format!("{}{}{}", format!("repo{}", repo_num), KEY_OBJ_SEPARATOR, format!("key{}", key_num));
+            let keyed_repo_name = format!("repo{}{}key{}", repo_num, KEY_OBJ_SEPARATOR, key_num);
             catalog.write_keyed_repository_entry(&keyed_repo_name).unwrap();
         }
         

@@ -1,6 +1,7 @@
 //! Concurrency benchmarks - multi-threaded insert, read, and mixed workload
 
-use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion};
+use std::hint::black_box;
+use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion};
 use nitrite::filter::all;
 use nitrite_bench::data_gen::generate_simple_docs;
 use nitrite_bench::stores::create_fjall_db;
@@ -23,7 +24,7 @@ fn bench_concurrent_insert(c: &mut Criterion) {
             group.bench_with_input(
                 BenchmarkId::new(format!("{}_threads", thread_count), doc_count),
                 &(doc_count, thread_count, docs_per_thread),
-                |b, &(doc_count, thread_count, docs_per_thread)| {
+                |b, &(_doc_count, thread_count, docs_per_thread)| {
                     b.iter_with_setup(
                         || {
                             let ctx = create_fjall_db().unwrap();

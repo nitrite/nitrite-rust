@@ -5,7 +5,8 @@
 //! cargo bench -p nitrite_bench --features comparison -- comparison
 //! ```
 
-use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion};
+use std::hint::black_box;
+use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion};
 use nitrite::filter::all;
 use nitrite_bench::stores::create_fjall_db;
 use serde::{Deserialize, Serialize};

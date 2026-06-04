@@ -257,6 +257,7 @@ impl Drop for Session {
 }
 
 #[cfg(test)]
+#[allow(clippy::assertions_on_constants)] // tests use assert!(true) as "reached without panic" markers
 mod tests {
     use super::*;
 

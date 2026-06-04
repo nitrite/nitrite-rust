@@ -191,8 +191,8 @@ mod tests {
         let idx_quarter = hilbert_index(0.25, 0.25, 8);
         let idx_three_quarter = hilbert_index(0.75, 0.75, 8);
 
-        // Both should be valid positive indices
-        assert!(idx_quarter >= 0);
+        // Both should be valid indices within the order-8 Hilbert range
+        assert!(idx_quarter < (1u64 << 16));
         assert!(idx_three_quarter > 0);
         // They should be different
         assert_ne!(idx_quarter, idx_three_quarter);
@@ -226,9 +226,9 @@ mod tests {
         // Points outside bounds should be clamped
         let idx_outside = hilbert_index_bounded(150.0, 150.0, &bounds, 8);
         let idx_max = hilbert_index_bounded(100.0, 100.0, &bounds, 8);
-        // Both should produce valid indices
-        assert!(idx_outside >= 0);
-        assert!(idx_max >= 0);
+        // Both should produce valid indices within the order-8 Hilbert range
+        assert!(idx_outside < (1u64 << 16));
+        assert!(idx_max < (1u64 << 16));
     }
 
     #[test]
@@ -260,8 +260,8 @@ mod tests {
         let idx_neg = hilbert_index_bounded(-90.0, -45.0, &bounds, 8);
         let idx_pos = hilbert_index_bounded(90.0, 45.0, &bounds, 8);
 
-        // Both should produce valid indices
-        assert!(idx_neg >= 0);
+        // Both should produce valid indices within the order-8 Hilbert range
+        assert!(idx_neg < (1u64 << 16));
         assert!(idx_pos > 0);
         // They should be different
         assert_ne!(idx_neg, idx_pos);

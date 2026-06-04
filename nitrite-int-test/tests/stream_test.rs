@@ -60,7 +60,7 @@ fn test_cursor_has_methods() {
             assert_eq!(count, 3);
 
             // Test iteration
-            let mut cursor = collection.find(field("id").gte(1))?;
+            let cursor = collection.find(field("id").gte(1))?;
             let mut items = 0;
             for doc_result in cursor {
                 let _doc = doc_result?;

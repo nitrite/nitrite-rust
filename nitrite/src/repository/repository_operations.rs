@@ -109,9 +109,7 @@ impl RepositoryOperationsInner {
             }
         };
         
-        if entity_id.is_some() {
-            let entity_id = entity_id.unwrap();
-            
+        if let Some(entity_id) = entity_id {
             let id_value = document.get(entity_id.field_name())?;
             if entity_id.is_nitrite_id() {
                 if id_value.is_null() {

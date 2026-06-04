@@ -449,6 +449,16 @@ impl FjallMapInner {
         )
     }
 
+    /// Deserializes a stored Fjall value (or key) back into a `Value`.
+    ///
+    /// Corrupted or format-incompatible on-disk bytes are surfaced as a `NitriteError` rather
+    /// than panicking, so a damaged or foreign database degrades to a recoverable read error
+    /// instead of crashing the process.
+    #[inline]
+    fn decode_value(raw: FjallValue) -> NitriteResult<Value> {
+        raw.try_into_value().map_err(NitriteError::from)
+    }
+
     fn get_attributes(&self) -> NitriteResult<Option<Attributes>> {
         if !self.is_dropped()? {
             let store = self.get_store()?;
@@ -490,7 +500,10 @@ impl FjallMapInner {
 
     fn contains_key(&self, key: &Key) -> NitriteResult<bool> {
         self.check_opened()?;
-        let fjall_key = FjallValue::new(key.clone());
+        // Normalize numeric key types so this matches the encoding used by get/put/remove
+        // (e.g. U64(5) and I64(5) map to the same stored key); otherwise contains_key could
+        // miss a key that get() would find.
+        let fjall_key = FjallValue::try_from_value_normalized(key)?;
         // Inside an atomic scope, read through the active transaction so the check observes
         // this transaction's own pending writes (read-your-writes); otherwise read the latest
         // committed state directly.
@@ -514,7 +527,9 @@ impl FjallMapInner {
         })
         .map_err(|err| Self::backend_err("get value from", err))?;
 
-        Ok(result.map(|value| FjallValue::from(value).into()))
+        result
+            .map(|value| Self::decode_value(FjallValue::from(value)))
+            .transpose()
     }
 
     fn clear(&self) -> NitriteResult<()> {
@@ -580,7 +595,8 @@ impl FjallMapInner {
         // across different numeric types (e.g., I64 vs U64)
         let normalized_key = FjallValue::try_from_value_normalized(&key)?;
         self.store.write_in_tx(|tx| {
-            tx.insert(&self.partition, normalized_key, FjallValue::new(value));
+            let fjall_value = FjallValue::try_from_value(&value)?;
+            tx.insert(&self.partition, normalized_key, fjall_value);
             Ok(())
         })
     }
@@ -600,7 +616,8 @@ impl FjallMapInner {
         self.store.write_in_tx(|tx| {
             for (key, value) in entries {
                 let normalized_key = FjallValue::try_from_value_normalized(&key)?;
-                tx.insert(&self.partition, normalized_key, FjallValue::new(value));
+                let fjall_value = FjallValue::try_from_value(&value)?;
+                tx.insert(&self.partition, normalized_key, fjall_value);
             }
             Ok(())
         })
@@ -627,9 +644,12 @@ impl FjallMapInner {
                 .get(&self.partition, normalized_key.clone())
                 .map_err(|err| Self::backend_err("get item from", err))?;
             if existing.is_none() {
-                tx.insert(&self.partition, normalized_key, FjallValue::new(value));
+                let fjall_value = FjallValue::try_from_value(&value)?;
+                tx.insert(&self.partition, normalized_key, fjall_value);
             }
-            Ok(existing.map(|value| FjallValue::from(value).into()))
+            existing
+                .map(|value| Self::decode_value(FjallValue::from(value)))
+                .transpose()
         })
     }
 
@@ -640,7 +660,9 @@ impl FjallMapInner {
             None => self.partition.first_key_value(),
         })
         .map_err(|err| Self::backend_err("get first key from", err))?;
-        Ok(result.map(|(key, _)| FjallValue::from(key).into()))
+        result
+            .map(|(key, _)| Self::decode_value(FjallValue::from(key)))
+            .transpose()
     }
 
     fn last_key(&self) -> NitriteResult<Option<Key>> {
@@ -650,7 +672,9 @@ impl FjallMapInner {
             None => self.partition.last_key_value(),
         })
         .map_err(|err| Self::backend_err("get last key from", err))?;
-        Ok(result.map(|(key, _)| FjallValue::from(key).into()))
+        result
+            .map(|(key, _)| Self::decode_value(FjallValue::from(key)))
+            .transpose()
     }
 
     fn higher_key(&self, key: &Key) -> NitriteResult<Option<Key>> {
@@ -667,7 +691,7 @@ impl FjallMapInner {
                 .next(),
         });
         match next {
-            Some(Ok((key, _))) => Ok(Some(FjallValue::from(key).into())),
+            Some(Ok((key, _))) => Ok(Some(Self::decode_value(FjallValue::from(key))?)),
             Some(Err(err)) => Err(Self::backend_err("get higher key from", err)),
             None => Ok(None),
         }
@@ -687,7 +711,7 @@ impl FjallMapInner {
                 .next(),
         });
         match next {
-            Some(Ok((key, _))) => Ok(Some(FjallValue::from(key).into())),
+            Some(Ok((key, _))) => Ok(Some(Self::decode_value(FjallValue::from(key))?)),
             Some(Err(err)) => Err(Self::backend_err("get ceiling key from", err)),
             None => Ok(None),
         }
@@ -707,7 +731,7 @@ impl FjallMapInner {
                 .next_back(),
         });
         match prev {
-            Some(Ok((key, _))) => Ok(Some(FjallValue::from(key).into())),
+            Some(Ok((key, _))) => Ok(Some(Self::decode_value(FjallValue::from(key))?)),
             Some(Err(err)) => Err(Self::backend_err("get lower key from", err)),
             None => Ok(None),
         }
@@ -727,7 +751,7 @@ impl FjallMapInner {
                 .next_back(),
         });
         match prev {
-            Some(Ok((key, _))) => Ok(Some(FjallValue::from(key).into())),
+            Some(Ok((key, _))) => Ok(Some(Self::decode_value(FjallValue::from(key))?)),
             Some(Err(err)) => Err(Self::backend_err("get floor key from", err)),
             None => Ok(None),
         }
@@ -802,6 +826,7 @@ impl FjallMapInner {
 }
 
 #[cfg(test)]
+#[allow(clippy::assertions_on_constants)] // tests use assert!(true) as "reached without panic" markers
 mod tests {
     use super::*;
     use crate::tests::{run_test, Context};
@@ -928,6 +953,28 @@ mod tests {
                 let map = ctx.fjall_map_unsafe();
                 let key = Key::from("test_key");
                 assert!(map.contains_key(&key).is_ok());
+            },
+            cleanup,
+        );
+    }
+
+    #[test]
+    fn test_contains_key_normalizes_numeric_types_like_get() {
+        // Regression: contains_key must use the same normalized key encoding as get/put, so a
+        // key stored as one numeric type is found regardless of the numeric type queried.
+        run_test(
+            create_context,
+            |ctx| {
+                let map = ctx.fjall_map_unsafe();
+                map.put(Key::U64(5), Value::from("five")).unwrap();
+
+                // Found via the same and the cross numeric type, matching get().
+                assert!(map.contains_key(&Key::U64(5)).unwrap());
+                assert!(map.contains_key(&Key::I64(5)).unwrap());
+                assert_eq!(map.get(&Key::I64(5)).unwrap(), Some(Value::from("five")));
+
+                // A genuinely absent key is still reported absent.
+                assert!(!map.contains_key(&Key::U64(6)).unwrap());
             },
             cleanup,
         );
@@ -1693,7 +1740,7 @@ mod tests {
                 // Add various value types
                 let values = vec![
                     Value::I64(42),
-                    Value::F64(3.14),
+                    Value::F64(3.5),
                     Value::String("test".to_string()),
                     Value::Null,
                     Value::Array(vec![1.into(), 2.into()]),
@@ -1811,7 +1858,7 @@ mod tests {
                 let entries = vec![
                     (Key::from("batch_a"), Value::from("value_a")),
                     (Key::from("batch_b"), Value::I64(42)),
-                    (Key::from("batch_c"), Value::F64(3.14)),
+                    (Key::from("batch_c"), Value::F64(3.5)),
                     (Key::from("batch_d"), Value::Bool(true)),
                     (Key::from("batch_e"), Value::Null),
                 ];
@@ -1831,7 +1878,7 @@ mod tests {
                 );
                 assert_eq!(
                     map.get(&Key::from("batch_c")).unwrap(),
-                    Some(Value::F64(3.14))
+                    Some(Value::F64(3.5))
                 );
                 assert_eq!(
                     map.get(&Key::from("batch_d")).unwrap(),

@@ -21,6 +21,21 @@ icu_collator = "2.0.0"
 icu = "2.0.0"
 fake = { version = "4.3.0" , features = ["chrono", "uuid"] }
 
+# This is a non-published integration-test / example / stress-harness crate.
+# The following clippy lints fire only in test, example, and harness code and
+# carry no production-quality signal here, so they are relaxed crate-wide:
+#   - field_reassign_with_default / assertions_on_constants: test-fixture style
+#   - duplicated_attributes: false positive on the `#[index(...)]` derive helper
+#     (distinct indexes that legitimately repeat the `type = ` key)
+#   - unnecessary_to_owned / too_many_arguments / explicit_counter_loop: test ergonomics
+[lints.clippy]
+field_reassign_with_default = "allow"
+assertions_on_constants = "allow"
+duplicated_attributes = "allow"
+unnecessary_to_owned = "allow"
+too_many_arguments = "allow"
+explicit_counter_loop = "allow"
+
 [features]
 default = ["fjall"]
 # Enable the `memory` feature to use the in-memory database

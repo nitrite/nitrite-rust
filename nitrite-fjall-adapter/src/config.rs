@@ -8,6 +8,43 @@ use std::sync::atomic::{
 };
 use std::sync::{Arc, OnceLock};
 
+/// Controls when a committed write is made durable (fsynced) to stable storage.
+///
+/// This trades write throughput against the size of the window in which an *acknowledged*
+/// write can be lost to a power loss / OS crash. A process (application) crash never loses an
+/// acknowledged write under either mode, because every commit is buffered to the OS.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Durability {
+    /// Fsync (`PersistMode::SyncAll`) every committed atomic write scope before `commit()`
+    /// returns. An acknowledged write survives power loss immediately, at the cost of one
+    /// fsync per commit. Choose this when zero acknowledged-data loss matters more than write
+    /// throughput.
+    OnCommit,
+    /// Buffer each commit to the OS (so it survives a process crash) and let the background
+    /// journal flush fsync it within the configured [`FjallConfig::fsync_frequency`] window
+    /// (a clean close also fsyncs). Faster for bulk and steady-state writes, with a bounded
+    /// (≤ `fsync_frequency`) power-loss window. This is the default.
+    Periodic,
+}
+
+impl Durability {
+    /// `true` for [`Durability::OnCommit`].
+    #[inline]
+    pub(crate) fn is_on_commit(self) -> bool {
+        matches!(self, Durability::OnCommit)
+    }
+
+    /// Maps the internal "fsync on commit" flag back to a [`Durability`].
+    #[inline]
+    pub(crate) fn from_on_commit(on_commit: bool) -> Self {
+        if on_commit {
+            Durability::OnCommit
+        } else {
+            Durability::Periodic
+        }
+    }
+}
+
 #[derive(Clone)]
 /// Fjall database configuration wrapper.
 ///
@@ -244,22 +281,33 @@ impl FjallConfig {
 
     /// Returns whether each atomic write scope is fsynced on commit (`Durability::OnCommit`).
     ///
-    /// When `true` (the default) every committed write is made durable immediately by syncing
-    /// the journal, so an acknowledged write survives a process crash or power loss without
-    /// waiting for the periodic flush or a clean drop. When `false` the store uses
-    /// `Durability::Periodic` — commits are buffered and made durable by the background
-    /// journal flush (`fsync_frequency`) or on drop — which is faster for bulk imports but can
-    /// lose the most recent commits on an unclean stop.
+    /// When `true` every committed write is made durable immediately by syncing the journal,
+    /// so an acknowledged write survives power loss without waiting for the periodic flush or
+    /// a clean drop. When `false` (the default) the store uses `Durability::Periodic` — commits
+    /// are buffered to the OS (surviving a process crash) and fsynced by the background journal
+    /// flush (`fsync_frequency`) or on a clean close — which is faster but can lose the most
+    /// recent commits on power loss.
     #[inline]
     pub fn durability_on_commit(&self) -> bool {
         self.inner.durability_on_commit()
     }
 
+    /// Returns the configured [`Durability`] mode.
+    #[inline]
+    pub fn durability(&self) -> Durability {
+        Durability::from_on_commit(self.inner.durability_on_commit())
+    }
+
     /// Sets whether each atomic write scope is fsynced on commit (`Durability::OnCommit`).
     #[inline]
-    #[allow(dead_code)]
     pub(crate) fn set_durability_on_commit(&self, v: bool) {
         self.inner.set_durability_on_commit(v)
+    }
+
+    /// Sets the [`Durability`] mode.
+    #[inline]
+    pub(crate) fn set_durability(&self, durability: Durability) {
+        self.set_durability_on_commit(durability.is_on_commit())
     }
 
     /// Returns bloom filter bits.
@@ -469,12 +517,18 @@ impl FjallConfigInner {
             blob_cache_capacity: AtomicU64::new(Self::DEFAULT_BLOB_CACHE_MB * 1_024 * 1_024),
             max_journaling_size: AtomicU64::new(Self::DEFAULT_MAX_JOURNALING_MB * 1_024 * 1_024),
             max_write_buffer_size: AtomicU64::new(Self::DEFAULT_WRITE_BUFFER_MB * 1_024 * 1_024),
-            fsync_frequency: AtomicU16::new(0),
+            // Periodic durability needs a real background fsync timer to bound the
+            // power-loss window; 1000 ms keeps the window small while the fsync runs off the
+            // write path (it does not block commits). Set to 0 to disable the timer (then a
+            // periodic-durability write is only fsynced on a clean close).
+            fsync_frequency: AtomicU16::new(1000),
             event_listeners: atomic(Vec::new()),
             commit_before_close: AtomicBool::new(true),
-            // Durability::OnCommit by default: fsync each committed write scope so an
-            // acknowledged write is crash-safe without relying on the periodic flush or drop.
-            durability_on_commit: AtomicBool::new(true),
+            // Durability::Periodic by default: commits are buffered to the OS (surviving a
+            // process crash) and fsynced by the background timer above within ~fsync_frequency,
+            // which is faster than an fsync per commit. Callers that need an acknowledged write
+            // to survive power loss immediately can opt into Durability::OnCommit.
+            durability_on_commit: AtomicBool::new(false),
             // Enable bloom filter by default with 10 bits per key for efficient lookups
             bloom_filter_bits: AtomicI8::new(10),
             compression_type: atomic(CompressionType::Lz4),
@@ -741,7 +795,11 @@ mod tests {
         assert_eq!(config.max_journaling_size(), 512 * 1_024 * 1_024);
         // New default: 128 MB write buffer
         assert_eq!(config.max_write_buffer_size(), 128 * 1_024 * 1_024);
-        assert_eq!(config.fsync_frequency(), 0);
+        // Default: 1000 ms background fsync timer (bounds the periodic-durability window).
+        assert_eq!(config.fsync_frequency(), 1000);
+        // Default: Durability::Periodic (buffered commits + background fsync), not OnCommit.
+        assert!(!config.durability_on_commit());
+        assert_eq!(config.durability(), Durability::Periodic);
         assert!(config.commit_before_close());
         // New default: bloom filter enabled with 10 bits
         assert_eq!(config.bloom_filter_bits(), 10);

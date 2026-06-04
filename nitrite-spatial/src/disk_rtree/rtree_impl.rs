@@ -493,7 +493,7 @@ impl DiskRTree {
                 header.version,
                 MigrationManager::current_version()
             );
-            drop(header); // Release read lock before calling migrate
+            // `header` is an owned clone; the read guard was already released above.
             MigrationManager::migrate(&self.inner.storage, &mut self.inner.header.write())?;
             println!("Migration complete");
         }

@@ -163,8 +163,8 @@ impl FieldsInner {
             return false;
         }
 
-        for i in 0..length {
-            if self.field_names[i] != prefix_names[i] {
+        for (field_name, prefix) in self.field_names.iter().zip(prefix_names.iter()).take(length) {
+            if field_name != prefix {
                 return false;
             }
         }

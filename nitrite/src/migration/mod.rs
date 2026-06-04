@@ -38,6 +38,7 @@
 //! If a migration fails, the database is rolled back to its previous state.
 
 mod manager;
+#[allow(clippy::module_inception)]
 mod migration;
 mod instructions;
 mod commands;

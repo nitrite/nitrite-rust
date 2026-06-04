@@ -29,7 +29,7 @@ fn test_cursor_iteration() {
             }
 
             // Iterate through cursor
-            let mut cursor = repo.find(all())?;
+            let cursor = repo.find(all())?;
             let mut count = 0;
             for obj_result in cursor {
                 let _obj = obj_result?;

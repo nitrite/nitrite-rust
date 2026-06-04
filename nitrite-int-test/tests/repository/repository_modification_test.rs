@@ -750,7 +750,7 @@ fn test_size() {
                 let mut emp = Employee::default();
                 emp.emp_id = Some(i);
                 repo.insert(emp)?;
-                assert_eq!(repo.size()?, ((i + 1)));
+                assert_eq!(repo.size()?, (i + 1));
             }
 
             Ok(())

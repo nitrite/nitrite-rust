@@ -37,6 +37,7 @@
 //! - Event listeners
 
 mod entity;
+#[allow(clippy::module_inception)]
 mod repository;
 mod cursor;
 mod repository_factory;

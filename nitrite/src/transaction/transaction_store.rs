@@ -299,6 +299,7 @@ impl TransactionStoreInner {
 }
 
 #[cfg(test)]
+#[allow(clippy::assertions_on_constants)] // tests use assert!(true) as "reached without panic" markers
 mod tests {
     use super::*;
     use crate::store::memory::{InMemoryStore, InMemoryStoreConfig};

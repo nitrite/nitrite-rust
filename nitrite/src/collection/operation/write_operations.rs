@@ -771,8 +771,7 @@ impl WriteOperationsInner {
         let mut nitrite_ids = Vec::new();
         let event = self.remove_internal(document.clone(), &mut nitrite_ids)?;
 
-        if event.is_some() {
-            let event = event.unwrap();
+        if let Some(event) = event {
             event.set_originator(document.source()?);
             self.event_bus.publish(event)?;
         }

@@ -292,7 +292,7 @@ impl TextFilter {
 
     fn sorted_ids_by_score(&self, score_map: HashMap<Value, i32>) -> NitriteResult<Vec<Value>> {
         let mut sorted_map: Vec<_> = score_map.into_iter().collect();
-        sorted_map.sort_by(|a, b| b.1.cmp(&a.1));
+        sorted_map.sort_by_key(|entry| std::cmp::Reverse(entry.1));
 
         let mut sorted_ids = Vec::new();
         for (key, _) in sorted_map {

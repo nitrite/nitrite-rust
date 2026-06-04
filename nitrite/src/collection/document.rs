@@ -27,7 +27,7 @@ type FieldVec = SmallVec<[String; 8]>;
 /// Below fields are reserved and cannot be used as key in a document.
 ///
 /// * `_id` - The unique identifier of the document. If not provided, Nitrite
-/// will generate a unique [NitriteId] for the document during insertion.
+///   will generate a unique [NitriteId] for the document during insertion.
 /// * `_revision` - The revision number of the document.
 /// * `_source` - The source of the document.
 /// * `_modified` - The last modified time of the document.

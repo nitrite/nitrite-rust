@@ -742,7 +742,7 @@ fn test_transaction_on_different_repositories_and_collections() {
 
                 for i in 0..10 {
                     let name: String = FirstName().fake();
-                    let document = nitrite::doc! {"firstName": (name.clone()), "id": ((i + 10))};
+                    let document = nitrite::doc! {"firstName": (name.clone()), "id": (i + 10)};
                     test1_2.insert(document)?;
 
                     tx_repo1_2.insert(TxData::new(i + 10, &name))?;

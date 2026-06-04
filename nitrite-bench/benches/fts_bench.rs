@@ -1,6 +1,7 @@
 //! Tantivy full-text search benchmarks
 
-use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion};
+use std::hint::black_box;
+use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion};
 use nitrite_bench::data_gen::generate_fts_docs;
 use nitrite_bench::stores::{create_fjall_fts_db, create_inmemory_fts_db};
 use nitrite_tantivy_fts::{fts_field, fts_index};
@@ -20,7 +21,7 @@ fn bench_fts_index_create(c: &mut Criterion) {
                     collection.insert_many(docs.clone()).unwrap();
                     (ctx, collection)
                 },
-                |(ctx, collection)| {
+                |(_ctx, collection)| {
                     collection
                         .create_index(vec!["content"], &fts_index())
                         .unwrap();
@@ -38,7 +39,7 @@ fn bench_fts_index_create(c: &mut Criterion) {
                     collection.insert_many(docs.clone()).unwrap();
                     (ctx, collection)
                 },
-                |(ctx, collection)| {
+                |(_ctx, collection)| {
                     collection
                         .create_index(vec!["content"], &fts_index())
                         .unwrap();
@@ -68,7 +69,7 @@ fn bench_fts_insert(c: &mut Criterion) {
                         .unwrap();
                     (ctx, collection, docs.clone())
                 },
-                |(ctx, collection, docs)| {
+                |(_ctx, collection, docs)| {
                     collection.insert_many(docs).unwrap();
                     black_box(collection.size().unwrap())
                 },
@@ -86,7 +87,7 @@ fn bench_fts_insert(c: &mut Criterion) {
                         .unwrap();
                     (ctx, collection, docs.clone())
                 },
-                |(ctx, collection, docs)| {
+                |(_ctx, collection, docs)| {
                     collection.insert_many(docs).unwrap();
                     black_box(collection.size().unwrap())
                 },
@@ -115,7 +116,7 @@ fn bench_fts_single_term_search(c: &mut Criterion) {
                     collection.insert_many(docs.clone()).unwrap();
                     (ctx, collection)
                 },
-                |(ctx, collection)| {
+                |(_ctx, collection)| {
                     // Search for a common word
                     let filter = fts_field("content").matches("the");
                     let cursor = collection.find(filter).unwrap();
@@ -136,7 +137,7 @@ fn bench_fts_single_term_search(c: &mut Criterion) {
                     collection.insert_many(docs.clone()).unwrap();
                     (ctx, collection)
                 },
-                |(ctx, collection)| {
+                |(_ctx, collection)| {
                     let filter = fts_field("content").matches("the");
                     let cursor = collection.find(filter).unwrap();
                     black_box(cursor.count())
@@ -166,7 +167,7 @@ fn bench_fts_phrase_search(c: &mut Criterion) {
                     collection.insert_many(docs.clone()).unwrap();
                     (ctx, collection)
                 },
-                |(ctx, collection)| {
+                |(_ctx, collection)| {
                     // Phrase search
                     let filter = fts_field("content").phrase("and the");
                     let cursor = collection.find(filter).unwrap();
@@ -187,7 +188,7 @@ fn bench_fts_phrase_search(c: &mut Criterion) {
                     collection.insert_many(docs.clone()).unwrap();
                     (ctx, collection)
                 },
-                |(ctx, collection)| {
+                |(_ctx, collection)| {
                     let filter = fts_field("content").phrase("and the");
                     let cursor = collection.find(filter).unwrap();
                     black_box(cursor.count())
@@ -221,7 +222,7 @@ fn bench_fts_multi_field_search(c: &mut Criterion) {
                     collection.insert_many(docs.clone()).unwrap();
                     (ctx, collection)
                 },
-                |(ctx, collection)| {
+                |(_ctx, collection)| {
                     // Search in title
                     let filter = fts_field("title").matches("the");
                     let cursor = collection.find(filter).unwrap();
@@ -245,7 +246,7 @@ fn bench_fts_multi_field_search(c: &mut Criterion) {
                     collection.insert_many(docs.clone()).unwrap();
                     (ctx, collection)
                 },
-                |(ctx, collection)| {
+                |(_ctx, collection)| {
                     let filter = fts_field("title").matches("the");
                     let cursor = collection.find(filter).unwrap();
                     black_box(cursor.count())

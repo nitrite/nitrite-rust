@@ -140,6 +140,7 @@ pub fn get_cpu_count() -> usize {
 }
 
 #[cfg(test)]
+#[allow(clippy::assertions_on_constants)] // tests use assert!(true) as "reached without panic" markers
 mod tests {
     use super::*;
 

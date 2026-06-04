@@ -164,6 +164,7 @@ impl FreeListManager {
 /// Trait for file format migrations
 pub trait VersionMigration {
     /// Version this migration migrates from
+    #[allow(clippy::wrong_self_convention)] // domain getter, not a constructor
     fn from_version(&self) -> u32;
 
     /// Version this migration migrates to

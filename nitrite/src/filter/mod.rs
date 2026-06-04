@@ -44,6 +44,7 @@
 //! - **Logical**: `and`, `or`, `not`
 //! - **Special**: `all` (match all), `by_id` (match by ID)
 
+#[allow(clippy::module_inception)]
 mod filter;
 mod fluent;
 

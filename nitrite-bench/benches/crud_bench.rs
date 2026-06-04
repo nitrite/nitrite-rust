@@ -1,6 +1,7 @@
 //! CRUD operation benchmarks
 
-use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
+use std::hint::black_box;
+use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
 use nitrite::filter::field;
 use nitrite_bench::data_gen::{generate_simple_docs, generate_single_doc};
 use nitrite_bench::stores::{create_fjall_db, create_inmemory_db};
@@ -18,7 +19,7 @@ fn bench_insert_single(c: &mut Criterion) {
                     let collection = ctx.db().collection("bench").unwrap();
                     (ctx, collection)
                 },
-                |(ctx, collection)| {
+                |(_ctx, collection)| {
                     for i in 0..size {
                         let doc = generate_single_doc(i);
                         collection.insert(doc).unwrap();
@@ -36,7 +37,7 @@ fn bench_insert_single(c: &mut Criterion) {
                     let collection = ctx.db().collection("bench").unwrap();
                     (ctx, collection)
                 },
-                |(ctx, collection)| {
+                |(_ctx, collection)| {
                     for i in 0..size {
                         let doc = generate_single_doc(i);
                         collection.insert(doc).unwrap();
@@ -66,7 +67,7 @@ fn bench_insert_batch(c: &mut Criterion) {
                     let collection = ctx.db().collection("bench").unwrap();
                     (ctx, collection, docs.clone())
                 },
-                |(ctx, collection, docs)| {
+                |(_ctx, collection, docs)| {
                     collection.insert_many(docs).unwrap();
                     black_box(collection.size().unwrap())
                 },
@@ -81,7 +82,7 @@ fn bench_insert_batch(c: &mut Criterion) {
                     let collection = ctx.db().collection("bench").unwrap();
                     (ctx, collection, docs.clone())
                 },
-                |(ctx, collection, docs)| {
+                |(_ctx, collection, docs)| {
                     collection.insert_many(docs).unwrap();
                     black_box(collection.size().unwrap())
                 },
@@ -108,7 +109,7 @@ fn bench_read(c: &mut Criterion) {
                     collection.insert_many(docs.clone()).unwrap();
                     (ctx, collection)
                 },
-                |(ctx, collection)| {
+                |(_ctx, collection)| {
                     // Read all documents
                     let cursor = collection.find(nitrite::filter::all()).unwrap();
                     black_box(cursor.count())
@@ -125,7 +126,7 @@ fn bench_read(c: &mut Criterion) {
                     collection.insert_many(docs.clone()).unwrap();
                     (ctx, collection)
                 },
-                |(ctx, collection)| {
+                |(_ctx, collection)| {
                     let cursor = collection.find(nitrite::filter::all()).unwrap();
                     black_box(cursor.count())
                 },
@@ -151,7 +152,7 @@ fn bench_update(c: &mut Criterion) {
                     collection.insert_many(docs.clone()).unwrap();
                     (ctx, collection)
                 },
-                |(ctx, collection)| {
+                |(_ctx, collection)| {
                     let update = nitrite::doc! { active: false };
                     collection
                         .update(field("active").eq(true), &update)
@@ -170,7 +171,7 @@ fn bench_update(c: &mut Criterion) {
                     collection.insert_many(docs.clone()).unwrap();
                     (ctx, collection)
                 },
-                |(ctx, collection)| {
+                |(_ctx, collection)| {
                     let update = nitrite::doc! { active: false };
                     collection
                         .update(field("active").eq(true), &update)
@@ -199,7 +200,7 @@ fn bench_delete(c: &mut Criterion) {
                     collection.insert_many(docs.clone()).unwrap();
                     (ctx, collection)
                 },
-                |(ctx, collection)| {
+                |(_ctx, collection)| {
                     collection.remove(nitrite::filter::all(), false).unwrap();
                     black_box(collection.size().unwrap())
                 },
@@ -215,7 +216,7 @@ fn bench_delete(c: &mut Criterion) {
                     collection.insert_many(docs.clone()).unwrap();
                     (ctx, collection)
                 },
-                |(ctx, collection)| {
+                |(_ctx, collection)| {
                     collection.remove(nitrite::filter::all(), false).unwrap();
                     black_box(collection.size().unwrap())
                 },

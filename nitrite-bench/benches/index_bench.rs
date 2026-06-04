@@ -1,6 +1,7 @@
 //! Indexing benchmarks
 
-use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion};
+use std::hint::black_box;
+use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion};
 use nitrite::filter::field;
 use nitrite::index::{non_unique_index, unique_index};
 use nitrite_bench::data_gen::generate_simple_docs;
@@ -21,7 +22,7 @@ fn bench_index_create(c: &mut Criterion) {
                     collection.insert_many(docs.clone()).unwrap();
                     (ctx, collection)
                 },
-                |(ctx, collection)| {
+                |(_ctx, collection)| {
                     collection
                         .create_index(vec!["age"], &non_unique_index())
                         .unwrap();
@@ -39,7 +40,7 @@ fn bench_index_create(c: &mut Criterion) {
                     collection.insert_many(docs.clone()).unwrap();
                     (ctx, collection)
                 },
-                |(ctx, collection)| {
+                |(_ctx, collection)| {
                     collection
                         .create_index(vec!["age"], &non_unique_index())
                         .unwrap();
@@ -67,7 +68,7 @@ fn bench_unique_index_create(c: &mut Criterion) {
                     collection.insert_many(docs.clone()).unwrap();
                     (ctx, collection)
                 },
-                |(ctx, collection)| {
+                |(_ctx, collection)| {
                     // Create unique index on id field (which is already unique)
                     collection
                         .create_index(vec!["id"], &unique_index())
@@ -86,7 +87,7 @@ fn bench_unique_index_create(c: &mut Criterion) {
                     collection.insert_many(docs.clone()).unwrap();
                     (ctx, collection)
                 },
-                |(ctx, collection)| {
+                |(_ctx, collection)| {
                     collection
                         .create_index(vec!["id"], &unique_index())
                         .unwrap();
@@ -117,7 +118,7 @@ fn bench_indexed_search(c: &mut Criterion) {
                         .unwrap();
                     (ctx, collection)
                 },
-                |(ctx, collection)| {
+                |(_ctx, collection)| {
                     // Search for specific age range
                     let filter = field("age").gte(30i64).and(field("age").lte(50i64));
                     let cursor = collection.find(filter).unwrap();
@@ -138,7 +139,7 @@ fn bench_indexed_search(c: &mut Criterion) {
                         .unwrap();
                     (ctx, collection)
                 },
-                |(ctx, collection)| {
+                |(_ctx, collection)| {
                     let filter = field("age").gte(30i64).and(field("age").lte(50i64));
                     let cursor = collection.find(filter).unwrap();
                     black_box(cursor.count())
@@ -166,7 +167,7 @@ fn bench_non_indexed_search(c: &mut Criterion) {
                     // No index created
                     (ctx, collection)
                 },
-                |(ctx, collection)| {
+                |(_ctx, collection)| {
                     let filter = field("age").gte(30i64).and(field("age").lte(50i64));
                     let cursor = collection.find(filter).unwrap();
                     black_box(cursor.count())
@@ -183,7 +184,7 @@ fn bench_non_indexed_search(c: &mut Criterion) {
                     collection.insert_many(docs.clone()).unwrap();
                     (ctx, collection)
                 },
-                |(ctx, collection)| {
+                |(_ctx, collection)| {
                     let filter = field("age").gte(30i64).and(field("age").lte(50i64));
                     let cursor = collection.find(filter).unwrap();
                     black_box(cursor.count())

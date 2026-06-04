@@ -1,6 +1,7 @@
 //! Spatial indexing and search benchmarks
 
-use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion};
+use std::hint::black_box;
+use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion};
 use nitrite_bench::data_gen::generate_spatial_docs;
 use nitrite_bench::stores::{create_fjall_spatial_db, create_inmemory_spatial_db};
 use nitrite_spatial::{spatial_field, spatial_index, Geometry, Point};
@@ -20,7 +21,7 @@ fn bench_spatial_index_create(c: &mut Criterion) {
                     collection.insert_many(docs.clone()).unwrap();
                     (ctx, collection)
                 },
-                |(ctx, collection)| {
+                |(_ctx, collection)| {
                     collection
                         .create_index(vec!["location"], &spatial_index())
                         .unwrap();
@@ -38,7 +39,7 @@ fn bench_spatial_index_create(c: &mut Criterion) {
                     collection.insert_many(docs.clone()).unwrap();
                     (ctx, collection)
                 },
-                |(ctx, collection)| {
+                |(_ctx, collection)| {
                     collection
                         .create_index(vec!["location"], &spatial_index())
                         .unwrap();
@@ -68,7 +69,7 @@ fn bench_spatial_insert(c: &mut Criterion) {
                         .unwrap();
                     (ctx, collection, docs.clone())
                 },
-                |(ctx, collection, docs)| {
+                |(_ctx, collection, docs)| {
                     collection.insert_many(docs).unwrap();
                     black_box(collection.size().unwrap())
                 },
@@ -86,7 +87,7 @@ fn bench_spatial_insert(c: &mut Criterion) {
                         .unwrap();
                     (ctx, collection, docs.clone())
                 },
-                |(ctx, collection, docs)| {
+                |(_ctx, collection, docs)| {
                     collection.insert_many(docs).unwrap();
                     black_box(collection.size().unwrap())
                 },
@@ -115,7 +116,7 @@ fn bench_spatial_within_query(c: &mut Criterion) {
                     collection.insert_many(docs.clone()).unwrap();
                     (ctx, collection)
                 },
-                |(ctx, collection)| {
+                |(_ctx, collection)| {
                     // Query for points in center 50% of the grid
                     let search_box = Geometry::envelope(250.0, 250.0, 750.0, 750.0);
                     let filter = spatial_field("location").within(search_box);
@@ -137,7 +138,7 @@ fn bench_spatial_within_query(c: &mut Criterion) {
                     collection.insert_many(docs.clone()).unwrap();
                     (ctx, collection)
                 },
-                |(ctx, collection)| {
+                |(_ctx, collection)| {
                     let search_box = Geometry::envelope(250.0, 250.0, 750.0, 750.0);
                     let filter = spatial_field("location").within(search_box);
                     let cursor = collection.find(filter).unwrap();
@@ -168,7 +169,7 @@ fn bench_spatial_near_query(c: &mut Criterion) {
                     collection.insert_many(docs.clone()).unwrap();
                     (ctx, collection)
                 },
-                |(ctx, collection)| {
+                |(_ctx, collection)| {
                     // Find points near center within radius
                     let center = Point::new(500.0, 500.0);
                     let filter = spatial_field("location").near(center, 200.0);
@@ -190,7 +191,7 @@ fn bench_spatial_near_query(c: &mut Criterion) {
                     collection.insert_many(docs.clone()).unwrap();
                     (ctx, collection)
                 },
-                |(ctx, collection)| {
+                |(_ctx, collection)| {
                     let center = Point::new(500.0, 500.0);
                     let filter = spatial_field("location").near(center, 200.0);
                     let cursor = collection.find(filter).unwrap();
@@ -221,7 +222,7 @@ fn bench_spatial_knearest_query(c: &mut Criterion) {
                     collection.insert_many(docs.clone()).unwrap();
                     (ctx, collection)
                 },
-                |(ctx, collection)| {
+                |(_ctx, collection)| {
                     let center = Point::new(500.0, 500.0);
                     let filter = spatial_field("location").knearest(center, 10).unwrap();
                     let cursor = collection.find(filter).unwrap();
@@ -242,7 +243,7 @@ fn bench_spatial_knearest_query(c: &mut Criterion) {
                     collection.insert_many(docs.clone()).unwrap();
                     (ctx, collection)
                 },
-                |(ctx, collection)| {
+                |(_ctx, collection)| {
                     let center = Point::new(500.0, 500.0);
                     let filter = spatial_field("location").knearest(center, 10).unwrap();
                     let cursor = collection.find(filter).unwrap();

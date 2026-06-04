@@ -5,6 +5,11 @@ use std::collections::VecDeque;
 use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, Mutex};
 
+/// Type-erased migration argument shared across steps.
+type AnyArg = Arc<dyn Any + Send + Sync>;
+/// Boxed migration function executed against an [`InstructionSet`].
+type MigrateFn = Box<dyn Fn(&InstructionSet) -> NitriteResult<()> + Send + Sync>;
+
 /// Represents a single migration step with its type and arguments.
 ///
 /// # Purpose
@@ -311,7 +316,7 @@ impl MigrationArguments {
     /// # Returns
     /// `Ok((Arc, Arc, Arc))` - Tuple of Arc references
     /// `Err(NitriteError)` - If variant is not Triple
-    pub fn as_any_triple(&self) -> NitriteResult<(Arc<dyn Any + Send + Sync>, Arc<dyn Any + Send + Sync>, Arc<dyn Any + Send + Sync>)> {
+    pub fn as_any_triple(&self) -> NitriteResult<(AnyArg, AnyArg, AnyArg)> {
         match self {
             MigrationArguments::Triple(arg1, arg2, arg3) => Ok((Arc::clone(arg1), Arc::clone(arg2), Arc::clone(arg3))),
             _ => Err(NitriteError::new(
@@ -524,7 +529,7 @@ pub struct MigrationInner {
     to_version: u32,
     migration_steps: Mutex<VecDeque<MigrationStep>>,
     executed: AtomicBool,
-    migrate: Box<dyn Fn(&InstructionSet) -> NitriteResult<()> + Send + Sync>,
+    migrate: MigrateFn,
 }
 
 impl std::fmt::Debug for MigrationInner {

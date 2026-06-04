@@ -123,19 +123,12 @@ impl FilterProvider for IntersectsFilter {
     }
 
     fn can_be_grouped(&self, other: Filter) -> NitriteResult<bool> {
-        if other.as_any().downcast_ref::<IntersectsFilter>().is_some() {
-            let self_field = self.get_field_name()?;
-            let other_field = other.get_field_name()?;
-            Ok(self_field == other_field)
-        } else if other.as_any().downcast_ref::<WithinFilter>().is_some() {
-            let self_field = self.get_field_name()?;
-            let other_field = other.get_field_name()?;
-            Ok(self_field == other_field)
-        } else if other.as_any().downcast_ref::<NearFilter>().is_some() {
-            let self_field = self.get_field_name()?;
-            let other_field = other.get_field_name()?;
-            Ok(self_field == other_field)
-        } else if other.as_any().downcast_ref::<GeoNearFilter>().is_some() {
+        let other_any = other.as_any();
+        if other_any.downcast_ref::<IntersectsFilter>().is_some()
+            || other_any.downcast_ref::<WithinFilter>().is_some()
+            || other_any.downcast_ref::<NearFilter>().is_some()
+            || other_any.downcast_ref::<GeoNearFilter>().is_some()
+        {
             let self_field = self.get_field_name()?;
             let other_field = other.get_field_name()?;
             Ok(self_field == other_field)

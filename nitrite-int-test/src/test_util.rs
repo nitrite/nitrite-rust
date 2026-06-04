@@ -4,6 +4,7 @@ use nitrite::common::{Convertible, Value};
 use nitrite::doc;
 use nitrite::errors::NitriteResult;
 use nitrite::nitrite::Nitrite;
+#[cfg(feature = "fjall")]
 use nitrite_fjall_adapter::FjallModule;
 use std::backtrace::Backtrace;
 use std::time::{Duration, Instant, SystemTime};

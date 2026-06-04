@@ -241,7 +241,7 @@ mod tests {
                 run_test(
                     || Context::new("test".to_string(), None, None, None, None),
                     |_ctx| {
-                        assert!(false, "Assertion failure with custom message");
+                        panic!("Assertion failure with custom message");
                     },
                     |_ctx| {},
                 );

@@ -259,8 +259,8 @@ impl NitriteError {
         &self.error_kind
     }
     
-    pub fn cause(&self) -> Option<&Box<NitriteError>> {
-        self.cause.as_ref()
+    pub fn cause(&self) -> Option<&NitriteError> {
+        self.cause.as_deref()
     }
 }
 

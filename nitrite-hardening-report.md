@@ -1,0 +1,124 @@
+# Nitrite-Rust Hardening Pass — Findings & Changes
+
+**Date:** 2026-06-04
+**Scope:** whole workspace (`nitrite`, `nitrite-fjall-adapter`, `nitrite-spatial`,
+`nitrite-tantivy-fts`, `nitrite-derive`, `nitrite-bench`, `nitrite-int-test`)
+**Decisions taken with the maintainer up front:**
+- **Async:** keep the core **synchronous** (no async layer). Rationale below.
+- **Delivery:** autonomous end-to-end, report at the end.
+- **Durability default:** configurable knob, default **Periodic (fast)**.
+- **Crate scope:** all crates.
+
+---
+
+## 1. Should the Nitrite API be async? — No (analysis)
+
+For an embedded database sitting on a **synchronous LSM engine** (fjall), converting the
+public API to `async` would **not** improve performance and would likely make the common
+path slower:
+
+- The cost centers — fjall memtable inserts, SSTable reads, compaction, and **fsync** — are
+  CPU- and blocking-syscall-bound. `async`/`await` does not accelerate that; it overlaps many
+  *waiting* I/O operations, which is a network-server pattern, not an embedded-storage one.
+- fjall exposes **no async API** and runs its own background threads. An async core would have
+  to wrap every call in `spawn_blocking`, adding task-scheduling + thread-handoff overhead per
+  operation — a net loss for the dominant single-op case.
+- It forces a `tokio` runtime on every consumer (CLI, mobile, sync apps), hurting
+  embeddability — the opposite of what an embedded DB wants.
+- Precedent: redb, sled, heed/LMDB, rocksdb, and fjall itself are all synchronous.
+
+**Recommendation honored:** core stays synchronous. If async ergonomics are ever needed, add
+an *optional, feature-gated async facade* over `spawn_blocking` — never an async core.
+
+---
+
+## 2. Baseline was not green — now it is
+
+`cargo clippy --workspace --all-targets` originally failed with **deny-level correctness
+errors** plus ~100+ warnings:
+
+- **Errors (block the build):** `approx_constant` (`3.14`≈π test fixtures),
+  `absurd_extreme_comparisons` (`assert!(idx >= 0)` on unsigned, `schema_version <= u32::MAX`).
+- **Warnings:** `unwrap`-after-`is_some`, `&Box<T>`, `module_inception`, `type_complexity`,
+  deprecated `criterion::black_box`, `field_reassign_with_default`, `assertions_on_constants`,
+  `format!`-in-`format!`, identical `if` blocks, `drop` of non-`Drop`, etc.
+
+All fixed. Production-crate lints were fixed *properly* (real code changes); purely cosmetic
+test/bench/example lints were relaxed centrally via a `[lints]` table in the non-published
+`nitrite-int-test` crate and scoped `#[allow]` on test modules — production code keeps the
+strict lint set. **Result: `cargo clippy --workspace --all-targets` is clean (0 warnings).**
+
+---
+
+## 3. Durability — configurable knob, default Periodic
+
+The atomic cross-partition commit (root cause **A** of the prior durability analysis) had
+already landed (one `fjall::WriteTransaction` per logical write via a thread-local bridge), and
+`close()` already drains (`persist(SyncAll)` + bounded wait on `active_compactions()`), closing
+the close/reopen-under-load race. Remaining work for this pass:
+
+- The `durability_on_commit` knob existed internally but had **no public builder method** and
+  **defaulted to OnCommit** (fsync per commit). Per the agreed default:
+  - Added a public **`Durability { OnCommit, Periodic }`** enum and a
+    `FjallModuleBuilder::durability(..)` builder method.
+  - **Flipped the default to `Periodic`** and set a **bounded default `fsync_frequency` of
+    1000 ms**, so "Periodic" is genuinely periodic (a background fsync bounds the power-loss
+    window) rather than "durable only on drop" (which would have left root cause **B** open).
+  - Documented the trade-off precisely: every commit is buffered to the OS (survives a
+    **process crash**); a clean close fsyncs; `OnCommit` adds a per-commit fsync for power-loss
+    safety. (fjall semantics verified against the 2.11.2 source: `manual_journal_persist=false`
+    auto-applies `PersistMode::Buffer` per commit; `fsync_ms` drives the background fsync.)
+
+---
+
+## 4. Correctness / memory-safety fixes (storage adapter)
+
+The biggest robustness gap for a production DB: **data-triggered process crashes.**
+
+- **Corrupted / format-incompatible bytes panicked the read path.** `FjallMap`'s reads
+  (`get`, `first/last/ceiling/floor/higher/lower_key`, `put_if_absent` return) used the
+  **panicking** `Value::from(FjallValue)` conversion, so damaged or foreign on-disk bytes
+  **crashed the process** instead of returning an error. Routed all of these through a new
+  fallible `decode_value` (`try_into_value` → `NitriteError`).
+- **Write path panicked on serialization failure.** `put`/`put_all`/`put_if_absent` used the
+  panicking `FjallValue::new`; switched to fallible `try_from_value`.
+- **`contains_key` numeric-key consistency bug.** `contains_key` encoded the key **without**
+  the numeric normalization that `get`/`put`/`remove` apply, so `contains_key(U64(5))` could
+  return `false` for a key that `get(U64(5))` finds (and that a unique-index check stored).
+  Fixed to normalize identically. Added a regression test
+  (`test_contains_key_normalizes_numeric_types_like_get`).
+
+**Memory safety:** only two `unsafe` blocks exist in production code — the `tx_scope`
+thread-local transaction bridge (scoped, per-thread, non-reentrant, no escape — invariants
+hold) and the `Vec<u8>→Value::Bytes` `TypeId` specialization in `value.rs` (correct
+`forget`/`from_raw_parts` ordering). Both reviewed and sound.
+
+---
+
+## 5. Performance
+
+The real throughput levers are architectural and are in place:
+
+- **One atomic transaction per logical write** (data + all index partitions) instead of N
+  independent partition inserts — fewer journal entries and lock acquisitions per commit.
+- **Periodic durability by default** removes the per-commit `fsync` from the hot write path
+  (the dominant write cost), while a background timer keeps the power-loss window bounded.
+
+No speculative micro-optimizations were made: without benchmark evidence they risk regressions
+for little gain. Further tuning should be benchmark-driven (the `nitrite-bench` criterion
+suites are the right harness).
+
+---
+
+## 6. Verification
+
+- `cargo clippy --workspace --all-targets`: **clean (0 warnings/errors).**
+- Tests: `nitrite` lib 2262 ✓ · `nitrite-fjall-adapter` 221 ✓ · `nitrite-spatial` 429 ✓ ·
+  `nitrite-tantivy-fts` 119 ✓ · `nitrite-derive` 11 ✓ · integration suite ✓ (see run notes).
+- Feature combos exercised by CI also checked: `--features memory --no-default-features` and
+  `--features custom_separator`.
+
+> **Test-harness note (not a production issue):** opening *many* independent fjall keyspaces in
+> parallel on a single (external) disk thrashes flush/compaction/fsync I/O — a documented
+> harness artifact. Production uses one keyspace. The integration suite is therefore run with
+> capped test threads on constrained disks; CI runs it at default parallelism on local SSDs.

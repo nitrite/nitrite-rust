@@ -206,8 +206,7 @@ impl ReadOperationsInner {
                     match nitrite_id {
                         Some(Value::NitriteId(id)) => {
                             let document = self.nitrite_map.get(&Value::from(id))?;
-                            if document.is_some() {
-                                let doc = document.unwrap();
+                            if let Some(doc) = document {
                                 match doc.as_document() {
                                     Some(d) => {
                                         raw_stream = Box::new(SingleStream::new(Some(d.clone())));
@@ -236,9 +235,7 @@ impl ReadOperationsInner {
                         }
                     }
                 } else {
-                    let index_descriptor = find_plan.index_descriptor();
-                    if index_descriptor.is_some() {
-                        let index_descriptor = index_descriptor.unwrap();
+                    if let Some(index_descriptor) = find_plan.index_descriptor() {
                         let indexer = self
                             .nitrite_config
                             .find_indexer(&index_descriptor.index_type())?;
@@ -267,8 +264,7 @@ impl ReadOperationsInner {
                 match nitrite_id {
                     Some(Value::NitriteId(id)) => {
                         let document = self.nitrite_map.get(&Value::from(id))?;
-                        if document.is_some() {
-                            let doc = document.unwrap();
+                        if let Some(doc) = document {
                             match doc.as_document() {
                                 Some(d) => {
                                     raw_stream = Box::new(SingleStream::new(Some(d.clone())));
@@ -297,9 +293,7 @@ impl ReadOperationsInner {
                     }
                 }
             } else {
-                let index_descriptor = find_plan.index_descriptor();
-                if index_descriptor.is_some() {
-                    let index_descriptor = index_descriptor.unwrap();
+                if let Some(index_descriptor) = find_plan.index_descriptor() {
                     let indexer = self
                         .nitrite_config
                         .find_indexer(&index_descriptor.index_type())?;

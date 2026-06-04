@@ -1,4 +1,4 @@
-use crate::config::FjallConfig;
+use crate::config::{Durability, FjallConfig};
 use crate::store::FjallStore;
 use fjall::compaction::Strategy;
 use fjall::CompressionType;
@@ -267,7 +267,20 @@ impl FjallModuleBuilder {
         self.store_config.set_fsync_frequency(fsync_frequency);
         self
     }
-    
+
+    /// Sets the [`Durability`] mode for committed writes.
+    ///
+    /// - [`Durability::Periodic`] (the default) buffers commits to the OS and fsyncs them in
+    ///   the background within [`fsync_frequency`](Self::fsync_frequency) — fastest, with a
+    ///   bounded power-loss window.
+    /// - [`Durability::OnCommit`] fsyncs every commit before it returns — zero acknowledged-data
+    ///   loss on power loss, at the cost of one fsync per commit.
+    #[inline]
+    pub fn durability(self, durability: Durability) -> Self {
+        self.store_config.set_durability(durability);
+        self
+    }
+
     #[inline]
     pub fn event_listener(self, listener: StoreEventListener) -> Self {
         self.store_config.add_event_listener(listener);

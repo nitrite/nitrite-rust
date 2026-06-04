@@ -231,7 +231,7 @@ impl Nitrite {
     /// `true` if the collection exists, `false` otherwise.
     pub fn has_collection(&self, name: &str) -> NitriteResult<bool> {
         let collections = self.list_collection_names()?;
-        Ok(collections.contains(&name.to_string()))
+        Ok(collections.iter().any(|c| c == name))
     }
 
     /// Checks if an object repository for type `T` exists in the database.
@@ -429,8 +429,8 @@ impl Nitrite {
     /// # Arguments
     ///
     /// * `func` - A closure that takes a `&Session` and returns a `NitriteResult<R>`.
-    ///           The closure should contain all database operations to be executed within
-    ///           the transaction context.
+    ///   The closure should contain all database operations to be executed within
+    ///   the transaction context.
     ///
     /// # Returns
     ///
@@ -1244,8 +1244,11 @@ mod tests {
         nitrite.initialize(None, None).unwrap();
         
         let metadata = nitrite.database_metadata().unwrap();
-        // schema_version should be present and valid as u32
-        assert!(metadata.schema_version <= u32::MAX);
+        // A freshly initialized database starts at the initial schema version
+        assert_eq!(
+            metadata.schema_version,
+            crate::INITIAL_SCHEMA_VERSION
+        );
     }
 
     #[test]
