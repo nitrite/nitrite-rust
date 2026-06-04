@@ -345,17 +345,25 @@ impl NitriteStore {
     /// * `Err(NitriteError)` if `op` failed (scope discarded) or the commit failed
     pub fn with_atomic<T, F>(&self, op: F) -> NitriteResult<T>
     where
-        F: Fn() -> NitriteResult<T>,
+        F: FnOnce() -> NitriteResult<T>,
     {
         if !self.inner.supports_atomic() {
             return op();
         }
 
+        // `run_atomic` invokes the operation exactly once but takes an `FnMut` trait object,
+        // so bridge our `FnOnce` through an `Option` we `take()` on that single call. This
+        // lets callers *move* owned data (e.g. a whole batch of documents) into `op` instead
+        // of cloning it on every write.
+        let mut op = Some(op);
         // `op` yields a value, but `run_atomic` only carries success/failure (so it knows
         // whether to commit or discard). Capture the real `op` result here and signal
         // failure to `run_atomic` by returning `Err`, so a failing `op` discards the scope.
         let mut captured: Option<NitriteResult<T>> = None;
         let run_result = self.inner.run_atomic(&mut || {
+            let op = op
+                .take()
+                .expect("run_atomic invoked the atomic operation more than once");
             let result = op();
             let signal = match &result {
                 Ok(_) => Ok(()),

@@ -68,19 +68,21 @@ impl WriteOperations {
     /// On backends without atomic support the scope is a transparent pass-through.
     fn with_atomic<T, F>(&self, op: F) -> NitriteResult<T>
     where
-        F: Fn() -> NitriteResult<T>,
+        F: FnOnce() -> NitriteResult<T>,
     {
         self.inner.nitrite_map.get_store()?.with_atomic(op)
     }
 
     /// Inserts a single document into the collection.
     pub fn insert(&self, document: Document) -> NitriteResult<WriteResult> {
-        self.with_atomic(|| self.inner.insert(document.clone()))
+        // `move` lets the document be handed to the atomic scope without an extra clone.
+        self.with_atomic(move || self.inner.insert(document))
     }
 
     /// Inserts multiple documents into the collection using optimized batch operations.
     pub fn insert_batch(&self, documents: Vec<Document>) -> NitriteResult<WriteResult> {
-        self.with_atomic(|| self.inner.insert_batch(documents.clone()))
+        // `move` hands the whole batch to the atomic scope without cloning every document.
+        self.with_atomic(move || self.inner.insert_batch(documents))
     }
 
     /// Updates documents matching a filter with the provided update fields.
@@ -90,7 +92,7 @@ impl WriteOperations {
         update: &Document,
         update_options: &UpdateOptions,
     ) -> NitriteResult<WriteResult> {
-        self.with_atomic(|| self.inner.update(filter.clone(), update, update_options))
+        self.with_atomic(move || self.inner.update(filter, update, update_options))
     }
 
     /// Updates a document directly by its NitriteId without filter-based lookup.
@@ -100,12 +102,12 @@ impl WriteOperations {
         update: &Document,
         insert_if_absent: bool,
     ) -> NitriteResult<WriteResult> {
-        self.with_atomic(|| self.inner.update_by_id(id, update, insert_if_absent))
+        self.with_atomic(move || self.inner.update_by_id(id, update, insert_if_absent))
     }
 
     /// Removes documents matching a filter.
     pub fn remove(&self, filter: Filter, just_once: bool) -> NitriteResult<WriteResult> {
-        self.with_atomic(|| self.inner.remove(filter.clone(), just_once))
+        self.with_atomic(move || self.inner.remove(filter, just_once))
     }
 
     /// Removes a specific document from the collection.
@@ -233,8 +235,9 @@ impl WriteOperationsInner {
                 ));
             }
             
-            // Track successfully indexed document for potential rollback
-            indexed_docs.push(processed_doc.clone());
+            // Track the indexed document for potential rollback. `processed_doc` is not used
+            // afterwards, so move it in rather than cloning.
+            indexed_docs.push(processed_doc);
             
             // Publish event
             let value = Value::Document(original_doc);

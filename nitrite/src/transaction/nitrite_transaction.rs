@@ -390,10 +390,9 @@ impl NitriteTransaction {
         };
 
         // Phase 1+2: execute all commit commands atomically, building the undo registry.
-        // with_atomic re-runs this closure on conflict, so it must stay side-effect free
-        // apart from the (idempotent) storage writes performed by the commit commands.
-        // The undo information escapes the closure via `undo_cell` so it is still available
-        // on the failure path (where it drives the logical rollback for non-atomic backends).
+        // with_atomic runs this closure exactly once; the undo information escapes it via
+        // `undo_cell` so it is still available on the failure path (where it drives the
+        // logical rollback for non-atomic backends).
         let supports_atomic = self.db.store().supports_atomic();
         let undo_cell: Mutex<HashMap<String, Vec<UndoEntry>>> = Mutex::new(HashMap::new());
 

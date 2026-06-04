@@ -104,9 +104,40 @@ The real throughput levers are architectural and are in place:
 - **Periodic durability by default** removes the per-commit `fsync` from the hot write path
   (the dominant write cost), while a background timer keeps the power-loss window bounded.
 
-No speculative micro-optimizations were made: without benchmark evidence they risk regressions
-for little gain. Further tuning should be benchmark-driven (the `nitrite-bench` criterion
-suites are the right harness).
+### 5.1 Benchmark-driven optimization (email-app workload)
+
+Primary consumer: a production cross-platform **email app** on nitrite + fjall + tantivy.
+Baselined the fjall variants with `nitrite-bench` (criterion, reduced sample params on an
+external disk — treat absolutes as relative; only deltas matter), 1000-doc workloads:
+
+| Operation (fjall, 1000 docs) | Baseline | After opt |
+| --- | --- | --- |
+| CRUD insert single | ~27.5 ms | **~24.8 ms (−10%)** |
+| CRUD insert batch | ~20.7 ms | ~20.6 ms (flat time) |
+| CRUD read / update / delete | 14 / 21.8 / 19.4 ms | unchanged |
+| Index create / unique | 38 / 36 ms | — |
+| Index indexed-search / full-scan | 13.0 / 13.7 ms | — |
+| Transaction commit (per extra tx) | ~0.14 ms (cold-start ~160 ms dominates) | — |
+
+**Optimization applied — eliminate redundant write-path clones (CPU + mobile memory):**
+`NitriteStore::with_atomic` required `F: Fn` (re-runnable), forcing every write to **clone its
+input** — including a full `Vec<Document>` clone on every batch insert — even though
+`run_atomic` invokes the operation **exactly once** (no backend retries; fjall's single-writer
+transaction has no conflicts). Relaxed the bound to **`FnOnce`** (bridged through an
+`Option::take` over the `FnMut` trait object), so `insert`/`insert_batch`/`update`/`remove`
+now **move** their data into the scope. Also moved (instead of cloned) the per-document
+rollback-tracking copy in `insert_batch_optimized`. Net effect: single insert ~10% faster and
+the transient per-batch full-document-vector clone is gone (peak-memory win on mobile). Batch
+*time* is flat because it is dominated by serialization + LSM writes, not the clone.
+
+**Deliberately not done (would need deeper, benchmark-gated work):**
+- Reordering index-vs-store phases in `insert_batch_optimized` to drop the remaining
+  `entries`/`process_before_write` clones — changes failure/rollback semantics; uncertain time
+  gain. Flagged for a focused follow-up.
+- Query-planner work: at 1000 docs an indexed range search (~13 ms) ≈ full scan (~13.7 ms);
+  worth confirming at 10k+ that a same-field `gte AND lte` uses the index optimally.
+- Cold-start (~160 ms to lazily create a collection's partitions/catalog on first write) is
+  disk-bound directory/fsync cost, paid once; relevant to first-run latency, not steady state.
 
 ---
 
