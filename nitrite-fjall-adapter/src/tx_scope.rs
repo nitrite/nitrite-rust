@@ -37,7 +37,7 @@
 //! 3. **No escape** — `with_active` only lends the reference to a closure that runs to
 //!    completion before the borrow ends; no reference outlives the call.
 
-use fjall::WriteTransaction;
+use fjall::SingleWriterWriteTx as WriteTransaction;
 use std::cell::{Cell, RefCell};
 use std::collections::{BTreeMap, HashMap};
 use std::sync::Arc;

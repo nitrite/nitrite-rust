@@ -1,12 +1,23 @@
-use fjall::compaction::Strategy;
-use fjall::{CompressionType, Config, KvSeparationOptions, PartitionCreateOptions};
+use fjall::config::{BlockSizePolicy, CompressionPolicy};
+use fjall::{
+    CompressionType, Config, KeyspaceCreateOptions as PartitionCreateOptions,
+    KvSeparationOptions,
+};
 use nitrite::common::{atomic, Atomic, ReadExecutor, WriteExecutor};
 use nitrite::store::{StoreConfigProvider, StoreEventListener};
 use std::any::Any;
+use std::path::Path;
 use std::sync::atomic::{
     AtomicBool, AtomicI8, AtomicU16, AtomicU32, AtomicU64, AtomicUsize, Ordering,
 };
 use std::sync::{Arc, OnceLock};
+
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub enum Strategy {
+    #[default]
+    Leveled,
+    Fifo,
+}
 
 /// Controls when a committed write is made durable (fsynced) to stable storage.
 ///
@@ -104,19 +115,18 @@ impl FjallConfig {
     /// Returns: A configured `fjall::Config` ready for keyspace initialization
     #[inline]
     pub(crate) fn keyspace_config(&self) -> Config {
-        let mut config = Config::new(self.inner.db_path());
-        config = config
+        let worker_threads = self
+            .inner
+            .flush_workers()
+            .max(self.inner.compaction_workers());
+
+        fjall::SingleWriterTxDatabase::builder(Path::new(self.inner.db_path()))
             .manual_journal_persist(self.inner.manual_journal_persist())
-            .flush_workers(self.inner.flush_workers())
-            .compaction_workers(self.inner.compaction_workers())
+            .worker_threads(worker_threads)
             .cache_size(self.inner.block_cache_capacity() + self.inner.blob_cache_capacity())
             .max_journaling_size(self.inner.max_journaling_size())
-            .max_write_buffer_size(self.inner.max_write_buffer_size());
-
-        if self.inner.fsync_frequency() > 0 {
-            config = config.fsync_ms(Some(self.inner.fsync_frequency()));
-        }
-        config
+            .max_write_buffer_size(Some(self.inner.max_write_buffer_size()))
+            .into_config()
     }
 
     /// Builds a Fjall Partition configuration from this config.
@@ -130,18 +140,25 @@ impl FjallConfig {
     pub(crate) fn partition_config(&self) -> PartitionCreateOptions {
         let mut config = PartitionCreateOptions::default();
         config = config
-            .bloom_filter_bits(if self.inner.bloom_filter_bits() == -1 {
-                None
-            } else {
-                Some(self.inner.bloom_filter_bits() as u8)
-            })
-            .compression(self.inner.compression_type())
-            .compaction_strategy(self.inner.compaction_strategy())
-            .max_memtable_size(self.inner.max_memtable_size())
-            .block_size(self.inner.block_size());
+            .expect_point_read_hits(self.inner.bloom_filter_bits() > 0)
+            .data_block_compression_policy(CompressionPolicy::new([self.inner.compression_type()]))
+            .max_memtable_size(u64::from(self.inner.max_memtable_size()))
+            .data_block_size_policy(BlockSizePolicy::all(self.inner.block_size()));
+
+        config = match self.inner.compaction_strategy() {
+            Strategy::Leveled => {
+                config.compaction_strategy(Arc::new(fjall::compaction::Leveled::default()))
+            }
+            Strategy::Fifo => {
+                config.compaction_strategy(Arc::new(fjall::compaction::Fifo::new(
+                    self.inner.max_journaling_size(),
+                    None,
+                )))
+            }
+        };
 
         if self.inner.kv_separated() {
-            config = config.with_kv_separation(KvSeparationOptions::default());
+            config = config.with_kv_separation(Some(KvSeparationOptions::default()));
         }
         config
     }

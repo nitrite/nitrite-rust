@@ -4,7 +4,10 @@ use crate::version::fjall_version;
 use crate::wrapper::to_nitrite_error;
 use crossbeam::sync::WaitGroup;
 use dashmap::DashMap;
-use fjall::{GarbageCollection, PersistMode, TxKeyspace, WriteTransaction};
+use fjall::{
+    PersistMode, SingleWriterTxDatabase as TxKeyspace,
+    SingleWriterTxKeyspace as TxPartitionHandle, SingleWriterWriteTx as WriteTransaction,
+};
 use nitrite::common::{
     async_task, NitriteEventBus, NitritePlugin, NitritePluginProvider, SubscriberRef,
     COLLECTION_CATALOG,
@@ -108,8 +111,8 @@ impl FjallStore {
             .replace("\x00K\x00", "_K_")   // Restore _K_ markers
     }
 
-    /// Returns a clone of the transactional Keyspace if it's initialized, or None if not.
-    /// Used by the adapter's tests to open partitions in the store's keyspace.
+    /// Returns a clone of the transactional database if it's initialized, or None if not.
+    /// Used by the adapter's tests to open keyspaces in the store's database.
     #[cfg(test)]
     pub(crate) fn keyspace(&self) -> Option<TxKeyspace> {
         self.inner.keyspace()
@@ -309,26 +312,26 @@ impl FjallStoreInner {
         &self,
         ks: &TxKeyspace,
         name: &str,
-        config: &fjall::PartitionCreateOptions,
-    ) -> NitriteResult<fjall::TxPartitionHandle> {
+        config: &fjall::KeyspaceCreateOptions,
+    ) -> NitriteResult<TxPartitionHandle> {
         // Clone config once to avoid multiple clones in retry paths
         let config_clone = config.clone();
         
-        match ks.open_partition(name, config_clone.clone()) {
+        match ks.keyspace(name, || config_clone.clone()) {
             Ok(partition) => Ok(partition),
             Err(err) => {
                 let err_msg = err.to_string();
                 
                 // If partition was deleted, we need to recreate it
                 if Self::is_partition_deleted_error(&err_msg) {
-                    log::warn!("Partition '{}' was deleted, recreating it", name);
+                    log::warn!("Keyspace '{}' was deleted, recreating it", name);
                     
                     // Clean up any stale references in the registry
                     self.map_registry.remove(name);
                     
-                    // Fjall's open_partition should create a new partition if it doesn't exist
+                    // Fjall's keyspace() should create a new keyspace if it doesn't exist
                     // If it fails, it might be due to file system cleanup in progress, so retry once
-                    match ks.open_partition(name, config_clone.clone()) {
+                    match ks.keyspace(name, || config_clone.clone()) {
                         Ok(partition) => Ok(partition),
                         Err(retry_err) => {
                             // If the retry also fails, wait a moment for file system cleanup
@@ -340,15 +343,15 @@ impl FjallStoreInner {
                             ));
                             
                             // Final attempt
-                            ks.open_partition(name, config_clone)
+                            ks.keyspace(name, || config_clone)
                                 .map_err(|e| {
-                                    log::error!("Failed to recreate partition '{}' after retries: {}", name, e);
+                                    log::error!("Failed to recreate keyspace '{}' after retries: {}", name, e);
                                     to_nitrite_error(e)
                                 })
                         }
                     }
                 } else {
-                    log::error!("Failed to open partition '{}': {}", name, err);
+                    log::error!("Failed to open keyspace '{}': {}", name, err);
                     Err(to_nitrite_error(err))
                 }
             }
@@ -374,14 +377,15 @@ impl FjallStoreInner {
 
         temp_registry.clear();
         self.map_registry.clear();
+        drop(temp_registry);
 
         // Drain background work before returning so that a subsequent open() of the same path
         // observes a settled, fully consistent on-disk state (the close/reopen-under-load fix).
         self.drain()?;
 
         // Release the keyspace so Fjall terminates its background worker threads (syncer,
-        // monitor, flusher, compactor). The maps were closed above, so their partition handles
-        // are gone and this drops the last `TxKeyspace` reference. This must happen even though
+        // monitor, flusher, compactor). The map registries were cleared and dropped above so
+        // their partition handles no longer keep cloned database handles alive. This must happen even though
         // the surrounding config<->store `Arc` cycle keeps `FjallStoreInner` itself alive —
         // otherwise every opened keyspace leaks its threads and a process that opens many
         // databases (e.g. the test suite) exhausts the OS thread limit and hangs.
@@ -430,7 +434,7 @@ impl FjallStoreInner {
         let config = self.store_config.keyspace_config();
         // Open a transactional keyspace so a logical write can span the data partition and all
         // of its index partitions inside one atomic, cross-partition Fjall transaction.
-        let result = config.open_transactional();
+        let result = TxKeyspace::open(config);
         match result {
             Ok(keyspace) => {
                 // Mirror the previous `get_or_init` semantics: keep the first keyspace if one is
@@ -567,48 +571,34 @@ impl FjallStoreInner {
 
     fn compact(&self) -> NitriteResult<()> {
         if let Some(ks) = self.keyspace() {
-            let partitions = ks.list_partitions();
-            let maps: Vec<&str> = partitions
+            let partitions = ks.list_keyspace_names();
+            let maps: Vec<String> = partitions
                 .iter()
-                .map(|partition| partition.trim())
+                .map(|partition| partition.to_string())
                 .collect();
             let wait_group = WaitGroup::new();
 
             for map in maps {
                 let cloned_keyspace = ks.clone();
                 let cloned_options = self.store_config.partition_config().clone();
-                let space_amp_factor = self.store_config.space_amp_factor();
-                let stale_threshold = self.store_config.staleness_threshold();
                 let cloned_map = map.to_string();
                 let cloned_wait_group = wait_group.clone();
 
                 async_task(move || {
-                    let partition = cloned_keyspace.open_partition(&cloned_map, cloned_options);
+                    let partition = cloned_keyspace.keyspace(&cloned_map, || cloned_options.clone());
                     match partition {
                         Ok(partition) => {
                             // Garbage-collection lives on the underlying (non-transactional)
                             // partition handle, reached via `inner()`.
                             let partition = partition.inner();
-                            let result = partition.gc_scan();
-                            if let Err(err) = result {
-                                log::error!("Failed to compact partition: {}", err);
-                                return;
-                            }
-
-                            let result = partition.gc_with_space_amp_target(space_amp_factor);
-                            if let Err(err) = result {
-                                log::error!("Failed to compact partition: {}", err);
-                                return;
-                            }
-
-                            let result = partition.gc_with_staleness_threshold(stale_threshold);
+                            let result = partition.major_compact();
                             if let Err(err) = result {
                                 log::error!("Failed to compact partition: {}", err);
                                 return;
                             }
                         }
                         Err(err) => {
-                            log::error!("Failed to open partition: {}", err);
+                            log::error!("Failed to open keyspace: {}", err);
                             return;
                         }
                     }
@@ -630,8 +620,7 @@ impl FjallStoreInner {
     #[inline]
     fn has_map(&self, name: &str) -> NitriteResult<bool> {
         if let Some(ks) = self.keyspace() {
-            let result = ks.partition_exists(name);
-            Ok(result)
+            Ok(ks.keyspace_exists(name))
         } else {
             Ok(false)
         }
@@ -692,18 +681,18 @@ impl FjallStoreInner {
 
         if let Some(ks) = self.keyspace() {
             let options = self.store_config.partition_config();
-            match ks.open_partition(name, options) {
+            match ks.keyspace(name, || options.clone()) {
                 Ok(partition) => {
-                    match ks.delete_partition(partition.clone()) {
+                    match ks.inner().delete_keyspace(partition.inner().clone()) {
                         Ok(_) => {
                             // Defensive cleanup: Ensure the map is removed from registry after successful deletion.
                             // This handles the unlikely race condition where the map might be re-opened
-                            // by another thread after close_map() but before delete_partition() completes.
+                            // by another thread after close_map() but before delete_keyspace() completes.
                             self.map_registry.remove(name);
                             Ok(())
                         }
                         Err(err) => {
-                            log::error!("Failed to remove partition: {}", err);
+                            log::error!("Failed to remove keyspace: {}", err);
                             Err(to_nitrite_error(err))
                         }
                     }
@@ -711,13 +700,13 @@ impl FjallStoreInner {
                 Err(err) => {
                     let err_msg = err.to_string();
                     
-                    // If partition doesn't exist or was already deleted, that's OK
+                    // If keyspace doesn't exist or was already deleted, that's OK
                     if Self::is_partition_deleted_error(&err_msg) {
                         self.map_registry.remove(name);
-                        log::debug!("Partition '{}' was already deleted", name);
+                        log::debug!("Keyspace '{}' was already deleted", name);
                         Ok(())
                     } else {
-                        log::error!("Failed to open partition for removal: {}", err);
+                        log::error!("Failed to open keyspace for removal: {}", err);
                         Err(to_nitrite_error(err))
                     }
                 }

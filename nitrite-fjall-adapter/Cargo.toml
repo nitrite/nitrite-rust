@@ -11,7 +11,7 @@ categories = ["database"]
 
 [dependencies]
 nitrite = { version = "0.3.1", path = "../nitrite" }
-fjall = { version = "2.6.3", features = ["bytes"] }
+fjall = { version = "3.1.4", features = ["bytes_1"] }
 bincode = { version = "2.0.1", features = ["serde"] }
 log = "0.4.14"
 cargo_toml = "0.22.1"

@@ -1,6 +1,5 @@
-use crate::config::{Durability, FjallConfig};
+use crate::config::{Durability, FjallConfig, Strategy};
 use crate::store::FjallStore;
-use fjall::compaction::Strategy;
 use fjall::CompressionType;
 use nitrite::common::{NitriteModule, NitritePlugin, PluginRegistrar};
 use nitrite::errors::NitriteResult;
@@ -346,7 +345,6 @@ impl FjallModuleBuilder {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use fjall::compaction::Strategy;
     use fjall::CompressionType;
     use nitrite::common::PluginRegistrar;
 

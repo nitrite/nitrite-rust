@@ -15,7 +15,9 @@ pub use module::*;
 mod tests {
     use crate::map::FjallMap;
     use crate::store::FjallStore;
-    use fjall::{TxKeyspace, TxPartitionHandle};
+    use fjall::{
+        SingleWriterTxDatabase as TxKeyspace, SingleWriterTxKeyspace as TxPartitionHandle,
+    };
     use nitrite::common::NitritePluginProvider;
     use nitrite::store::NitriteMapProvider;
 

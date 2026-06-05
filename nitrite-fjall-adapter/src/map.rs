@@ -1,7 +1,7 @@
 use crate::config::FjallConfig;
 use crate::store::FjallStore;
 use crate::wrapper::FjallValue;
-use fjall::{GarbageCollection, TxPartitionHandle};
+use fjall::SingleWriterTxKeyspace as TxPartitionHandle;
 use nitrite::common::{async_task, AttributeAware, Attributes, Key, Value, META_MAP_NAME};
 use nitrite::errors::{ErrorKind, NitriteError, NitriteResult};
 use nitrite::store::{
@@ -11,7 +11,7 @@ use nitrite::store::{
 use std::collections::Bound::{Excluded, Included, Unbounded};
 use std::iter::Rev;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::Arc;
+use std::sync::{Arc, RwLock};
 
 #[derive(Clone)]
 /// Fjall-based key-value map implementation.
@@ -380,7 +380,7 @@ impl FjallMap {
 struct FjallMapInner {
     name: String,
     overlay_key: Arc<str>,
-    partition: TxPartitionHandle,
+    partition: RwLock<Option<TxPartitionHandle>>,
     closed: AtomicBool,
     dropped: AtomicBool,
     store: FjallStore,
@@ -413,7 +413,7 @@ impl FjallMapInner {
         FjallMapInner {
             name,
             overlay_key,
-            partition,
+            partition: RwLock::new(Some(partition)),
             store,
             closed: AtomicBool::new(false),
             dropped: AtomicBool::new(false),
@@ -446,6 +446,19 @@ impl FjallMapInner {
         }
 
         Ok(())
+    }
+
+    fn partition_handle(&self) -> NitriteResult<TxPartitionHandle> {
+        self.partition
+            .read()
+            .unwrap_or_else(|e| e.into_inner())
+            .clone()
+            .ok_or_else(|| {
+                NitriteError::new(
+                    &format!("Map {} is closed", self.name),
+                    ErrorKind::StoreAlreadyClosed,
+                )
+            })
     }
 
     /// Builds a `BackendError` for a failed Fjall operation, logging it as well.
@@ -481,27 +494,29 @@ impl FjallMapInner {
     fn insert_in_tx(&self, key: FjallValue, value: FjallValue) -> NitriteResult<()> {
         let raw_key = key.as_ref().to_vec();
         let raw_value = Box::<[u8]>::from(value.as_ref());
+        let partition = self.partition_handle()?;
         crate::tx_scope::with_active(|tx| {
             let tx = tx.expect("write_in_tx requires an active transaction");
-            tx.insert(&self.partition, key, value);
+            tx.insert(&partition, key, value);
         });
         crate::tx_scope::record_insert(&self.overlay_key, raw_key, raw_value);
         Ok(())
     }
 
     fn remove_in_tx(&self, raw_key: Vec<u8>) -> NitriteResult<()> {
+        let partition = self.partition_handle()?;
         crate::tx_scope::with_active(|tx| {
             let tx = tx.expect("write_in_tx requires an active transaction");
-            tx.remove(&self.partition, raw_key.clone());
+            tx.remove(&partition, raw_key.clone());
         });
         crate::tx_scope::record_remove(&self.overlay_key, raw_key);
         Ok(())
     }
 
     fn visible_contains_key(&self, op: &str, key: &FjallValue) -> NitriteResult<bool> {
+        let partition = self.partition_handle()?;
         if !crate::tx_scope::in_scope() {
-            return self
-                .partition
+            return partition
                 .contains_key(key.clone())
                 .map_err(|err| Self::backend_err(op, err));
         }
@@ -511,16 +526,16 @@ impl FjallMapInner {
                 return Ok(value.is_some());
             }
 
-            self.partition
+            partition
                 .contains_key(key.clone())
                 .map_err(|err| Self::backend_err(op, err))
         })
     }
 
     fn visible_value(&self, op: &str, key: &FjallValue) -> NitriteResult<Option<Value>> {
+        let partition = self.partition_handle()?;
         if !crate::tx_scope::in_scope() {
-            return self
-                .partition
+            return partition
                 .get(key.clone())
                 .map_err(|err| Self::backend_err(op, err))?
                 .as_deref()
@@ -533,7 +548,7 @@ impl FjallMapInner {
                 return value.as_deref().map(Self::decode_bytes).transpose();
             }
 
-            self.partition
+            partition
                 .get(key.clone())
                 .map_err(|err| Self::backend_err(op, err))?
                 .as_deref()
@@ -549,33 +564,34 @@ impl FjallMapInner {
         inclusive: bool,
         direction: SeekDirection,
     ) -> NitriteResult<Option<(Vec<u8>, Vec<u8>)>> {
+        let partition = self.partition_handle()?;
         let result = match (direction, bound) {
-            (SeekDirection::Forward, None) => self.partition.first_key_value(),
-            (SeekDirection::Reverse, None) => self.partition.last_key_value(),
-            (SeekDirection::Forward, Some(bound)) => self
-                .partition
+            (SeekDirection::Forward, None) => partition.first_key_value(),
+            (SeekDirection::Reverse, None) => partition.last_key_value(),
+            (SeekDirection::Forward, Some(bound)) => partition
                 .inner()
                 .range::<Vec<u8>, _>(((if inclusive {
                     Included(bound.to_vec())
                 } else {
                     Excluded(bound.to_vec())
                 }), Unbounded))
-                .next()
-                .transpose(),
-            (SeekDirection::Reverse, Some(bound)) => self
-                .partition
+                .next(),
+            (SeekDirection::Reverse, Some(bound)) => partition
                 .inner()
                 .range::<Vec<u8>, _>((Unbounded, if inclusive {
                     Included(bound.to_vec())
                 } else {
                     Excluded(bound.to_vec())
                 }))
-                .next_back()
-                .transpose(),
-        }
-        .map_err(|err| Self::backend_err(op, err))?;
+                .next_back(),
+        };
 
-        Ok(result.map(|(key, value)| (key.to_vec(), value.to_vec())))
+        result
+            .map(|guard| {
+                let (key, value) = guard.into_inner().map_err(|err| Self::backend_err(op, err))?;
+                Ok((key.to_vec(), value.to_vec()))
+            })
+            .transpose()
     }
 
     fn overlay_entry_raw<'a>(
@@ -647,7 +663,7 @@ impl FjallMapInner {
     }
 
     fn committed_size(&self, op: &str) -> NitriteResult<u64> {
-        self.partition
+        self.partition_handle()?
             .inner()
             .len()
             .map(|len| len as u64)
@@ -655,6 +671,7 @@ impl FjallMapInner {
     }
 
     fn overlay_size_delta(&self, op: &str) -> NitriteResult<i64> {
+        let partition = self.partition_handle()?;
         crate::tx_scope::with_partition_overlay_mut(&self.overlay_key, |overlay| {
             let Some(overlay) = overlay else {
                 return Ok(0);
@@ -666,8 +683,7 @@ impl FjallMapInner {
 
             let mut delta = 0i64;
             for (key, value) in &overlay.entries {
-                let committed_present = self
-                    .partition
+                let committed_present = partition
                     .contains_key(key.as_slice())
                     .map_err(|err| Self::backend_err(op, err))?;
 
@@ -777,7 +793,7 @@ impl FjallMapInner {
         let fjall_key = FjallValue::try_from_value_normalized(key)?;
         if !crate::tx_scope::in_scope() {
             return self
-                .partition
+                .partition_handle()?
                 .contains_key(fjall_key)
                 .map_err(|err| Self::backend_err("check key in", err));
         }
@@ -818,6 +834,12 @@ impl FjallMapInner {
 
     fn close(&self) -> NitriteResult<()> {
         self.closed.store(true, Ordering::Relaxed);
+        let partition = self
+            .partition
+            .write()
+            .unwrap_or_else(|e| e.into_inner())
+            .take();
+        drop(partition);
         let store = self.get_store()?;
         store.close_map(&self.name)
     }
@@ -963,7 +985,7 @@ impl FjallMapInner {
         self.check_opened()?;
         if !crate::tx_scope::in_scope() {
             return self
-                .partition
+                .partition_handle()?
                 .inner()
                 .is_empty()
                 .map_err(|err| Self::backend_err("check if empty", err));
@@ -985,6 +1007,12 @@ impl FjallMapInner {
     fn dispose(&self) -> NitriteResult<()> {
         self.dropped.store(true, Ordering::Relaxed);
         self.closed.store(true, Ordering::Relaxed);
+        let partition = self
+            .partition
+            .write()
+            .unwrap_or_else(|e| e.into_inner())
+            .take();
+        drop(partition);
 
         let store = self.get_store()?;
         let name = self.get_name()?; // Get decoded name since remove_map will encode it
@@ -1009,20 +1037,10 @@ impl FjallMapInner {
     pub fn collect_garbage(&self) -> NitriteResult<()> {
         if self.fjall_config.kv_separated() {
             // Garbage collection lives on the underlying (non-transactional) partition handle.
-            let partition = self.partition.inner();
-            // Use if let pattern instead of repeated error handling
-            if let Err(err) = partition.gc_scan() {
-                return Self::handle_gc_error(err, "collect garbage (scan)");
-            }
-
-            let space_amp_factor = self.fjall_config.space_amp_factor();
-            if let Err(err) = partition.gc_with_space_amp_target(space_amp_factor) {
-                return Self::handle_gc_error(err, "collect garbage (space amp)");
-            }
-
-            let stale_threshold = self.fjall_config.staleness_threshold();
-            if let Err(err) = partition.gc_with_staleness_threshold(stale_threshold) {
-                return Self::handle_gc_error(err, "collect garbage (staleness)");
+            let partition_handle = self.partition_handle()?;
+            let partition = partition_handle.inner();
+            if let Err(err) = partition.major_compact() {
+                return Self::handle_gc_error(err, "collect garbage (major compact)");
             }
         } else {
             log::warn!("Cannot use GC for non-KV-separated tree");
@@ -1073,7 +1091,7 @@ mod tests {
             .expect("Store keyspace should be initialized");
         let partition = keyspace
             .clone()
-            .open_partition("test_partition", fjall_config.partition_config())
+            .keyspace("test_partition", || fjall_config.partition_config())
             .expect("Failed to open partition");
 
         let fjall_map = FjallMap::new(
