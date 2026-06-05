@@ -194,12 +194,50 @@ and the find-plan optimizer (AND / OR), to make *all* search paths index-efficie
 - `OR`: each branch is planned independently and the index plans are unioned; falls back to a
   single full scan only when a branch is unindexable — correct and reasonable.
 
-**Noted, not changed (semantics/risk):** `DocumentCursor` caches a clone of every yielded
-document (to support `reset()`/`size()`/re-iteration), and `count()` materialises every matching
-document. For a forward-only consumer (list a folder, count unread) this is redundant CPU +
-peak memory. A `count()` that short-circuits on a fully index-covered plan, and an opt-out of
-caching for one-shot iteration, are worthwhile follow-ups but touch cursor semantics used across
-the codebase — deferred to keep this change set green and low-risk.
+### 5.4 `count()` short-circuit — answer from the index, never fetch documents
+
+Previously `find(filter).count()` (and `size()`) **fetched and deserialized every matching
+document** just to count them — the "unread count in a folder" path scaled with the number of
+matches. Now:
+- An **index-covered** query (an index scan with no post-filter, skip, limit, or OR-union) makes
+  `count()`/`size()` return the index id-set length directly — **zero document fetches**.
+- A `find(all())`/`size()` returns the **map size** directly (`AllFilter` is no longer pushed
+  as a redundant full-scan filter, which also unblocks this fast path).
+
+**Result — indexed `count()` on a warm collection (`active == true`, ~80% match):**
+
+| Matches | Materialized (old: fetch every doc) | Short-circuit (new) | Speedup |
+| --- | --- | --- | --- |
+| ~800 (1k coll) | 1.198 ms | **45.8 µs** | **~26×** |
+| ~8000 (10k coll) | 15.75 ms | **129.6 µs** | **~121×** |
+
+The gap widens with the match count, exactly as a count-from-index should. (Verified count
+values are unchanged across the whole integration suite.)
+
+### 5.5 Full-text search (tantivy) — batch commits + reuse the reader
+
+Two classic FTS performance bugs in `nitrite-tantivy-fts`:
+1. **A tantivy `commit()` on every single document write/delete.** A commit flushes + fsyncs
+   segments, so bulk-indexing email was N commits.
+2. **A fresh `IndexReader` built on every search**, reopening the index segments per query.
+
+**Fixes:** writes/deletes now just buffer (mark dirty) and the batch is committed once on the
+next **search** (`commit_if_dirty`, serialized by the writer lock and reloaded so the search
+sees its own writes) or on `close()` (clean-shutdown durability). A single `IndexReader` is
+built once and reused across searches.
+
+**Result — FTS insert of 100 documents into an indexed collection:**
+
+| | Time |
+| --- | --- |
+| Before (commit per write) | **14.85 s** |
+| After (batched commit) | **0.170 s** |
+| **Speedup** | **~87×** |
+
+(The per-write-commit version could not even complete a 2-second criterion measurement of 1000
+inserts in several minutes.) This turns FTS indexing of a mailbox from unusable to instant; the
+trade-off — a process crash between writes and the next search/`close()` loses the *uncommitted*
+FTS batch — is acceptable for a derived, rebuildable index, and a clean shutdown always commits.
 
 ---
 

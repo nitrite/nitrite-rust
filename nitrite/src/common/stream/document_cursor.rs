@@ -12,6 +12,10 @@ pub struct DocumentCursor {
     current_index: usize,
     processor_chain: ProcessorChain,
     find_plan: Option<FindPlan>,
+    /// Number of matching documents when the query is fully answered by an index (an index
+    /// scan with no post-filter, skip, limit, or OR-union). When set, `count()`/`size()` return
+    /// it directly instead of fetching and deserializing every matching document.
+    covered_count: Option<usize>,
 }
 
 impl DocumentCursor {
@@ -25,7 +29,14 @@ impl DocumentCursor {
             current_index: 0,
             processor_chain,
             find_plan: None,
+            covered_count: None,
         }
+    }
+
+    /// Records the index-covered match count so `count()`/`size()` can answer without fetching.
+    pub(crate) fn with_covered_count(mut self, covered_count: Option<usize>) -> Self {
+        self.covered_count = covered_count;
+        self
     }
 
     /// Resets the cursor so that it can be iterated from the beginning.
@@ -33,7 +44,28 @@ impl DocumentCursor {
         self.current_index = 0;
     }
 
+    /// Returns the number of matching documents.
+    ///
+    /// When the query is fully answered by an index, this is the **fast path**: the count comes
+    /// straight from the index id set without fetching or deserializing a single document (the
+    /// common "unread count in a folder" case). Otherwise the cursor is drained.
+    pub fn count(mut self) -> usize {
+        if let Some(count) = self.covered_count {
+            return count;
+        }
+        let mut count = 0;
+        while self.next().is_some() {
+            count += 1;
+        }
+        count
+    }
+
     pub fn size(&mut self) -> usize {
+        // Index-covered queries know their size without materializing any document.
+        if let Some(count) = self.covered_count {
+            self.reset();
+            return count;
+        }
         // If the underlying iterator is already exhausted,
         // then no need to iterate again.
         if self.underlying.is_none() {

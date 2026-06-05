@@ -4,13 +4,14 @@
 //! for integration with Nitrite's indexing system.
 
 use std::path::PathBuf;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
 use parking_lot::RwLock;
 use tantivy::collector::TopDocs;
 use tantivy::query::QueryParser;
 use tantivy::schema::{Field, Schema, Value as TantivyValue, STORED, STRING, TEXT};
-use tantivy::{Index, IndexWriter, ReloadPolicy, TantivyDocument};
+use tantivy::{Index, IndexReader, IndexWriter, ReloadPolicy, TantivyDocument};
 
 use nitrite::collection::{FindPlan, NitriteId};
 use nitrite::common::{FieldValues, Value};
@@ -30,6 +31,13 @@ pub struct FtsIndex {
 struct FtsIndexInner {
     index: Index,
     index_writer: RwLock<Option<IndexWriter>>,
+    /// A single reader reused across all searches (creating one per query reopens the segments).
+    /// It is reloaded after a commit so searches observe the latest data.
+    reader: IndexReader,
+    /// `true` when there are buffered writes/deletes not yet committed. Writes do **not** commit
+    /// per document (a tantivy commit flushes + fsyncs segments); instead the next search (or
+    /// `close()`) commits the whole batch once. This turns bulk indexing from N commits into one.
+    dirty: AtomicBool,
     id_field: Field,
     text_field: Field,
     index_path: Option<PathBuf>,
@@ -107,16 +115,62 @@ impl FtsIndex {
             )
         })?;
 
+        // Build the (reusable) reader once. `Manual` reload means we explicitly `reload()` after
+        // our own commits, so a search always observes the data it just committed.
+        let reader = index
+            .reader_builder()
+            .reload_policy(ReloadPolicy::Manual)
+            .try_into()
+            .map_err(|e| {
+                NitriteError::new(
+                    &format!("Failed to create FTS reader: {}", e),
+                    ErrorKind::Extension("FTS".to_string()),
+                )
+            })?;
+
         Ok(Self {
             inner: Arc::new(FtsIndexInner {
                 index,
                 index_writer: RwLock::new(Some(index_writer)),
+                reader,
+                dirty: AtomicBool::new(false),
                 id_field,
                 text_field,
                 index_path,
                 search_result_limit: config.search_result_limit(),
             }),
         })
+    }
+
+    /// Commits buffered writes/deletes once (if any) and reloads the reader so searches see them.
+    ///
+    /// The commit is serialized by the writer lock, and `dirty` is re-checked under it so
+    /// concurrent searches commit at most once per batch.
+    fn commit_if_dirty(&self) -> NitriteResult<()> {
+        if !self.inner.dirty.load(Ordering::Acquire) {
+            return Ok(());
+        }
+
+        let mut writer_guard = self.inner.index_writer.write();
+        if self.inner.dirty.load(Ordering::Acquire) {
+            if let Some(ref mut writer) = *writer_guard {
+                writer.commit().map_err(|e| {
+                    NitriteError::new(
+                        &format!("Failed to commit FTS index: {}", e),
+                        ErrorKind::Extension("FTS".to_string()),
+                    )
+                })?;
+            }
+            // Only clear the flag after a successful commit so a failure is retried next time.
+            self.inner.dirty.store(false, Ordering::Release);
+            self.inner.reader.reload().map_err(|e| {
+                NitriteError::new(
+                    &format!("Failed to reload FTS reader: {}", e),
+                    ErrorKind::Extension("FTS".to_string()),
+                )
+            })?;
+        }
+        Ok(())
     }
 
     /// Writes a document to the FTS index.
@@ -149,23 +203,20 @@ impl FtsIndex {
 
         let id_term = tantivy::Term::from_field_text(self.inner.id_field, &nitrite_id.to_string());
 
-        let mut writer_guard = self.inner.index_writer.write();
-        if let Some(ref mut writer) = *writer_guard {
-            writer.delete_term(id_term);
-            writer.add_document(doc).map_err(|e| {
-                NitriteError::new(
-                    &format!("Failed to add document to FTS index: {}", e),
-                    ErrorKind::Extension("FTS".to_string()),
-                )
-            })?;
-
-            writer.commit().map_err(|e| {
-                NitriteError::new(
-                    &format!("Failed to commit FTS index: {}", e),
-                    ErrorKind::Extension("FTS".to_string()),
-                )
-            })?;
+        {
+            let mut writer_guard = self.inner.index_writer.write();
+            if let Some(ref mut writer) = *writer_guard {
+                writer.delete_term(id_term);
+                writer.add_document(doc).map_err(|e| {
+                    NitriteError::new(
+                        &format!("Failed to add document to FTS index: {}", e),
+                        ErrorKind::Extension("FTS".to_string()),
+                    )
+                })?;
+            }
         }
+        // Defer the (expensive) commit; the next search or close() flushes the whole batch.
+        self.inner.dirty.store(true, Ordering::Release);
 
         Ok(())
     }
@@ -175,16 +226,14 @@ impl FtsIndex {
         let nitrite_id = field_values.nitrite_id().id_value();
         let id_term = tantivy::Term::from_field_text(self.inner.id_field, &nitrite_id.to_string());
 
-        let mut writer_guard = self.inner.index_writer.write();
-        if let Some(ref mut writer) = *writer_guard {
-            writer.delete_term(id_term);
-            writer.commit().map_err(|e| {
-                NitriteError::new(
-                    &format!("Failed to commit FTS index after delete: {}", e),
-                    ErrorKind::Extension("FTS".to_string()),
-                )
-            })?;
+        {
+            let mut writer_guard = self.inner.index_writer.write();
+            if let Some(ref mut writer) = *writer_guard {
+                writer.delete_term(id_term);
+            }
         }
+        // Defer the commit; the next search or close() flushes the delete with the batch.
+        self.inner.dirty.store(true, Ordering::Release);
 
         Ok(())
     }
@@ -221,20 +270,11 @@ impl FtsIndex {
 
     /// Performs a full-text search and returns matching NitriteIds.
     fn search(&self, query_str: &str) -> NitriteResult<Vec<NitriteId>> {
-        let reader = self
-            .inner
-            .index
-            .reader_builder()
-            .reload_policy(ReloadPolicy::Manual)
-            .try_into()
-            .map_err(|e| {
-                NitriteError::new(
-                    &format!("Failed to create FTS reader: {}", e),
-                    ErrorKind::Extension("FTS".to_string()),
-                )
-            })?;
+        // Flush any buffered writes once so this search observes them, then reuse the cached
+        // reader instead of reopening the index segments per query.
+        self.commit_if_dirty()?;
 
-        let searcher = reader.searcher();
+        let searcher = self.inner.reader.searcher();
         let query_parser = QueryParser::for_index(&self.inner.index, vec![self.inner.text_field]);
 
         let query = query_parser.parse_query(query_str).map_err(|e| {
@@ -282,12 +322,14 @@ impl FtsIndex {
     pub fn close(&self) -> NitriteResult<()> {
         let mut writer_guard = self.inner.index_writer.write();
         if let Some(mut writer) = writer_guard.take() {
+            // Flush any buffered batch durably before dropping the writer.
             writer.commit().map_err(|e| {
                 NitriteError::new(
                     &format!("Failed to commit FTS index on close: {}", e),
                     ErrorKind::Extension("FTS".to_string()),
                 )
             })?;
+            self.inner.dirty.store(false, Ordering::Release);
         }
         Ok(())
     }

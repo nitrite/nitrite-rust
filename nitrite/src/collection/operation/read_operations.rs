@@ -154,7 +154,13 @@ impl ReadOperationsInner {
             // Direct map iteration with no filters
             let iter = Box::new(MapValues::new(self.nitrite_map.clone()));
 
-            // Apply limit/skip if needed
+            // Apply limit/skip if needed. With neither, the whole collection matches, so the
+            // count is the map size — answerable without iterating any document.
+            let covered_count = if find_plan.skip().is_some() || find_plan.limit().is_some() {
+                None
+            } else {
+                Some(self.nitrite_map.size()? as usize)
+            };
             let iter: Box<dyn Iterator<Item = NitriteResult<Document>>> =
                 if find_plan.skip().is_some() || find_plan.limit().is_some() {
                     let skip = find_plan.skip().unwrap_or(0);
@@ -166,20 +172,34 @@ impl ReadOperationsInner {
 
             // Combine cursor creation and plan setting into single operation
             return Ok(DocumentCursor::new(iter, self.processor_chain.clone())
-                .set_find_plan(find_plan.clone()));
+                .set_find_plan(find_plan.clone())
+                .with_covered_count(covered_count));
         }
 
         // Standard path for complex queries
-        let iter = self.find_suitable_iter(find_plan)?;
+        let mut indexed_id_count = None;
+        let iter = self.find_suitable_iter(find_plan, &mut indexed_id_count)?;
+        // The index id count is the exact match count only when nothing downstream drops or
+        // changes cardinality (a post-filter, skip, or limit). Sort does not change the count.
+        let covered_count = if find_plan.full_scan_filter().is_none()
+            && find_plan.skip().is_none()
+            && find_plan.limit().is_none()
+        {
+            indexed_id_count
+        } else {
+            None
+        };
         Ok(
             DocumentCursor::new(iter, self.processor_chain.clone())
-                .set_find_plan(find_plan.clone()),
+                .set_find_plan(find_plan.clone())
+                .with_covered_count(covered_count),
         )
     }
 
     fn find_suitable_iter(
         &self,
         find_plan: &FindPlan,
+        indexed_id_count: &mut Option<usize>,
     ) -> NitriteResult<Box<dyn Iterator<Item = NitriteResult<Document>>>> {
         let mut raw_stream: Box<dyn Iterator<Item = NitriteResult<Document>>>;
 
@@ -190,7 +210,9 @@ impl ReadOperationsInner {
                 > = SmallVec::with_capacity(sub_plans.len());
 
                 for sub_plan in sub_plans {
-                    let iter = self.find_suitable_iter(&sub_plan)?;
+                    // A sub-plan's own covered count cannot answer the union's count (dedup),
+                    // so discard it here.
+                    let iter = self.find_suitable_iter(&sub_plan, &mut None)?;
                     sub_iters.push(iter);
                 }
 
@@ -300,6 +322,9 @@ impl ReadOperationsInner {
 
                     let nitrite_ids = indexer.find_by_filter(find_plan, &self.nitrite_config)?;
 
+                    // The index supplied the exact matching id set; record its size so a
+                    // count()/size() with no row-dropping step downstream can answer from it.
+                    *indexed_id_count = Some(nitrite_ids.len());
                     raw_stream =
                         Box::new(IndexedStream::new(self.nitrite_map.clone(), nitrite_ids));
                 } else {
@@ -537,7 +562,7 @@ mod tests {
             .find_optimizer
             .create_find_plan(&filter, &find_options, &[index_descriptor])
             .unwrap();
-        let result = inner.find_suitable_iter(&find_plan);
+        let result = inner.find_suitable_iter(&find_plan, &mut None);
         assert!(result.is_ok());
     }
 
@@ -554,7 +579,7 @@ mod tests {
         }
         // Actually, for empty we just don't add any
 
-        let result = inner.find_suitable_iter(&find_plan);
+        let result = inner.find_suitable_iter(&find_plan, &mut None);
         assert!(result.is_ok());
     }
 
@@ -570,7 +595,7 @@ mod tests {
         find_plan.add_sub_plan(sub_plan1);
         find_plan.add_sub_plan(sub_plan2);
 
-        let result = inner.find_suitable_iter(&find_plan);
+        let result = inner.find_suitable_iter(&find_plan, &mut None);
         assert!(result.is_ok());
     }
 
@@ -586,7 +611,7 @@ mod tests {
         }
 
         // This should not panic with the fix (using if-let instead of multiple unwraps)
-        let result = inner.find_suitable_iter(&find_plan);
+        let result = inner.find_suitable_iter(&find_plan, &mut None);
         assert!(result.is_ok());
     }
 

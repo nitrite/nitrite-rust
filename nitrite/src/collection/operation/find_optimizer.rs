@@ -7,8 +7,8 @@ use crate::{
     collection::{FindOptions, FindPlan},
     errors::{ErrorKind, NitriteError, NitriteResult},
     filter::{
-        is_and_filter, is_between_filter, is_equals_filter, is_or_filter, is_text_filter, Filter,
-        FilterProvider, IndexScanFilter,
+        is_all_filter, is_and_filter, is_between_filter, is_equals_filter, is_or_filter,
+        is_text_filter, Filter, FilterProvider, IndexScanFilter,
     },
     index::IndexDescriptor,
     SortOrder, DOC_ID,
@@ -441,6 +441,12 @@ impl FindOptimizerInner {
         filters: &[Filter],
     ) -> NitriteResult<()> {
         for filter in filters {
+            // AllFilter matches every document, so it never needs to run as a post-filter.
+            // Skipping it keeps a pure `find(all())` free of a full-scan filter, which lets the
+            // cursor answer count()/size() from the map size instead of iterating.
+            if is_all_filter(filter) {
+                continue;
+            }
             if !self.contains_filter(filter, index_scan_filters)? {
                 let mut eligible = false;
 

@@ -3,8 +3,51 @@
 use std::hint::black_box;
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
 use nitrite::filter::field;
+use nitrite::index::non_unique_index;
 use nitrite_bench::data_gen::{generate_simple_docs, generate_single_doc};
 use nitrite_bench::stores::{create_fjall_db, create_inmemory_db};
+
+/// Indexed `count()` on a warm database: the short-circuit answers from the index id set,
+/// whereas the materialized variant fetches and deserializes every matching document (the old
+/// behaviour). Both run on the same warmed collection so the difference isolates the
+/// optimization rather than cold-start / index-build cost.
+fn bench_count(c: &mut Criterion) {
+    let mut group = c.benchmark_group("Count/Indexed");
+
+    for size in [1_000, 10_000].iter() {
+        let docs = generate_simple_docs(*size);
+
+        // Fast path: count() short-circuits to the index id-set length (no document fetch).
+        group.bench_with_input(BenchmarkId::new("shortcircuit", size), &docs, |b, docs| {
+            let ctx = create_fjall_db().unwrap();
+            let coll = ctx.db().collection("bench").unwrap();
+            coll.insert_many(docs.clone()).unwrap();
+            coll.create_index(vec!["active"], &non_unique_index()).unwrap();
+            let _ = coll.find(field("active").eq(true)).unwrap().count(); // warm partitions
+            b.iter(|| black_box(coll.find(field("active").eq(true)).unwrap().count()));
+        });
+
+        // Old behaviour: materialize every matching document just to count them.
+        group.bench_with_input(BenchmarkId::new("materialized", size), &docs, |b, docs| {
+            let ctx = create_fjall_db().unwrap();
+            let coll = ctx.db().collection("bench").unwrap();
+            coll.insert_many(docs.clone()).unwrap();
+            coll.create_index(vec!["active"], &non_unique_index()).unwrap();
+            let _ = coll.find(field("active").eq(true)).unwrap().count(); // warm partitions
+            b.iter(|| {
+                // `fold` drives the cursor's `Iterator::next` (fetching each matching document),
+                // bypassing the index-covered `count()` short-circuit to measure the old cost.
+                black_box(
+                    coll.find(field("active").eq(true))
+                        .unwrap()
+                        .fold(0usize, |n, _| n + 1),
+                )
+            });
+        });
+    }
+
+    group.finish();
+}
 
 fn bench_insert_single(c: &mut Criterion) {
     let mut group = c.benchmark_group("CRUD/Insert Single");
@@ -233,6 +276,7 @@ criterion_group!(
     bench_insert_batch,
     bench_read,
     bench_update,
-    bench_delete
+    bench_delete,
+    bench_count
 );
 criterion_main!(benches);
