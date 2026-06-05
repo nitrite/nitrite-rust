@@ -221,6 +221,140 @@ fn test_find_after_dropped_index() {
 }
 
 #[test]
+fn test_indexed_multi_bound_range_query_matches_full_scan() {
+    // Regression: a multi-bound range query on a single-field index (e.g. `age >= 30 AND
+    // age <= 50`) must use *both* bounds at the index level and return the exact same set as
+    // an unindexed full scan — not "everything above the lower bound, post-filtered".
+    run_test(
+        create_test_context,
+        |ctx| {
+            let coll = ctx.db().collection("range")?;
+            for age in 0i64..100 {
+                coll.insert(nitrite::doc! { id: (age), age: (age) })?;
+            }
+
+            // Ground truth from an unindexed full scan: ages 30..=50 inclusive = 21 docs.
+            let inclusive = || field("age").gte(30i64).and(field("age").lte(50i64));
+            assert_eq!(coll.find(inclusive())?.count(), 21, "full-scan ground truth");
+
+            // Index the field; the same query must return the identical, exact set.
+            coll.create_index(vec!["age"], &non_unique_index())?;
+
+            let mut ages: Vec<i64> = Vec::new();
+            for doc in coll.find(inclusive())? {
+                if let Ok(Value::I64(age)) = doc?.get("age") {
+                    ages.push(age);
+                }
+            }
+            ages.sort_unstable();
+            assert_eq!(
+                ages,
+                (30..=50).collect::<Vec<_>>(),
+                "indexed range must equal exactly ages 30..=50 (both bounds applied)"
+            );
+
+            // Exclusive bounds: 30 < age < 50 -> 31..=49 = 19 docs.
+            assert_eq!(
+                coll.find(field("age").gt(30i64).and(field("age").lt(50i64)))?.count(),
+                19
+            );
+            // Contradictory range yields nothing.
+            assert_eq!(
+                coll.find(field("age").gte(50i64).and(field("age").lte(30i64)))?.count(),
+                0
+            );
+            // Degenerate single-value range.
+            assert_eq!(
+                coll.find(field("age").gte(42i64).and(field("age").lte(42i64)))?.count(),
+                1
+            );
+
+            // The `between` API must be index-accelerated identically to `gte().and(lte())`.
+            assert_eq!(coll.find(field("age").between_inclusive(30i64, 50i64, true))?.count(), 21);
+            // And nested inside an AND with another predicate (exercises 3 same-field bounds via
+            // the intersection fallback).
+            assert_eq!(
+                coll.find(
+                    field("age")
+                        .between_inclusive(30i64, 50i64, true)
+                        .and(field("age").gt(40i64)),
+                )?
+                .count(),
+                10 // ages 41..=50
+            );
+
+            Ok(())
+        },
+        cleanup,
+    )
+}
+
+#[test]
+fn test_compound_index_terminal_range_matches_full_scan() {
+    // A compound index `[folder, date]` queried with an equality prefix and a range on the
+    // terminal field (`folder == 3 AND date BETWEEN 20 AND 40`) must bound the range at the
+    // index level and return the exact same set as a full scan.
+    run_test(
+        create_test_context,
+        |ctx| {
+            let coll = ctx.db().collection("compound_range")?;
+            for folder in 0i64..10 {
+                for date in 0i64..100 {
+                    coll.insert(nitrite::doc! {
+                        id: (folder * 100 + date),
+                        folder: (folder),
+                        date: (date)
+                    })?;
+                }
+            }
+
+            let q = || {
+                field("folder")
+                    .eq(3i64)
+                    .and(field("date").gte(20i64))
+                    .and(field("date").lte(40i64))
+            };
+
+            // Ground truth from an unindexed full scan: dates 20..=40 in folder 3 = 21 docs.
+            assert_eq!(coll.find(q())?.count(), 21, "full-scan ground truth");
+
+            // With the compound index the result must be identical and exact.
+            coll.create_index(vec!["folder", "date"], &non_unique_index())?;
+            let mut dates: Vec<i64> = Vec::new();
+            for doc in coll.find(q())? {
+                let doc = doc?;
+                if let Ok(Value::I64(d)) = doc.get("date") {
+                    dates.push(d);
+                }
+                // Every returned document must be in the queried folder.
+                assert_eq!(doc.get("folder").ok(), Some(Value::I64(3)));
+            }
+            dates.sort_unstable();
+            assert_eq!(
+                dates,
+                (20..=40).collect::<Vec<_>>(),
+                "compound terminal range must equal exactly dates 20..=40 in folder 3"
+            );
+
+            // A different folder over the same date range yields nothing.
+            assert_eq!(
+                coll.find(
+                    field("folder")
+                        .eq(7i64)
+                        .and(field("date").gte(200i64))
+                        .and(field("date").lte(400i64)),
+                )?
+                .count(),
+                0
+            );
+
+            Ok(())
+        },
+        cleanup,
+    )
+}
+
+#[test]
 fn test_find_text_with_wild_card() {
     run_test(
         create_test_context,

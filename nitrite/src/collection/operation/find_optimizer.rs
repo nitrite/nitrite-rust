@@ -7,8 +7,8 @@ use crate::{
     collection::{FindOptions, FindPlan},
     errors::{ErrorKind, NitriteError, NitriteResult},
     filter::{
-        is_and_filter, is_equals_filter, is_or_filter, is_text_filter, Filter, FilterProvider,
-        IndexScanFilter,
+        is_and_filter, is_between_filter, is_equals_filter, is_or_filter, is_text_filter, Filter,
+        FilterProvider, IndexScanFilter,
     },
     index::IndexDescriptor,
     SortOrder, DOC_ID,
@@ -186,6 +186,11 @@ impl FindOptimizerInner {
         } else if is_or_filter(filter) {
             let filters = SmallVec::from_vec(filter.logical_filters()?);
             self.create_or_plan(index_descriptors, filters)
+        } else if is_between_filter(filter) {
+            // `field.between(a, b)` is a conjunction of two bounds; plan it as an AND so both
+            // bounds drive a bounded index range scan instead of a full scan.
+            let filters = SmallVec::from_vec(filter.logical_filters()?);
+            self.create_and_plan(index_descriptors, filters)
         } else {
             let mut filters = FilterVec::new();
             filters.push(filter.clone());
@@ -207,6 +212,10 @@ impl FindOptimizerInner {
         for f in logical_filters {
             if is_and_filter(&f) {
                 filters.append(&mut self.flatten_and_filter(&f)?);
+            } else if is_between_filter(&f) {
+                // Expand a nested `between` into its two bounds so they participate in index
+                // planning (and combine into a bounded range scan on the terminal field).
+                filters.extend(f.logical_filters()?);
             } else {
                 filters.push(f);
             }
@@ -369,9 +378,18 @@ impl FindOptimizerInner {
 
         for index_descriptor in index_descriptors {
             let fields_names = index_descriptor.index_fields().field_names();
+            let last_field_idx = fields_names.len().saturating_sub(1);
             let mut index_filters = FilterVec::new();
 
-            for field_name in fields_names {
+            for (field_idx, field_name) in fields_names.iter().enumerate() {
+                // The *terminal* (last) index field may carry several bounds on the same field —
+                // e.g. a `BETWEEN` / `gte AND lte` range — which the scanner combines into one
+                // bounded range scan. Earlier (prefix) fields of a compound index consume exactly
+                // one filter each, because the scan cascades into one sub-map per matched key, so
+                // collecting a second filter for a prefix field would mis-apply it at the wrong
+                // cascade level. This covers both the single-field index (its only field is
+                // terminal) and the terminal field of a compound index.
+                let is_terminal = field_idx == last_field_idx;
                 let mut matched = false;
                 for filter in filters {
                     if !filter.has_field() {
@@ -381,10 +399,14 @@ impl FindOptimizerInner {
 
                     // Using ? operator for error propagation
                     let name = filter.get_field_name()?;
-                    if field_name == name {
+                    if field_name == &name {
                         index_filters.push(filter.clone());
                         matched = true;
-                        break;
+                        if !is_terminal {
+                            // Prefix field of a compound index: one filter per level.
+                            break;
+                        }
+                        // Terminal field: keep collecting all bounds on this field.
                     }
                 }
 

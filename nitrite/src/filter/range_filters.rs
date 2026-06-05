@@ -78,6 +78,7 @@ impl Bound {
 /// - **Operation Selection**: Determines the comparison operator (>, >=, <, <=)
 /// - **Index Optimization**: Enables efficient index-accelerated comparisons
 /// - **Sort Direction Control**: Supports reverse-scan optimization for index traversal
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub(crate) enum ComparisonMode {
     Greater,
     GreaterEqual,
@@ -137,6 +138,17 @@ impl SortingAwareFilter {
             reverse_scan: AtomicBool::new(false),
             collection_name: OnceLock::new(),
         }
+    }
+
+    /// The comparison operator (`>`, `>=`, `<`, `<=`) this filter represents. Used by the index
+    /// scanner to combine a lower and an upper bound into a single bounded range scan.
+    pub(crate) fn comparison_mode(&self) -> ComparisonMode {
+        self.comparison_mode
+    }
+
+    /// The value this filter compares against, if it has been set.
+    pub(crate) fn field_value(&self) -> Option<&Value> {
+        self.field_value.get()
     }
 
     fn compare_greater(

@@ -1,11 +1,12 @@
 use super::IndexMap;
 use crate::{
     collection::NitriteId,
+    common::Value,
     errors::NitriteResult,
-    filter::{Filter, FilterProvider},
+    filter::{ComparisonMode, Filter, FilterProvider, SortingAwareFilter},
 };
 use itertools::Itertools;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
 /// Scanner for evaluating filter expressions against index maps.
@@ -114,6 +115,28 @@ impl IndexScannerInner {
         filters: Vec<Filter>,
         scan_order: HashMap<String, bool>,
     ) -> NitriteResult<Vec<NitriteId>> {
+        // Multi-bound range query on a single-field index (e.g. `age >= 30 AND age <= 50`):
+        // evaluate each bound against the index and intersect, so only the ids whose key falls
+        // inside the range are returned — instead of every id above the lower bound, which would
+        // force the read path to fetch (and post-filter) almost as many documents as a full scan.
+        if filters.len() > 1 {
+            let first_field = filters[0].get_field_name()?;
+            let same_field = filters
+                .iter()
+                .all(|f| matches!(f.get_field_name(), Ok(name) if name == first_field));
+            if same_field {
+                // Best case: a lower + upper bound form a contiguous range — scan only the
+                // keys inside it (reads in-range keys, not the whole index).
+                if let Some(ids) = self.scan_bounded_range(&filters)? {
+                    return Ok(ids);
+                }
+                // Otherwise still correct, just reads more: evaluate each bound and intersect.
+                if let Some(ids) = self.scan_intersect_same_field(&filters, &scan_order)? {
+                    return Ok(ids);
+                }
+            }
+        }
+
         let mut nitrite_ids = Vec::new();
 
         if !filters.is_empty() {
@@ -194,8 +217,131 @@ impl IndexScannerInner {
         // Sort to ensure consistent ordering for dedup operation
         nitrite_ids.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
         nitrite_ids.dedup();
-        
+
         Ok(nitrite_ids)
+    }
+
+    /// Combines a single lower bound (`>`/`>=`) and a single upper bound (`<`/`<=`) on the same
+    /// field into one bounded forward scan that visits **only the index keys inside the range**.
+    ///
+    /// This is the efficient path for the common selective range query (e.g. "received between
+    /// two dates"): instead of scanning everything above the lower bound and everything below
+    /// the upper bound and intersecting (which reads the whole index), it walks
+    /// `ceiling(lower) .. floor(upper)` directly.
+    ///
+    /// Returns `None` (so the caller falls back to intersection) when the filters are not a
+    /// clean lower+upper pair of comparison filters, or when a sub-map is encountered (a
+    /// compound-index level rather than a single-field scan).
+    fn scan_bounded_range(&self, filters: &[Filter]) -> NitriteResult<Option<Vec<NitriteId>>> {
+        let mut lower: Option<(Value, bool)> = None; // (value, inclusive)
+        let mut upper: Option<(Value, bool)> = None;
+
+        for filter in filters {
+            let Some(saf) = filter.as_any().downcast_ref::<SortingAwareFilter>() else {
+                return Ok(None);
+            };
+            let Some(value) = saf.field_value() else {
+                return Ok(None);
+            };
+            match saf.comparison_mode() {
+                ComparisonMode::GreaterEqual | ComparisonMode::Greater if lower.is_some() => {
+                    return Ok(None); // more than one lower bound — let intersection handle it
+                }
+                ComparisonMode::LesserEqual | ComparisonMode::Lesser if upper.is_some() => {
+                    return Ok(None); // more than one upper bound
+                }
+                ComparisonMode::GreaterEqual => lower = Some((value.clone(), true)),
+                ComparisonMode::Greater => lower = Some((value.clone(), false)),
+                ComparisonMode::LesserEqual => upper = Some((value.clone(), true)),
+                ComparisonMode::Lesser => upper = Some((value.clone(), false)),
+            }
+        }
+
+        // A bounded scan needs both ends; a one-sided range is already efficient on its own.
+        let (Some((lower_val, lower_incl)), Some((upper_val, upper_incl))) = (lower, upper) else {
+            return Ok(None);
+        };
+
+        let mut key = if lower_incl {
+            self.index_map.ceiling_key(&lower_val)?
+        } else {
+            self.index_map.higher_key(&lower_val)?
+        };
+
+        let mut nitrite_ids: Vec<NitriteId> = Vec::new();
+        while let Some(k) = key {
+            let within_upper = if upper_incl { k <= upper_val } else { k < upper_val };
+            if !within_upper {
+                break;
+            }
+
+            match self.index_map.get(&k)? {
+                Some(Value::Array(array)) => {
+                    for value in array {
+                        if let Some(id) = value.as_nitrite_id() {
+                            nitrite_ids.push(*id);
+                        }
+                    }
+                }
+                // A sub-map means this is a compound-index level, not a single-field scan.
+                Some(Value::Map(_)) => return Ok(None),
+                _ => {}
+            }
+
+            key = self.index_map.higher_key(&k)?;
+        }
+
+        nitrite_ids.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+        nitrite_ids.dedup();
+        Ok(Some(nitrite_ids))
+    }
+
+    /// Evaluates several filters that all target the same single field and intersects their id
+    /// sets (used for multi-bound range queries on a single-field index).
+    ///
+    /// Returns `None` — so [`scan`](Self::scan) falls back to its default behaviour — if any
+    /// filter yields sub-maps instead of terminal ids, which means this is a compound-index
+    /// level rather than a single-field scan.
+    fn scan_intersect_same_field(
+        &self,
+        filters: &[Filter],
+        scan_order: &HashMap<String, bool>,
+    ) -> NitriteResult<Option<Vec<NitriteId>>> {
+        let mut acc: Option<HashSet<NitriteId>> = None;
+
+        for filter in filters {
+            let field = filter.get_field_name()?;
+            let reverse = scan_order.get(field.as_str()).copied().unwrap_or(false);
+            self.index_map.set_reverse_scan(reverse);
+            if filter.is_reverse_scan_supported() {
+                filter.set_reverse_scan(reverse)?;
+            }
+
+            let result = filter.apply_on_index(&self.index_map)?;
+            // A sub-map result means this is a compound-index level, not a single-field scan.
+            if result.iter().any(|value| !value.is_nitrite_id()) {
+                return Ok(None);
+            }
+
+            let ids: HashSet<NitriteId> = result
+                .iter()
+                .filter_map(|value| value.as_nitrite_id().copied())
+                .collect();
+
+            acc = Some(match acc {
+                None => ids,
+                Some(existing) => existing.intersection(&ids).copied().collect(),
+            });
+
+            // Nothing can survive further intersection once the set is empty.
+            if acc.as_ref().is_some_and(|set| set.is_empty()) {
+                break;
+            }
+        }
+
+        let mut nitrite_ids: Vec<NitriteId> = acc.unwrap_or_default().into_iter().collect();
+        nitrite_ids.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+        Ok(Some(nitrite_ids))
     }
 }
 

@@ -134,10 +134,72 @@ the transient per-batch full-document-vector clone is gone (peak-memory win on m
 - Reordering index-vs-store phases in `insert_batch_optimized` to drop the remaining
   `entries`/`process_before_write` clones — changes failure/rollback semantics; uncertain time
   gain. Flagged for a focused follow-up.
-- Query-planner work: at 1000 docs an indexed range search (~13 ms) ≈ full scan (~13.7 ms);
-  worth confirming at 10k+ that a same-field `gte AND lte` uses the index optimally.
 - Cold-start (~160 ms to lazily create a collection's partitions/catalog on first write) is
   disk-bound directory/fsync cost, paid once; relevant to first-run latency, not steady state.
+
+### 5.2 Range queries were not actually index-accelerated — fixed (high impact for email)
+
+**Symptom:** an indexed range query was barely faster than a full scan
+(10k docs: indexed ~39.9 ms vs full scan ~43.2 ms, ~7%).
+
+**Root cause (two places):** for `age >= 30 AND age <= 50` (two bounds on one indexed field),
+1. the planner (`plan_index_scan_filter`) took only the **first** filter per index field, so only
+   `>= 30` drove the index and `<= 50` became a post-fetch full-scan filter; and
+2. the scanner (`IndexScannerInner::scan`) applied only `filters[0]` for a single-field index.
+
+So the index returned ~everything above the lower bound and the read path fetched (and
+post-filtered) almost as many documents as a full scan — the index did nothing useful.
+
+**Fix:**
+- Planner now collects **all** bounds on a single-field index (compound indexes still take one
+  filter per level).
+- Scanner combines a lower + upper bound into a **single bounded range scan** that walks only
+  `ceiling(lower) .. floor(upper)` — reading just the in-range keys — with a correctness
+  fallback to per-bound **intersection** for other same-field combinations.
+- Added `Durability`-independent correctness coverage: a regression test asserting the indexed
+  result set is **exactly** the full-scan result (inclusive/exclusive/empty/single-value ranges).
+
+**Result (10k docs):**
+
+| Query | Before | After |
+| --- | --- | --- |
+| Broad range (`age` ∈ [30,50], low-cardinality, ~34% selectivity) | ~39.9 ms (≈ scan) | ~38 ms |
+| **Narrow range (1% selectivity, high-cardinality `id`)** | (≈ scan) | **~23.9 ms vs ~40.5 ms scan (~41% faster)** |
+
+The advantage **grows with collection size** (at 1k the fixed query overhead dominates and the
+two tie; at 10k the index clearly wins; at real mailbox sizes it dominates) and with
+**selectivity** (a narrow date window touches only the matching rows instead of the whole store).
+
+### 5.3 Comprehensive query-engine audit (all filters / scan / plan)
+
+Followed up by auditing every filter's index behaviour, the scan algorithm (simple + compound),
+and the find-plan optimizer (AND / OR), to make *all* search paths index-efficient.
+
+**Findings & fixes:**
+- **Range on the *compound*-index terminal level** (e.g. `[folder, date]` index with
+  `folder == X AND date BETWEEN`): was using only one bound. **Fixed** — the planner now collects
+  *all* bounds for the *terminal* index field (prefix fields still take one filter each, as the
+  scan cascades one sub-map per matched key), and the scanner's bounded range scan runs at the
+  recursed terminal level. Regression test added.
+- **`field.between(a, b)` did a full scan** (the `BetweenFilter` has no `apply_on_index` and
+  defaults `has_field()` to `false`, so it was skipped in index planning entirely — silently
+  slower than the equivalent `gte().and(lte())`). **Fixed** — the planner expands `BetweenFilter`
+  into its two bounds (standalone and nested inside an `AND`), so `between` is now bounded-scanned
+  identically. Test added.
+
+**Audited and confirmed already efficient / inherently unavoidable (no change needed):**
+- `eq` (EqualsFilter) and `in_array` (InFilter): single / N point lookups on the index — fast.
+- `!=`, `not in`, `.not()`, `regex`/`like`: full index or collection scan — inherent to negation
+  and pattern matching (no btree can avoid it); not a bug.
+- `OR`: each branch is planned independently and the index plans are unioned; falls back to a
+  single full scan only when a branch is unindexable — correct and reasonable.
+
+**Noted, not changed (semantics/risk):** `DocumentCursor` caches a clone of every yielded
+document (to support `reset()`/`size()`/re-iteration), and `count()` materialises every matching
+document. For a forward-only consumer (list a folder, count unread) this is redundant CPU +
+peak memory. A `count()` that short-circuits on a fully index-covered plan, and an opt-out of
+caching for one-shot iteration, are worthwhile follow-ups but touch cursor semantics used across
+the codebase — deferred to keep this change set green and low-risk.
 
 ---
 

@@ -196,11 +196,64 @@ fn bench_non_indexed_search(c: &mut Criterion) {
     group.finish();
 }
 
+/// Narrow range query (~1% selectivity) on a high-cardinality field (`id`) — representative of
+/// an email client query like "messages in this folder received in the last day". This is where
+/// a real index should massively beat a full scan, because only a few rows need to be fetched.
+fn bench_narrow_range_search(c: &mut Criterion) {
+    let mut group = c.benchmark_group("Index/Narrow Range Search");
+
+    for size in [1_000, 10_000].iter() {
+        let docs = generate_simple_docs(*size);
+        let lo = (*size as i64) / 2;
+        let hi = lo + (*size as i64) / 100; // ~1% of rows
+
+        // Fjall, indexed on the high-cardinality `id` field.
+        group.bench_with_input(BenchmarkId::new("indexed", size), &docs, |b, docs| {
+            b.iter_with_setup(
+                || {
+                    let ctx = create_fjall_db().unwrap();
+                    let collection = ctx.db().collection("bench").unwrap();
+                    collection.insert_many(docs.clone()).unwrap();
+                    collection
+                        .create_index(vec!["id"], &non_unique_index())
+                        .unwrap();
+                    (ctx, collection)
+                },
+                |(_ctx, collection)| {
+                    let filter = field("id").gte(lo).and(field("id").lte(hi));
+                    let cursor = collection.find(filter).unwrap();
+                    black_box(cursor.count())
+                },
+            );
+        });
+
+        // Fjall, no index (full scan baseline).
+        group.bench_with_input(BenchmarkId::new("fullscan", size), &docs, |b, docs| {
+            b.iter_with_setup(
+                || {
+                    let ctx = create_fjall_db().unwrap();
+                    let collection = ctx.db().collection("bench").unwrap();
+                    collection.insert_many(docs.clone()).unwrap();
+                    (ctx, collection)
+                },
+                |(_ctx, collection)| {
+                    let filter = field("id").gte(lo).and(field("id").lte(hi));
+                    let cursor = collection.find(filter).unwrap();
+                    black_box(cursor.count())
+                },
+            );
+        });
+    }
+
+    group.finish();
+}
+
 criterion_group!(
     benches,
     bench_index_create,
     bench_unique_index_create,
     bench_indexed_search,
-    bench_non_indexed_search
+    bench_non_indexed_search,
+    bench_narrow_range_search
 );
 criterion_main!(benches);

@@ -13,6 +13,7 @@ use std::sync::Arc;
 
 use super::AllFilter;
 use super::AndFilter;
+use super::BetweenFilter;
 use super::ElementMatchFilter;
 use super::EqualsFilter;
 use super::NotFilter;
@@ -428,6 +429,13 @@ pub(crate) fn is_or_filter(filter: &Filter) -> bool {
 
 pub(crate) fn is_text_filter(filter: &Filter) -> bool {
     filter.as_any().is::<TextFilter>()
+}
+
+/// A `BetweenFilter` is a conjunction of a lower and an upper bound. It has no `apply_on_index`
+/// of its own, so the planner expands it into those two bounds to drive a bounded index range
+/// scan (otherwise `field.between(a, b)` would silently fall back to a full scan).
+pub(crate) fn is_between_filter(filter: &Filter) -> bool {
+    filter.as_any().is::<BetweenFilter>()
 }
 
 pub(crate) fn is_equals_filter(filter: &Filter) -> bool {
