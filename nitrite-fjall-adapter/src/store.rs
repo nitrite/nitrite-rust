@@ -17,7 +17,7 @@ use nitrite::store::{
 };
 use std::collections::{HashMap, HashSet};
 use std::sync::atomic::AtomicBool;
-use std::sync::{Arc, OnceLock};
+use std::sync::{Arc, OnceLock, RwLock};
 
 #[derive(Clone)]
 /// Fjall-based store implementation.
@@ -112,7 +112,7 @@ impl FjallStore {
     /// Used by the adapter's tests to open partitions in the store's keyspace.
     #[cfg(test)]
     pub(crate) fn keyspace(&self) -> Option<TxKeyspace> {
-        self.inner.keyspace.get().cloned()
+        self.inner.keyspace()
     }
 
     /// Runs `f` with a write transaction that participates in the current atomic scope.
@@ -249,7 +249,12 @@ impl NitriteStoreProvider for FjallStore {
 }
 
 struct FjallStoreInner {
-    keyspace: OnceLock<TxKeyspace>,
+    // `Option` (not `OnceLock`) so `close()` can take the keyspace and drop it, which is what
+    // stops Fjall's per-keyspace background worker threads. `Nitrite`'s config and store form an
+    // `Arc` cycle (config -> plugin manager -> store -> config), so `FjallStoreInner` itself is
+    // never dropped; without an explicit drop here those worker threads would leak for the life
+    // of the process and eventually exhaust the OS thread limit.
+    keyspace: RwLock<Option<TxKeyspace>>,
     closed: AtomicBool,
     event_bus: NitriteEventBus<StoreEventInfo, StoreEventListener>,
     store_config: FjallConfig,
@@ -260,13 +265,24 @@ struct FjallStoreInner {
 impl FjallStoreInner {
     fn new(config: FjallConfig) -> FjallStoreInner {
         FjallStoreInner {
-            keyspace: OnceLock::new(),
+            keyspace: RwLock::new(None),
             closed: AtomicBool::new(false),
             event_bus: NitriteEventBus::new(),
             store_config: config,
             nitrite_config: OnceLock::new(),
             map_registry: DashMap::new(),
         }
+    }
+
+    /// Returns a clone of the active keyspace handle, or `None` if it has not been opened yet or
+    /// has already been released by [`close`](Self::close). `TxKeyspace` is `Arc`-backed, so the
+    /// clone is cheap and the read lock is held only long enough to clone it.
+    #[inline]
+    fn keyspace(&self) -> Option<TxKeyspace> {
+        self.keyspace
+            .read()
+            .unwrap_or_else(|e| e.into_inner())
+            .clone()
     }
 
     /// Delay in milliseconds to wait for file system cleanup when recreating a deleted partition.
@@ -363,6 +379,15 @@ impl FjallStoreInner {
         // observes a settled, fully consistent on-disk state (the close/reopen-under-load fix).
         self.drain()?;
 
+        // Release the keyspace so Fjall terminates its background worker threads (syncer,
+        // monitor, flusher, compactor). The maps were closed above, so their partition handles
+        // are gone and this drops the last `TxKeyspace` reference. This must happen even though
+        // the surrounding config<->store `Arc` cycle keeps `FjallStoreInner` itself alive —
+        // otherwise every opened keyspace leaks its threads and a process that opens many
+        // databases (e.g. the test suite) exhausts the OS thread limit and hangs.
+        let keyspace = self.keyspace.write().unwrap_or_else(|e| e.into_inner()).take();
+        drop(keyspace);
+
         self.closed
             .store(true, std::sync::atomic::Ordering::Relaxed);
         self.event_bus.close()?;
@@ -384,7 +409,7 @@ impl FjallStoreInner {
     /// state. Atomic transactions already make recovery consistent, and this drain removes the
     /// remaining close/reopen race.
     fn drain(&self) -> NitriteResult<()> {
-        if let Some(ks) = self.keyspace.get() {
+        if let Some(ks) = self.keyspace() {
             ks.persist(PersistMode::SyncAll).map_err(|err| {
                 log::error!("Failed to persist keyspace during drain: {}", err);
                 to_nitrite_error(err)
@@ -408,7 +433,12 @@ impl FjallStoreInner {
         let result = config.open_transactional();
         match result {
             Ok(keyspace) => {
-                self.keyspace.get_or_init(|| keyspace);
+                // Mirror the previous `get_or_init` semantics: keep the first keyspace if one is
+                // already installed (re-open is a no-op) and drop the newly opened duplicate.
+                let mut guard = self.keyspace.write().unwrap_or_else(|e| e.into_inner());
+                if guard.is_none() {
+                    *guard = Some(keyspace);
+                }
                 Ok(())
             }
             Err(err) => {
@@ -424,7 +454,7 @@ impl FjallStoreInner {
     }
 
     fn has_unsaved_changes(&self) -> NitriteResult<bool> {
-        if let Some(ks) = self.keyspace.get() {
+        if let Some(ks) = self.keyspace() {
             let uncommitted = ks.write_buffer_size();
             Ok(uncommitted > 0)
         } else {
@@ -441,7 +471,7 @@ impl FjallStoreInner {
     }
 
     fn commit(&self) -> NitriteResult<()> {
-        if let Some(ks) = self.keyspace.get() {
+        if let Some(ks) = self.keyspace() {
             match ks.persist(PersistMode::SyncAll) {
                 Ok(_) => Ok(()),
                 Err(err) => {
@@ -482,13 +512,13 @@ impl FjallStoreInner {
             return op();
         }
 
-        let ks = match self.keyspace.get() {
+        let ks = match self.keyspace() {
             Some(ks) => ks,
             // No keyspace yet: nothing can be written, so just run the operation.
             None => return op(),
         };
 
-        let mut tx = self.new_write_tx(ks);
+        let mut tx = self.new_write_tx(&ks);
         let result = crate::tx_scope::run_with_active(&mut tx, op);
         match result {
             Ok(()) => tx.commit().map_err(|err| {
@@ -516,13 +546,13 @@ impl FjallStoreInner {
         }
 
         // Outside any scope: open a one-shot transaction so the write stays atomic + durable.
-        let ks = self.keyspace.get().ok_or_else(|| {
+        let ks = self.keyspace().ok_or_else(|| {
             NitriteError::new(
                 "Keyspace is not initialized",
                 ErrorKind::StoreNotInitialized,
             )
         })?;
-        let mut tx = self.new_write_tx(ks);
+        let mut tx = self.new_write_tx(&ks);
         match f(&mut tx) {
             Ok(value) => {
                 tx.commit().map_err(|err| {
@@ -539,7 +569,7 @@ impl FjallStoreInner {
     }
 
     fn compact(&self) -> NitriteResult<()> {
-        if let Some(ks) = self.keyspace.get() {
+        if let Some(ks) = self.keyspace() {
             let partitions = ks.list_partitions();
             let maps: Vec<&str> = partitions
                 .iter()
@@ -602,7 +632,7 @@ impl FjallStoreInner {
 
     #[inline]
     fn has_map(&self, name: &str) -> NitriteResult<bool> {
-        if let Some(ks) = self.keyspace.get() {
+        if let Some(ks) = self.keyspace() {
             let result = ks.partition_exists(name);
             Ok(result)
         } else {
@@ -626,11 +656,11 @@ impl FjallStoreInner {
             self.map_registry.remove(name);
         }
 
-        if let Some(ks) = self.keyspace.get() {
+        if let Some(ks) = self.keyspace() {
             let config = self.store_config.partition_config();
-            
+
             // Try to open the partition - with retry logic for deleted partitions
-            let partition = self.open_partition_with_retry(ks, name, &config)?;
+            let partition = self.open_partition_with_retry(&ks, name, &config)?;
 
             let fjall_map = FjallMap::new(
                 name.to_string(),
@@ -662,8 +692,8 @@ impl FjallStoreInner {
     fn remove_map(&self, name: &str) -> NitriteResult<()> {
         // close the map if it is open to drop any partition handles holding by the map
         self.close_map(name)?;
-        
-        if let Some(ks) = self.keyspace.get() {
+
+        if let Some(ks) = self.keyspace() {
             let options = self.store_config.partition_config();
             match ks.open_partition(name, options) {
                 Ok(partition) => {
@@ -803,7 +833,7 @@ mod tests {
         run_test(|| {
             create_context()
         }, |ctx| {
-            assert!(ctx.fjall_store_unsafe().inner.keyspace.get().is_none());
+            assert!(ctx.fjall_store_unsafe().inner.keyspace().is_none());
         }, |ctx| {
             cleanup(ctx);
         });
