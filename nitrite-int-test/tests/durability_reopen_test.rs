@@ -16,7 +16,7 @@ use nitrite::errors::ErrorKind;
 use nitrite::filter::{all, field};
 use nitrite::index::unique_index;
 use nitrite::nitrite::Nitrite;
-use nitrite_fjall_adapter::FjallModule;
+use nitrite_fjall_adapter::{Durability, FjallModule};
 use nitrite_int_test::test_util::random_path;
 use std::fs;
 
@@ -33,6 +33,21 @@ fn open_db(path: &str) -> Nitrite {
         .expect("failed to open Fjall-backed Nitrite database")
 }
 
+/// Opens a Fjall-backed Nitrite database with KV separation enabled.
+fn open_kv_separated_db(path: &str, durability: Durability) -> Nitrite {
+    let storage_module = FjallModule::with_config()
+        .db_path(path)
+        .low_memory_preset()
+        .kv_separated(true)
+        .durability(durability)
+        .build();
+
+    Nitrite::builder()
+        .load_module(storage_module)
+        .open_or_create(None, None)
+        .expect("failed to open KV-separated Fjall-backed Nitrite database")
+}
+
 /// Builds folder-like documents with a natural `(account_id, path)` key.
 fn folder_docs(count: i64) -> Vec<Document> {
     (0..count)
@@ -44,6 +59,67 @@ fn folder_docs(count: i64) -> Vec<Document> {
             }
         })
         .collect()
+}
+
+fn assert_kv_separated_unique_index_transaction_roundtrip(durability: Durability) {
+    let path = random_path();
+    let folder_count = 6_i64;
+
+    {
+        let db = open_kv_separated_db(&path, durability);
+        let collection = db.collection("folder").expect("open collection");
+        collection
+            .create_index(vec!["account_id", "path"], &unique_index())
+            .expect("create unique compound index");
+
+        db.with_session(|session| {
+            let txn = session.begin_transaction()?;
+            let tx_collection = txn.collection("folder")?;
+            tx_collection.insert_many(folder_docs(folder_count))?;
+            txn.commit()?;
+            Ok(())
+        })
+        .expect("transactional folder commit on KV-separated store");
+
+        assert_eq!(
+            collection.find(all()).expect("find all after commit").count(),
+            folder_count as usize,
+            "transactional commit must leave all folders visible before close"
+        );
+        assert_eq!(
+            collection
+                .find(field("path").eq("/inbox/folder_0"))
+                .expect("indexed lookup after commit")
+                .count(),
+            1,
+            "the unique index must be readable immediately after the transactional commit"
+        );
+
+        db.close().expect("close first session");
+    }
+
+    {
+        let db = open_kv_separated_db(&path, durability);
+        let collection = db.collection("folder").expect("reopen collection");
+
+        assert_eq!(
+            collection.find(all()).expect("find all after reopen").count(),
+            folder_count as usize,
+            "all folders must survive reopen on a KV-separated store"
+        );
+        assert_eq!(
+            collection
+                .find(field("path").eq("/inbox/folder_0"))
+                .expect("indexed lookup after reopen")
+                .count(),
+            1,
+            "the unique index must survive reopen on a KV-separated store"
+        );
+
+        db.close().expect("close second session");
+    }
+
+    let _ = fs::remove_dir_all(&path);
 }
 
 #[test]
@@ -177,4 +253,14 @@ fn failed_unique_insert_leaves_no_orphan_index_entry_across_reopen() {
     }
 
     let _ = fs::remove_dir_all(&path);
+}
+
+#[test]
+fn kv_separated_transactional_unique_index_commit_roundtrips_with_periodic_durability() {
+    assert_kv_separated_unique_index_transaction_roundtrip(Durability::Periodic);
+}
+
+#[test]
+fn kv_separated_transactional_unique_index_commit_roundtrips_with_on_commit_durability() {
+    assert_kv_separated_unique_index_transaction_roundtrip(Durability::OnCommit);
 }

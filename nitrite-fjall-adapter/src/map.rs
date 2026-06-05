@@ -10,7 +10,6 @@ use nitrite::store::{
 };
 use std::collections::Bound::{Excluded, Included, Unbounded};
 use std::iter::Rev;
-use std::ops::RangeFull;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
@@ -380,11 +379,18 @@ impl FjallMap {
 /// Thread-safe: Uses AtomicBool for state flags with Relaxed ordering for performance.
 struct FjallMapInner {
     name: String,
+    overlay_key: Arc<str>,
     partition: TxPartitionHandle,
     closed: AtomicBool,
     dropped: AtomicBool,
     store: FjallStore,
     fjall_config: FjallConfig,
+}
+
+#[derive(Clone, Copy)]
+enum SeekDirection {
+    Forward,
+    Reverse,
 }
 
 impl FjallMapInner {
@@ -403,8 +409,10 @@ impl FjallMapInner {
         store: FjallStore,
         fjall_config: FjallConfig,
     ) -> FjallMapInner {
+        let overlay_key = Arc::<str>::from(name.as_str());
         FjallMapInner {
             name,
+            overlay_key,
             partition,
             store,
             closed: AtomicBool::new(false),
@@ -459,6 +467,269 @@ impl FjallMapInner {
         raw.try_into_value().map_err(NitriteError::from)
     }
 
+    #[inline]
+    fn decode_bytes(raw: &[u8]) -> NitriteResult<Value> {
+        bincode::serde::decode_from_slice(raw, bincode::config::legacy())
+            .map(|(value, _)| value)
+            .map_err(|err| {
+                NitriteError::from(crate::wrapper::FjallValueError::DeserializationError(
+                    err.to_string(),
+                ))
+            })
+    }
+
+    fn insert_in_tx(&self, key: FjallValue, value: FjallValue) -> NitriteResult<()> {
+        let raw_key = key.as_ref().to_vec();
+        let raw_value = Box::<[u8]>::from(value.as_ref());
+        crate::tx_scope::with_active(|tx| {
+            let tx = tx.expect("write_in_tx requires an active transaction");
+            tx.insert(&self.partition, key, value);
+        });
+        crate::tx_scope::record_insert(&self.overlay_key, raw_key, raw_value);
+        Ok(())
+    }
+
+    fn remove_in_tx(&self, raw_key: Vec<u8>) -> NitriteResult<()> {
+        crate::tx_scope::with_active(|tx| {
+            let tx = tx.expect("write_in_tx requires an active transaction");
+            tx.remove(&self.partition, raw_key.clone());
+        });
+        crate::tx_scope::record_remove(&self.overlay_key, raw_key);
+        Ok(())
+    }
+
+    fn visible_contains_key(&self, op: &str, key: &FjallValue) -> NitriteResult<bool> {
+        if !crate::tx_scope::in_scope() {
+            return self
+                .partition
+                .contains_key(key.clone())
+                .map_err(|err| Self::backend_err(op, err));
+        }
+
+        crate::tx_scope::with_partition_overlay(&self.overlay_key, |overlay| {
+            if let Some(value) = overlay.and_then(|entries| entries.entries.get(key.as_ref())) {
+                return Ok(value.is_some());
+            }
+
+            self.partition
+                .contains_key(key.clone())
+                .map_err(|err| Self::backend_err(op, err))
+        })
+    }
+
+    fn visible_value(&self, op: &str, key: &FjallValue) -> NitriteResult<Option<Value>> {
+        if !crate::tx_scope::in_scope() {
+            return self
+                .partition
+                .get(key.clone())
+                .map_err(|err| Self::backend_err(op, err))?
+                .as_deref()
+                .map(Self::decode_bytes)
+                .transpose();
+        }
+
+        crate::tx_scope::with_partition_overlay(&self.overlay_key, |overlay| {
+            if let Some(value) = overlay.and_then(|entries| entries.entries.get(key.as_ref())) {
+                return value.as_deref().map(Self::decode_bytes).transpose();
+            }
+
+            self.partition
+                .get(key.clone())
+                .map_err(|err| Self::backend_err(op, err))?
+                .as_deref()
+                .map(Self::decode_bytes)
+                .transpose()
+        })
+    }
+
+    fn committed_entry_raw(
+        &self,
+        op: &str,
+        bound: Option<&[u8]>,
+        inclusive: bool,
+        direction: SeekDirection,
+    ) -> NitriteResult<Option<(Vec<u8>, Vec<u8>)>> {
+        let result = match (direction, bound) {
+            (SeekDirection::Forward, None) => self.partition.first_key_value(),
+            (SeekDirection::Reverse, None) => self.partition.last_key_value(),
+            (SeekDirection::Forward, Some(bound)) => self
+                .partition
+                .inner()
+                .range::<Vec<u8>, _>(((if inclusive {
+                    Included(bound.to_vec())
+                } else {
+                    Excluded(bound.to_vec())
+                }), Unbounded))
+                .next()
+                .transpose(),
+            (SeekDirection::Reverse, Some(bound)) => self
+                .partition
+                .inner()
+                .range::<Vec<u8>, _>((Unbounded, if inclusive {
+                    Included(bound.to_vec())
+                } else {
+                    Excluded(bound.to_vec())
+                }))
+                .next_back()
+                .transpose(),
+        }
+        .map_err(|err| Self::backend_err(op, err))?;
+
+        Ok(result.map(|(key, value)| (key.to_vec(), value.to_vec())))
+    }
+
+    fn overlay_entry_raw<'a>(
+        overlay: Option<&'a crate::tx_scope::PartitionOverlay>,
+        bound: Option<&[u8]>,
+        inclusive: bool,
+        direction: SeekDirection,
+    ) -> Option<(&'a Vec<u8>, &'a [u8])> {
+        let overlay = overlay?;
+
+        match (direction, bound) {
+            (SeekDirection::Forward, None) => overlay
+                .entries
+                .iter()
+                .find_map(|(key, value)| value.as_deref().map(|value| (key, value))),
+            (SeekDirection::Reverse, None) => overlay
+                .entries
+                .iter()
+                .rev()
+                .find_map(|(key, value)| value.as_deref().map(|value| (key, value))),
+            (SeekDirection::Forward, Some(bound)) => overlay
+                .entries
+                .range((if inclusive {
+                    Included(bound.to_vec())
+                } else {
+                    Excluded(bound.to_vec())
+                }, Unbounded))
+                .find_map(|(key, value)| value.as_deref().map(|value| (key, value))),
+            (SeekDirection::Reverse, Some(bound)) => overlay
+                .entries
+                .range((Unbounded, if inclusive {
+                    Included(bound.to_vec())
+                } else {
+                    Excluded(bound.to_vec())
+                }))
+                .rev()
+                .find_map(|(key, value)| value.as_deref().map(|value| (key, value))),
+        }
+    }
+
+    fn choose_entry(
+        direction: SeekDirection,
+        overlay_candidate: Option<(&Vec<u8>, &[u8])>,
+        committed_candidate: Option<(Vec<u8>, Vec<u8>)>,
+    ) -> Option<(Vec<u8>, Vec<u8>)> {
+        match (overlay_candidate, committed_candidate) {
+            (Some((overlay_key, overlay_value)), Some(committed_entry)) => match direction {
+                SeekDirection::Forward => {
+                    if overlay_key.as_slice() <= committed_entry.0.as_slice() {
+                        Some((overlay_key.clone(), overlay_value.to_vec()))
+                    } else {
+                        Some(committed_entry)
+                    }
+                }
+                SeekDirection::Reverse => {
+                    if overlay_key.as_slice() >= committed_entry.0.as_slice() {
+                        Some((overlay_key.clone(), overlay_value.to_vec()))
+                    } else {
+                        Some(committed_entry)
+                    }
+                }
+            },
+            (Some((overlay_key, overlay_value)), None) => {
+                Some((overlay_key.clone(), overlay_value.to_vec()))
+            }
+            (None, Some(committed_entry)) => Some(committed_entry),
+            (None, None) => None,
+        }
+    }
+
+    fn committed_size(&self, op: &str) -> NitriteResult<u64> {
+        self.partition
+            .inner()
+            .len()
+            .map(|len| len as u64)
+            .map_err(|err| Self::backend_err(op, err))
+    }
+
+    fn overlay_size_delta(&self, op: &str) -> NitriteResult<i64> {
+        crate::tx_scope::with_partition_overlay_mut(&self.overlay_key, |overlay| {
+            let Some(overlay) = overlay else {
+                return Ok(0);
+            };
+
+            if let Some(delta) = overlay.cached_size_delta() {
+                return Ok(delta);
+            }
+
+            let mut delta = 0i64;
+            for (key, value) in &overlay.entries {
+                let committed_present = self
+                    .partition
+                    .contains_key(key.as_slice())
+                    .map_err(|err| Self::backend_err(op, err))?;
+
+                match (committed_present, value.is_some()) {
+                    (false, true) => delta += 1,
+                    (true, false) => delta -= 1,
+                    _ => {}
+                }
+            }
+
+            overlay.cache_size_delta(delta);
+            Ok(delta)
+        })
+    }
+
+    fn visible_size(&self, op: &str) -> NitriteResult<u64> {
+        let committed = self.committed_size(op)? as i64;
+        let visible = committed + self.overlay_size_delta(op)?;
+        debug_assert!(visible >= 0, "transaction overlay size delta underflowed");
+        Ok(visible.max(0) as u64)
+    }
+
+    fn visible_entry_raw(
+        &self,
+        op: &str,
+        bound: Option<&[u8]>,
+        inclusive: bool,
+        direction: SeekDirection,
+    ) -> NitriteResult<Option<(Vec<u8>, Vec<u8>)>> {
+        if !crate::tx_scope::in_scope() {
+            return self.committed_entry_raw(op, bound, inclusive, direction);
+        }
+
+        crate::tx_scope::with_partition_overlay(&self.overlay_key, |overlay| {
+            let overlay_candidate = Self::overlay_entry_raw(overlay, bound, inclusive, direction);
+            let mut committed_candidate = self.committed_entry_raw(op, bound, inclusive, direction)?;
+
+            while let Some((key, value)) = committed_candidate.take() {
+                match overlay.and_then(|entries| entries.entries.get(key.as_slice())) {
+                    Some(None) => {
+                        committed_candidate =
+                            self.committed_entry_raw(op, Some(&key), false, direction)?;
+                    }
+                    Some(Some(overlay_value)) => {
+                        committed_candidate = Some((key, overlay_value.to_vec()));
+                        break;
+                    }
+                    None => {
+                        committed_candidate = Some((key, value));
+                        break;
+                    }
+                }
+            }
+
+            Ok(Self::choose_entry(
+                direction,
+                overlay_candidate,
+                committed_candidate,
+            ))
+        })
+    }
+
     fn get_attributes(&self) -> NitriteResult<Option<Attributes>> {
         if !self.is_dropped()? {
             let store = self.get_store()?;
@@ -504,14 +775,14 @@ impl FjallMapInner {
         // (e.g. U64(5) and I64(5) map to the same stored key); otherwise contains_key could
         // miss a key that get() would find.
         let fjall_key = FjallValue::try_from_value_normalized(key)?;
-        // Inside an atomic scope, read through the active transaction so the check observes
-        // this transaction's own pending writes (read-your-writes); otherwise read the latest
-        // committed state directly.
-        crate::tx_scope::with_active(|tx| match tx {
-            Some(tx) => tx.contains_key(&self.partition, fjall_key),
-            None => self.partition.contains_key(fjall_key),
-        })
-        .map_err(|err| Self::backend_err("check key in", err))
+        if !crate::tx_scope::in_scope() {
+            return self
+                .partition
+                .contains_key(fjall_key)
+                .map_err(|err| Self::backend_err("check key in", err));
+        }
+
+        self.visible_contains_key("check key in", &fjall_key)
     }
 
     fn get(&self, key: &Key) -> NitriteResult<Option<Value>> {
@@ -519,48 +790,23 @@ impl FjallMapInner {
 
         // Use normalized numeric types for keys to ensure consistent index behavior
         let normalized_key = FjallValue::try_from_value_normalized(key)?;
-        // Read through the active transaction when in an atomic scope (read-your-writes),
-        // otherwise read the latest committed state directly.
-        let result = crate::tx_scope::with_active(|tx| match tx {
-            Some(tx) => tx.get(&self.partition, normalized_key),
-            None => self.partition.get(normalized_key),
-        })
-        .map_err(|err| Self::backend_err("get value from", err))?;
-
-        result
-            .map(|value| Self::decode_value(FjallValue::from(value)))
-            .transpose()
+        self.visible_value("get value from", &normalized_key)
     }
 
     fn clear(&self) -> NitriteResult<()> {
         self.check_opened()?;
 
-        // Collect every key (observing pending writes when in an atomic scope), then delete
-        // them inside a single atomic write transaction so the clear is all-or-nothing.
-        let keys: Vec<Vec<u8>> = crate::tx_scope::with_active(
-            |tx| -> NitriteResult<Vec<Vec<u8>>> {
-                let mut keys = Vec::new();
-                match tx {
-                    Some(tx) => {
-                        for result in tx.range::<Vec<u8>, RangeFull>(&self.partition, ..) {
-                            let (key, _) = result.map_err(|err| Self::backend_err("clear", err))?;
-                            keys.push(key.to_vec());
-                        }
-                    }
-                    None => {
-                        for result in self.partition.inner().range::<Vec<u8>, RangeFull>(..) {
-                            let (key, _) = result.map_err(|err| Self::backend_err("clear", err))?;
-                            keys.push(key.to_vec());
-                        }
-                    }
-                }
-                Ok(keys)
-            },
-        )?;
+        // Collect every visible key first, then delete them inside one atomic transaction.
+        let mut keys = Vec::new();
+        let mut next = self.visible_entry_raw("clear", None, true, SeekDirection::Forward)?;
+        while let Some((key, _)) = next {
+            keys.push(key.clone());
+            next = self.visible_entry_raw("clear", Some(&key), false, SeekDirection::Forward)?;
+        }
 
-        self.store.write_in_tx(|tx| {
+        self.store.write_in_tx(|| {
             for key in keys {
-                tx.remove(&self.partition, key);
+                self.remove_in_tx(key)?;
             }
             Ok(())
         })
@@ -582,10 +828,8 @@ impl FjallMapInner {
         // within an atomic write transaction.
         let value = self.get(key)?;
         let normalized_key = FjallValue::try_from_value_normalized(key)?;
-        self.store.write_in_tx(|tx| {
-            tx.remove(&self.partition, normalized_key);
-            Ok(())
-        })?;
+        self.store
+            .write_in_tx(|| self.remove_in_tx(normalized_key.as_ref().to_vec()))?;
         Ok(value)
     }
 
@@ -594,10 +838,9 @@ impl FjallMapInner {
         // Use normalized numeric types for keys to ensure consistent index behavior
         // across different numeric types (e.g., I64 vs U64)
         let normalized_key = FjallValue::try_from_value_normalized(&key)?;
-        self.store.write_in_tx(|tx| {
+        self.store.write_in_tx(|| {
             let fjall_value = FjallValue::try_from_value(&value)?;
-            tx.insert(&self.partition, normalized_key, fjall_value);
-            Ok(())
+            self.insert_in_tx(normalized_key, fjall_value)
         })
     }
 
@@ -613,11 +856,11 @@ impl FjallMapInner {
             return Ok(());
         }
 
-        self.store.write_in_tx(|tx| {
+        self.store.write_in_tx(|| {
             for (key, value) in entries {
                 let normalized_key = FjallValue::try_from_value_normalized(&key)?;
                 let fjall_value = FjallValue::try_from_value(&value)?;
-                tx.insert(&self.partition, normalized_key, fjall_value);
+                self.insert_in_tx(normalized_key, fjall_value)?;
             }
             Ok(())
         })
@@ -625,12 +868,11 @@ impl FjallMapInner {
 
     fn size(&self) -> NitriteResult<u64> {
         self.check_opened()?;
-        let result = crate::tx_scope::with_active(|tx| match tx {
-            Some(tx) => tx.len(&self.partition),
-            None => self.partition.inner().len(),
-        })
-        .map_err(|err| Self::backend_err("get size of", err))?;
-        Ok(result as u64)
+        if !crate::tx_scope::in_scope() {
+            return self.committed_size("get size of");
+        }
+
+        self.visible_size("get size of")
     }
 
     fn put_if_absent(&self, key: Key, value: Value) -> NitriteResult<Option<Value>> {
@@ -639,27 +881,19 @@ impl FjallMapInner {
         let normalized_key = FjallValue::try_from_value_normalized(&key)?;
         // The read and the conditional insert run in one transaction so the check and the
         // write are atomic and read-your-writes consistent.
-        self.store.write_in_tx(|tx| {
-            let existing = tx
-                .get(&self.partition, normalized_key.clone())
-                .map_err(|err| Self::backend_err("get item from", err))?;
+        self.store.write_in_tx(|| {
+            let existing = self.visible_value("get item from", &normalized_key)?;
             if existing.is_none() {
                 let fjall_value = FjallValue::try_from_value(&value)?;
-                tx.insert(&self.partition, normalized_key, fjall_value);
+                self.insert_in_tx(normalized_key.clone(), fjall_value)?;
             }
-            existing
-                .map(|value| Self::decode_value(FjallValue::from(value)))
-                .transpose()
+            Ok(existing)
         })
     }
 
     fn first_key(&self) -> NitriteResult<Option<Key>> {
         self.check_opened()?;
-        let result = crate::tx_scope::with_active(|tx| match tx {
-            Some(tx) => tx.first_key_value(&self.partition),
-            None => self.partition.first_key_value(),
-        })
-        .map_err(|err| Self::backend_err("get first key from", err))?;
+        let result = self.visible_entry_raw("get first key from", None, true, SeekDirection::Forward)?;
         result
             .map(|(key, _)| Self::decode_value(FjallValue::from(key)))
             .transpose()
@@ -667,11 +901,7 @@ impl FjallMapInner {
 
     fn last_key(&self) -> NitriteResult<Option<Key>> {
         self.check_opened()?;
-        let result = crate::tx_scope::with_active(|tx| match tx {
-            Some(tx) => tx.last_key_value(&self.partition),
-            None => self.partition.last_key_value(),
-        })
-        .map_err(|err| Self::backend_err("get last key from", err))?;
+        let result = self.visible_entry_raw("get last key from", None, true, SeekDirection::Reverse)?;
         result
             .map(|(key, _)| Self::decode_value(FjallValue::from(key)))
             .transpose()
@@ -680,90 +910,66 @@ impl FjallMapInner {
     fn higher_key(&self, key: &Key) -> NitriteResult<Option<Key>> {
         self.check_opened()?;
         let normalized_key = FjallValue::try_from_value_normalized(key)?;
-        let next = crate::tx_scope::with_active(|tx| match tx {
-            Some(tx) => tx
-                .range(&self.partition, (Excluded(normalized_key), Unbounded))
-                .next(),
-            None => self
-                .partition
-                .inner()
-                .range((Excluded(normalized_key), Unbounded))
-                .next(),
-        });
-        match next {
-            Some(Ok((key, _))) => Ok(Some(Self::decode_value(FjallValue::from(key))?)),
-            Some(Err(err)) => Err(Self::backend_err("get higher key from", err)),
-            None => Ok(None),
-        }
+        let next = self.visible_entry_raw(
+            "get higher key from",
+            Some(normalized_key.as_ref()),
+            false,
+            SeekDirection::Forward,
+        )?;
+        next.map(|(key, _)| Self::decode_value(FjallValue::from(key)))
+            .transpose()
     }
 
     fn ceiling_key(&self, key: &Key) -> NitriteResult<Option<Key>> {
         self.check_opened()?;
         let normalized_key = FjallValue::try_from_value_normalized(key)?;
-        let next = crate::tx_scope::with_active(|tx| match tx {
-            Some(tx) => tx
-                .range(&self.partition, (Included(normalized_key), Unbounded))
-                .next(),
-            None => self
-                .partition
-                .inner()
-                .range((Included(normalized_key), Unbounded))
-                .next(),
-        });
-        match next {
-            Some(Ok((key, _))) => Ok(Some(Self::decode_value(FjallValue::from(key))?)),
-            Some(Err(err)) => Err(Self::backend_err("get ceiling key from", err)),
-            None => Ok(None),
-        }
+        let next = self.visible_entry_raw(
+            "get ceiling key from",
+            Some(normalized_key.as_ref()),
+            true,
+            SeekDirection::Forward,
+        )?;
+        next.map(|(key, _)| Self::decode_value(FjallValue::from(key)))
+            .transpose()
     }
 
     fn lower_key(&self, key: &Key) -> NitriteResult<Option<Key>> {
         self.check_opened()?;
         let normalized_key = FjallValue::try_from_value_normalized(key)?;
-        let prev = crate::tx_scope::with_active(|tx| match tx {
-            Some(tx) => tx
-                .range(&self.partition, (Unbounded, Excluded(normalized_key)))
-                .next_back(),
-            None => self
-                .partition
-                .inner()
-                .range((Unbounded, Excluded(normalized_key)))
-                .next_back(),
-        });
-        match prev {
-            Some(Ok((key, _))) => Ok(Some(Self::decode_value(FjallValue::from(key))?)),
-            Some(Err(err)) => Err(Self::backend_err("get lower key from", err)),
-            None => Ok(None),
-        }
+        let prev = self.visible_entry_raw(
+            "get lower key from",
+            Some(normalized_key.as_ref()),
+            false,
+            SeekDirection::Reverse,
+        )?;
+        prev.map(|(key, _)| Self::decode_value(FjallValue::from(key)))
+            .transpose()
     }
 
     fn floor_key(&self, key: &Key) -> NitriteResult<Option<Key>> {
         self.check_opened()?;
         let normalized_key = FjallValue::try_from_value_normalized(key)?;
-        let prev = crate::tx_scope::with_active(|tx| match tx {
-            Some(tx) => tx
-                .range(&self.partition, (Unbounded, Included(normalized_key)))
-                .next_back(),
-            None => self
-                .partition
-                .inner()
-                .range((Unbounded, Included(normalized_key)))
-                .next_back(),
-        });
-        match prev {
-            Some(Ok((key, _))) => Ok(Some(Self::decode_value(FjallValue::from(key))?)),
-            Some(Err(err)) => Err(Self::backend_err("get floor key from", err)),
-            None => Ok(None),
-        }
+        let prev = self.visible_entry_raw(
+            "get floor key from",
+            Some(normalized_key.as_ref()),
+            true,
+            SeekDirection::Reverse,
+        )?;
+        prev.map(|(key, _)| Self::decode_value(FjallValue::from(key)))
+            .transpose()
     }
 
     fn is_empty(&self) -> NitriteResult<bool> {
         self.check_opened()?;
-        crate::tx_scope::with_active(|tx| match tx {
-            Some(tx) => tx.first_key_value(&self.partition).map(|kv| kv.is_none()),
-            None => self.partition.inner().is_empty(),
-        })
-        .map_err(|err| Self::backend_err("check if empty", err))
+        if !crate::tx_scope::in_scope() {
+            return self
+                .partition
+                .inner()
+                .is_empty()
+                .map_err(|err| Self::backend_err("check if empty", err));
+        }
+
+        Ok(self.visible_size("check if empty")? == 0)
     }
 
     fn get_store(&self) -> NitriteResult<NitriteStore> {

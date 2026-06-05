@@ -115,19 +115,19 @@ impl FjallStore {
         self.inner.keyspace()
     }
 
-    /// Runs `f` with a write transaction that participates in the current atomic scope.
+    /// Runs `f` inside a write transaction that participates in the current atomic scope.
     ///
     /// If an ambient write transaction is already active on this thread (the caller is inside
     /// an atomic scope opened by [`FjallStoreInner::run_atomic`]), `f` is invoked with that
     /// transaction so the write joins the enclosing transaction and is committed atomically
     /// with the rest of the scope. Otherwise a fresh single-writer transaction is opened just
-    /// for this call, `f` is run against it, and it is committed (durably, per
-    /// [`FjallConfig::durability_on_commit`]) before returning — so even a write issued outside
-    /// any atomic scope (e.g. a catalog or metadata write) is still applied atomically (and, in
-    /// `Durability::OnCommit` mode, fsynced before returning).
+    /// for this call, `f` is run against it with an ambient transaction scope installed, and it
+    /// is committed (durably, per [`FjallConfig::durability_on_commit`]) before returning — so
+    /// even a write issued outside any atomic scope (e.g. a catalog or metadata write) is still
+    /// applied atomically (and, in `Durability::OnCommit` mode, fsynced before returning).
     pub(crate) fn write_in_tx<R, F>(&self, f: F) -> NitriteResult<R>
     where
-        F: FnOnce(&mut WriteTransaction<'_>) -> NitriteResult<R>,
+        F: FnOnce() -> NitriteResult<R>,
     {
         self.inner.write_in_tx(f)
     }
@@ -535,14 +535,11 @@ impl FjallStoreInner {
 
     fn write_in_tx<R, F>(&self, f: F) -> NitriteResult<R>
     where
-        F: FnOnce(&mut WriteTransaction<'_>) -> NitriteResult<R>,
+        F: FnOnce() -> NitriteResult<R>,
     {
-        // Inside an atomic scope: use the active transaction so this write joins it.
+        // Inside an atomic scope: the active transaction is already installed on this thread.
         if crate::tx_scope::in_scope() {
-            return crate::tx_scope::with_active(|tx| {
-                let tx = tx.expect("in_scope() implies an active transaction");
-                f(tx)
-            });
+            return f();
         }
 
         // Outside any scope: open a one-shot transaction so the write stays atomic + durable.
@@ -553,7 +550,7 @@ impl FjallStoreInner {
             )
         })?;
         let mut tx = self.new_write_tx(&ks);
-        match f(&mut tx) {
+        match crate::tx_scope::run_with_active(&mut tx, f) {
             Ok(value) => {
                 tx.commit().map_err(|err| {
                     log::error!("Failed to commit write transaction: {}", err);

@@ -5,6 +5,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.1] - 2026-06-05
+
+### Fixed
+
+- **`nitrite-fjall-adapter`** — transactional reads inside an active Fjall atomic scope no
+  longer rely on Fjall 2.11.2's KV-separated `WriteTransaction` read helpers. The adapter now
+  reconstructs read-your-writes semantics from committed partition reads plus a scoped
+  transaction overlay, so commits that touch unique indexes succeed on `kv_separated(true)`
+  stores instead of failing with `MaybeInlineValue` decode errors.
+- **`nitrite-int-test`** — added a KV-separated unique-index transaction regression that
+  exercises both `Durability::Periodic` and `Durability::OnCommit`, validates immediate
+  post-commit reads, and verifies the data/index pair still agrees after reopen.
+
+### Changed
+
+- **Release** — bumped the workspace crates to `0.3.1` for publication.
+
 ## [0.3.0] - 2026-06-05
 
 This release makes cross-partition writes crash-atomic, adds configurable durability, and

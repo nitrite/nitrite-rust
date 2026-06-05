@@ -300,7 +300,7 @@ pub fn create_fts_test_context() -> NitriteResult<TestContext> {
     }))
 }
 
-#[cfg(feature = "memory")]
+#[cfg(all(feature = "memory", not(feature = "fjall")))]
 pub fn create_test_context() -> NitriteResult<TestContext> {
     let path = random_path();
 
@@ -371,7 +371,7 @@ pub fn cleanup(ctx: TestContext) -> NitriteResult<()> {
     Ok(())
 }
 
-#[cfg(feature = "memory")]
+#[cfg(all(feature = "memory", not(feature = "fjall")))]
 pub fn cleanup(ctx: TestContext) -> NitriteResult<()> {
     // Close the database
     ctx.db().close()?;
@@ -385,7 +385,7 @@ pub fn cleanup(ctx: TestContext) -> NitriteResult<()> {
 
 /// Clean up orphaned rtree temp files in the system temp directory.
 /// These files are created by spatial indexes when no base path is provided.
-#[cfg(feature = "memory")]
+#[cfg(all(feature = "memory", not(feature = "fjall")))]
 fn cleanup_rtree_temp_files() {
     let temp_dir = std::env::temp_dir();
     if let Ok(entries) = fs::read_dir(&temp_dir) {

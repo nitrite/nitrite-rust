@@ -18,6 +18,11 @@
 //! synchronous extent of the scope and restores the previous value on the way out (even on a
 //! panic); [`with_active`] hands the active transaction (if any) to a closure.
 //!
+//! In addition to the raw pointer, the scope also tracks an in-memory overlay of writes staged
+//! into the active transaction. Fjall 2.11.2's transactional read helpers do not resolve
+//! KV-separated values, so the adapter reconstructs read-your-writes semantics itself by reading
+//! committed partition state directly and layering the active transaction's inserts/removes on top.
+//!
 //! # Safety invariants
 //! The single `unsafe` deref in [`with_active`] is sound because:
 //! 1. **Liveness** — the pointer is non-null only between [`run_with_active`] installing it and
@@ -33,11 +38,45 @@
 //!    completion before the borrow ends; no reference outlives the call.
 
 use fjall::WriteTransaction;
-use std::cell::Cell;
+use std::cell::{Cell, RefCell};
+use std::collections::{BTreeMap, HashMap};
+use std::sync::Arc;
+
+pub(crate) type OverlayValue = Box<[u8]>;
+
+#[derive(Default)]
+pub(crate) struct PartitionOverlay {
+    pub(crate) entries: BTreeMap<Vec<u8>, Option<OverlayValue>>,
+    size_delta: Option<i64>,
+}
+
+impl PartitionOverlay {
+    #[inline]
+    fn mark_dirty(&mut self) {
+        self.size_delta = None;
+    }
+
+    #[inline]
+    pub(crate) fn cached_size_delta(&self) -> Option<i64> {
+        self.size_delta
+    }
+
+    #[inline]
+    pub(crate) fn cache_size_delta(&mut self, delta: i64) {
+        self.size_delta = Some(delta);
+    }
+}
+
+#[derive(Default)]
+struct TxOverlay {
+    partitions: HashMap<Arc<str>, PartitionOverlay>,
+}
 
 thread_local! {
     /// Type-erased pointer to the `WriteTransaction` active on this thread, or null.
     static ACTIVE_TX: Cell<*mut ()> = const { Cell::new(std::ptr::null_mut()) };
+    /// Overlay of writes buffered into the active transaction on this thread.
+    static ACTIVE_OVERLAY: RefCell<Vec<TxOverlay>> = const { RefCell::new(Vec::new()) };
 }
 
 /// Restores the previous active-transaction pointer when dropped, so the thread-local is
@@ -49,6 +88,9 @@ struct ScopeGuard {
 impl Drop for ScopeGuard {
     fn drop(&mut self) {
         ACTIVE_TX.with(|cell| cell.set(self.prev));
+        ACTIVE_OVERLAY.with(|stack| {
+            stack.borrow_mut().pop();
+        });
     }
 }
 
@@ -62,6 +104,7 @@ impl Drop for ScopeGuard {
 pub(crate) fn run_with_active<R>(tx: &mut WriteTransaction<'_>, f: impl FnOnce() -> R) -> R {
     let ptr: *mut () = (tx as *mut WriteTransaction<'_>).cast();
     let prev = ACTIVE_TX.with(|cell| cell.replace(ptr));
+    ACTIVE_OVERLAY.with(|stack| stack.borrow_mut().push(TxOverlay::default()));
     let _guard = ScopeGuard { prev };
     f()
 }
@@ -87,4 +130,54 @@ pub(crate) fn with_active<R>(f: impl FnOnce(Option<&mut WriteTransaction<'_>>) -
         let tx = unsafe { &mut *tx_ptr };
         f(Some(tx))
     }
+}
+
+pub(crate) fn record_insert(partition: &Arc<str>, key: Vec<u8>, value: OverlayValue) {
+    ACTIVE_OVERLAY.with(|stack| {
+        if let Some(active) = stack.borrow_mut().last_mut() {
+            let overlay = active
+                .partitions
+                .entry(partition.clone())
+                .or_default();
+            overlay.mark_dirty();
+            overlay.entries.insert(key, Some(value));
+        }
+    });
+}
+
+pub(crate) fn record_remove(partition: &Arc<str>, key: Vec<u8>) {
+    ACTIVE_OVERLAY.with(|stack| {
+        if let Some(active) = stack.borrow_mut().last_mut() {
+            let overlay = active
+                .partitions
+                .entry(partition.clone())
+                .or_default();
+            overlay.mark_dirty();
+            overlay.entries.insert(key, None);
+        }
+    });
+}
+
+pub(crate) fn with_partition_overlay<R>(
+    partition: &Arc<str>,
+    f: impl FnOnce(Option<&PartitionOverlay>) -> R,
+) -> R {
+    ACTIVE_OVERLAY.with(|stack| {
+        let borrowed = stack.borrow();
+        let overlay = borrowed.last().and_then(|active| active.partitions.get(partition));
+        f(overlay)
+    })
+}
+
+pub(crate) fn with_partition_overlay_mut<R>(
+    partition: &Arc<str>,
+    f: impl FnOnce(Option<&mut PartitionOverlay>) -> R,
+) -> R {
+    ACTIVE_OVERLAY.with(|stack| {
+        let mut borrowed = stack.borrow_mut();
+        let overlay = borrowed
+            .last_mut()
+            .and_then(|active| active.partitions.get_mut(partition));
+        f(overlay)
+    })
 }

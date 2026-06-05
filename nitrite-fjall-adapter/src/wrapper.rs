@@ -160,6 +160,12 @@ impl From<Value> for FjallValue {
         }
     }
 }
+impl From<Vec<u8>> for FjallValue {
+    #[inline]
+    fn from(value: Vec<u8>) -> Self {
+        FjallValue(value)
+    }
+}
 impl From<FjallValue> for UserKey {
     /// Converts FjallValue to a Fjall UserKey for partition operations.
     ///
