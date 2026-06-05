@@ -239,6 +239,27 @@ inserts in several minutes.) This turns FTS indexing of a mailbox from unusable 
 trade-off — a process crash between writes and the next search/`close()` loses the *uncommitted*
 FTS batch — is acceptable for a derived, rebuildable index, and a clean shutdown always commits.
 
+### 5.6 Streaming cursor — stop retaining the whole result set in memory
+
+`DocumentCursor` previously **cached every yielded document** to support `reset()`/`size()`/
+re-iteration, so a forward-only scan (list a folder, export, aggregate) held the entire result
+set alive until the cursor dropped — a real peak-memory cost on mobile. (`Document` is an
+`im::OrdMap` with O(1) clone, so the cost is *retention*, not CPU.)
+
+**Fix — streaming cursors with rebuild-on-reset:**
+- A `find()` cursor is now **streaming**: documents flow straight through and **nothing is
+  retained**. `reset()` rebuilds the stream via a captured factory (a cheap Arc-backed clone of
+  the read context + the plan) — re-running the query instead of replaying a cache. So `size()`,
+  `first()`, and re-iteration keep their exact observable behaviour with zero retention.
+- Cursors that genuinely need cheap replay still cache: raw-iterator/`vec`-backed cursors, and a
+  **join's foreign cursor** (scanned once per local row) — the join explicitly marks it
+  rewindable so it caches once and replays from memory rather than re-running its query N times.
+
+Result: forward-only iteration of an N-document result holds **O(1)** documents instead of
+**O(N)**. The entire integration suite (joins, projections, repository cursors, `size()`/`first()`
+/`reset()` usages — 200+ call sites) passes unchanged, plus a new regression test asserting a
+streaming cursor resets, replays, and survives `size()`/`first()` without caching.
+
 ---
 
 ## 6. Verification

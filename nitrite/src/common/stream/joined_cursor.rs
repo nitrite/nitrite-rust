@@ -32,6 +32,9 @@ impl<'a> JoinedDocumentCursor<'a> {
         foreign_cursor: &'a mut DocumentCursor,
         lookup: &'a Lookup,
     ) -> Self {
+        // The foreign side is scanned once per local row, so cache it for cheap replay rather
+        // than re-running its query on every reset.
+        foreign_cursor.make_rewindable();
         JoinedDocumentCursor {
             iter,
             foreign_cursor,

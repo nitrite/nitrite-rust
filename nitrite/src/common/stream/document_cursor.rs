@@ -6,9 +6,22 @@ use crate::common::{ReadExecutor, WriteExecutor};
 use crate::errors::NitriteResult;
 use crate::ProcessorProvider;
 
+/// Rebuilds a cursor's underlying document stream. A streaming cursor uses this to replay on
+/// reset without retaining every yielded document in memory.
+pub(crate) type StreamFactory =
+    Box<dyn Fn() -> NitriteResult<Box<dyn Iterator<Item = NitriteResult<Document>>>>>;
+
 pub struct DocumentCursor {
     underlying: Option<Box<dyn Iterator<Item = NitriteResult<Document>>>>,
+    /// Rebuilds `underlying` for a streaming cursor on reset. `None` for cursors built from a
+    /// fixed, non-rebuildable iterator (those are rewindable and replay from `cache`).
+    factory: Option<StreamFactory>,
     cache: Vec<NitriteResult<Document>>,
+    /// When `true`, yielded documents are cached so the cursor replays from memory on reset
+    /// (raw-iterator cursors and join foreign cursors). When `false`, the cursor is *streaming*:
+    /// it retains nothing and rebuilds the stream via `factory` on reset, so a forward-only scan
+    /// never holds the whole result set in memory.
+    rewindable: bool,
     current_index: usize,
     processor_chain: ProcessorChain,
     find_plan: Option<FindPlan>,
@@ -19,18 +32,49 @@ pub struct DocumentCursor {
 }
 
 impl DocumentCursor {
+    /// Builds a cursor over a fixed, non-rebuildable iterator. Such a cursor is **rewindable**:
+    /// it caches yielded documents so it can replay them on `reset()` (tests, vec-backed cursors,
+    /// and join foreign cursors).
     pub fn new(
         iter: Box<dyn Iterator<Item = NitriteResult<Document>>>,
         processor_chain: ProcessorChain,
     ) -> Self {
         DocumentCursor {
             underlying: Some(iter),
+            factory: None,
             cache: Vec::new(),
+            rewindable: true,
             current_index: 0,
             processor_chain,
             find_plan: None,
             covered_count: None,
         }
+    }
+
+    /// Builds a **streaming** cursor that retains nothing: documents flow straight through, and
+    /// `reset()` rebuilds the stream via `factory` rather than replaying a cache. This keeps the
+    /// common forward-only scan from holding the entire result set in memory.
+    pub(crate) fn streaming(
+        iter: Box<dyn Iterator<Item = NitriteResult<Document>>>,
+        factory: StreamFactory,
+        processor_chain: ProcessorChain,
+    ) -> Self {
+        DocumentCursor {
+            underlying: Some(iter),
+            factory: Some(factory),
+            cache: Vec::new(),
+            rewindable: false,
+            current_index: 0,
+            processor_chain,
+            find_plan: None,
+            covered_count: None,
+        }
+    }
+
+    /// Switches a streaming cursor into caching mode so it can be replayed cheaply — used by a
+    /// join, which scans the foreign side once per local row. Call before iteration begins.
+    pub(crate) fn make_rewindable(&mut self) {
+        self.rewindable = true;
     }
 
     /// Records the index-covered match count so `count()`/`size()` can answer without fetching.
@@ -40,7 +84,14 @@ impl DocumentCursor {
     }
 
     /// Resets the cursor so that it can be iterated from the beginning.
+    ///
+    /// A rewindable cursor replays from its cache; a streaming cursor that has advanced rebuilds
+    /// its underlying stream (re-running the query) so it never has to retain documents to be
+    /// replayable.
     pub fn reset(&mut self) {
+        if !self.rewindable && (self.current_index > 0 || self.underlying.is_none()) {
+            self.underlying = self.factory.as_ref().and_then(|factory| factory().ok());
+        }
         self.current_index = 0;
     }
 
@@ -66,16 +117,15 @@ impl DocumentCursor {
             self.reset();
             return count;
         }
-        // If the underlying iterator is already exhausted,
-        // then no need to iterate again.
-        if self.underlying.is_none() {
-            self.reset();
-            return self.cache.len();
-        }
-        // Otherwise, iterate through the remaining items.
-        for _ in self.by_ref() {}
+        // Count from the beginning by draining the cursor, then reset so it stays usable. A
+        // streaming cursor counts without caching; a rewindable cursor fills its cache.
         self.reset();
-        self.cache.len()
+        let mut count = 0;
+        while self.next().is_some() {
+            count += 1;
+        }
+        self.reset();
+        count
     }
 
     pub fn first(&mut self) -> Option<NitriteResult<Document>> {
@@ -156,7 +206,11 @@ impl Iterator for DocumentCursor {
                     self.processor_chain.process_after_read(doc)
                 });
 
-                self.cache.push(processed.clone());
+                // Only retain documents for cursors that replay from memory; a streaming cursor
+                // keeps nothing and rebuilds via its factory on reset.
+                if self.rewindable {
+                    self.cache.push(processed.clone());
+                }
                 self.current_index += 1;
                 return Some(processed);
             }

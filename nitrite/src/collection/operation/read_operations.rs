@@ -22,6 +22,9 @@ use smallvec::SmallVec;
 use std::ops::Deref;
 use std::sync::Arc;
 
+/// A boxed stream of (pre-processor) documents, as produced by the read planner.
+type DocumentStream = Box<dyn Iterator<Item = NitriteResult<Document>>>;
+
 #[derive(Clone)]
 pub(crate) struct ReadOperations {
     inner: Arc<ReadOperationsInner>,
@@ -144,6 +147,36 @@ impl ReadOperationsInner {
     }
 
     fn create_cursor(&self, find_plan: &FindPlan) -> NitriteResult<DocumentCursor> {
+        let (iter, covered_count) = self.build_raw_stream(find_plan)?;
+
+        // Build a factory that rebuilds the stream on demand, so the (streaming) cursor can be
+        // reset and replayed without retaining every yielded document in memory. The captured
+        // `ReadOperations` is a cheap, Arc-backed clone of this read context.
+        let ops = ReadOperations::new(
+            self.collection_name.clone(),
+            self.index_operations.clone(),
+            self.nitrite_config.clone(),
+            self.nitrite_map.clone(),
+            self.find_optimizer.clone(),
+            self.processor_chain.clone(),
+        );
+        let plan = find_plan.clone();
+        let factory = Box::new(move || ops.build_raw_stream(&plan).map(|(stream, _)| stream));
+
+        Ok(
+            DocumentCursor::streaming(iter, factory, self.processor_chain.clone())
+                .set_find_plan(find_plan.clone())
+                .with_covered_count(covered_count),
+        )
+    }
+
+    /// Builds the raw (pre-processor) document stream for a plan, plus the index-covered match
+    /// count (`Some` only when the query is fully answered by an index — see [`create_cursor`]).
+    /// Kept separate from cursor construction so it can be re-run to replay a streaming cursor.
+    pub(crate) fn build_raw_stream(
+        &self,
+        find_plan: &FindPlan,
+    ) -> NitriteResult<(DocumentStream, Option<usize>)> {
         // Fast path for simple all-documents query with no filtering or sorting
         if find_plan.by_id_filter().is_none()
             && find_plan.index_descriptor().is_none()
@@ -170,10 +203,7 @@ impl ReadOperationsInner {
                     iter
                 };
 
-            // Combine cursor creation and plan setting into single operation
-            return Ok(DocumentCursor::new(iter, self.processor_chain.clone())
-                .set_find_plan(find_plan.clone())
-                .with_covered_count(covered_count));
+            return Ok((iter, covered_count));
         }
 
         // Standard path for complex queries
@@ -189,11 +219,7 @@ impl ReadOperationsInner {
         } else {
             None
         };
-        Ok(
-            DocumentCursor::new(iter, self.processor_chain.clone())
-                .set_find_plan(find_plan.clone())
-                .with_covered_count(covered_count),
-        )
+        Ok((iter, covered_count))
     }
 
     fn find_suitable_iter(

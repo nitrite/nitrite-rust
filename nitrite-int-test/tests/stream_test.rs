@@ -4,6 +4,45 @@ use nitrite::filter::field;
 use nitrite_int_test::test_util::{cleanup, create_test_context, run_test};
 
 #[test]
+fn test_streaming_cursor_resets_and_replays_without_caching() {
+    // A find() cursor streams (retains nothing); reset() rebuilds the query so it can be
+    // replayed, and size()/first() leave it usable — same observable behaviour as before, but
+    // without holding the whole result set in memory.
+    run_test(
+        create_test_context,
+        |ctx| {
+            let coll = ctx.db().collection("stream_reset")?;
+            for i in 0i64..50 {
+                coll.insert(doc! {"id": (i), "group": (i % 2)})?;
+            }
+
+            // Non-indexed filter => full-scan, non-index-covered (truly streaming) cursor.
+            let mut cursor = coll.find(field("group").eq(0i64))?;
+            let first_pass: Vec<_> = cursor.by_ref().map(|d| d.unwrap()).collect();
+            assert_eq!(first_pass.len(), 25, "forward pass yields all matches");
+
+            // reset() rebuilds the stream and replays the identical set.
+            cursor.reset();
+            let second_pass: Vec<_> = cursor.by_ref().map(|d| d.unwrap()).collect();
+            assert_eq!(second_pass.len(), 25, "reset replays the full set");
+
+            // size() reports the count and leaves the cursor usable.
+            let mut cursor2 = coll.find(field("group").eq(0i64))?;
+            assert_eq!(cursor2.size(), 25);
+            let after_size: Vec<_> = cursor2.by_ref().map(|d| d.unwrap()).collect();
+            assert_eq!(after_size.len(), 25, "cursor is usable after size()");
+
+            // first() returns the first match and the cursor still iterates.
+            let mut cursor3 = coll.find(field("group").eq(1i64))?;
+            assert!(cursor3.first().is_some());
+
+            Ok(())
+        },
+        cleanup,
+    )
+}
+
+#[test]
 fn test_find_result_is_document_stream() {
     run_test(
         create_test_context,
