@@ -335,12 +335,6 @@ impl FindPlan {
         }
     }
 
-    pub(crate) fn set_index_scan_order(&mut self, order: HashMap<String, bool>) {
-        if let Some(inner) = Arc::get_mut(&mut self.inner) {
-            inner.index_scan_order = Some(order);
-        }
-    }
-
     pub(crate) fn set_blocking_sort_order(&mut self, order: Vec<(String, SortOrder)>) {
         if let Some(inner) = Arc::get_mut(&mut self.inner) {
             inner.blocking_sort_order = Some(order);

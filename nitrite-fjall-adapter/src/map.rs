@@ -457,14 +457,15 @@ impl FjallMapInner {
         )
     }
 
-    /// Deserializes a stored Fjall value (or key) back into a `Value`.
+    /// Deserializes a stored Fjall **key** back into a `Value`, using the order-preserving key
+    /// codec (the counterpart of [`FjallValue::try_from_key`]).
     ///
     /// Corrupted or format-incompatible on-disk bytes are surfaced as a `NitriteError` rather
     /// than panicking, so a damaged or foreign database degrades to a recoverable read error
     /// instead of crashing the process.
     #[inline]
     fn decode_value(raw: FjallValue) -> NitriteResult<Value> {
-        raw.try_into_value().map_err(NitriteError::from)
+        raw.try_into_key().map_err(NitriteError::from)
     }
 
     #[inline]
@@ -774,7 +775,7 @@ impl FjallMapInner {
         // Normalize numeric key types so this matches the encoding used by get/put/remove
         // (e.g. U64(5) and I64(5) map to the same stored key); otherwise contains_key could
         // miss a key that get() would find.
-        let fjall_key = FjallValue::try_from_value_normalized(key)?;
+        let fjall_key = FjallValue::try_from_key(key)?;
         if !crate::tx_scope::in_scope() {
             return self
                 .partition
@@ -789,7 +790,7 @@ impl FjallMapInner {
         self.check_opened()?;
 
         // Use normalized numeric types for keys to ensure consistent index behavior
-        let normalized_key = FjallValue::try_from_value_normalized(key)?;
+        let normalized_key = FjallValue::try_from_key(key)?;
         self.visible_value("get value from", &normalized_key)
     }
 
@@ -827,7 +828,7 @@ impl FjallMapInner {
         // Read the current value first (through the active transaction if any), then delete it
         // within an atomic write transaction.
         let value = self.get(key)?;
-        let normalized_key = FjallValue::try_from_value_normalized(key)?;
+        let normalized_key = FjallValue::try_from_key(key)?;
         self.store
             .write_in_tx(|| self.remove_in_tx(normalized_key.as_ref().to_vec()))?;
         Ok(value)
@@ -837,7 +838,7 @@ impl FjallMapInner {
         self.check_opened()?;
         // Use normalized numeric types for keys to ensure consistent index behavior
         // across different numeric types (e.g., I64 vs U64)
-        let normalized_key = FjallValue::try_from_value_normalized(&key)?;
+        let normalized_key = FjallValue::try_from_key(&key)?;
         self.store.write_in_tx(|| {
             let fjall_value = FjallValue::try_from_value(&value)?;
             self.insert_in_tx(normalized_key, fjall_value)
@@ -858,7 +859,7 @@ impl FjallMapInner {
 
         self.store.write_in_tx(|| {
             for (key, value) in entries {
-                let normalized_key = FjallValue::try_from_value_normalized(&key)?;
+                let normalized_key = FjallValue::try_from_key(&key)?;
                 let fjall_value = FjallValue::try_from_value(&value)?;
                 self.insert_in_tx(normalized_key, fjall_value)?;
             }
@@ -878,7 +879,7 @@ impl FjallMapInner {
     fn put_if_absent(&self, key: Key, value: Value) -> NitriteResult<Option<Value>> {
         self.check_opened()?;
         // Use normalized numeric types for keys to ensure consistent index behavior
-        let normalized_key = FjallValue::try_from_value_normalized(&key)?;
+        let normalized_key = FjallValue::try_from_key(&key)?;
         // The read and the conditional insert run in one transaction so the check and the
         // write are atomic and read-your-writes consistent.
         self.store.write_in_tx(|| {
@@ -909,7 +910,7 @@ impl FjallMapInner {
 
     fn higher_key(&self, key: &Key) -> NitriteResult<Option<Key>> {
         self.check_opened()?;
-        let normalized_key = FjallValue::try_from_value_normalized(key)?;
+        let normalized_key = FjallValue::try_from_key(key)?;
         let next = self.visible_entry_raw(
             "get higher key from",
             Some(normalized_key.as_ref()),
@@ -922,7 +923,7 @@ impl FjallMapInner {
 
     fn ceiling_key(&self, key: &Key) -> NitriteResult<Option<Key>> {
         self.check_opened()?;
-        let normalized_key = FjallValue::try_from_value_normalized(key)?;
+        let normalized_key = FjallValue::try_from_key(key)?;
         let next = self.visible_entry_raw(
             "get ceiling key from",
             Some(normalized_key.as_ref()),
@@ -935,7 +936,7 @@ impl FjallMapInner {
 
     fn lower_key(&self, key: &Key) -> NitriteResult<Option<Key>> {
         self.check_opened()?;
-        let normalized_key = FjallValue::try_from_value_normalized(key)?;
+        let normalized_key = FjallValue::try_from_key(key)?;
         let prev = self.visible_entry_raw(
             "get lower key from",
             Some(normalized_key.as_ref()),
@@ -948,7 +949,7 @@ impl FjallMapInner {
 
     fn floor_key(&self, key: &Key) -> NitriteResult<Option<Key>> {
         self.check_opened()?;
-        let normalized_key = FjallValue::try_from_value_normalized(key)?;
+        let normalized_key = FjallValue::try_from_key(key)?;
         let prev = self.visible_entry_raw(
             "get floor key from",
             Some(normalized_key.as_ref()),

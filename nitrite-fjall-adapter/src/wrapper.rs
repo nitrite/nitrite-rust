@@ -86,6 +86,24 @@ impl FjallValue {
             .map(FjallValue)
             .map_err(|e| FjallValueError::SerializationError(e.to_string()))
     }
+    /// Encodes a value used as a **key** with the order-preserving codec.
+    ///
+    /// Unlike [`try_from_value_normalized`](Self::try_from_value_normalized) (plain `bincode`,
+    /// not order-preserving), the produced bytes sort lexicographically in the same order as
+    /// [`nitrite::common::Value`]'s own ordering, so Fjall's byte-ordered range / seek queries
+    /// power correct index range scans and sorted walks. See [`crate::ordered_key`].
+    #[inline]
+    pub fn try_from_key(value: &Value) -> FjallValueResult<FjallValue> {
+        Ok(FjallValue(crate::ordered_key::encode_key(value)))
+    }
+
+    /// Decodes an order-preserving **key** back into a semantically-equal `Value`.
+    #[inline]
+    pub fn try_into_key(self) -> FjallValueResult<Value> {
+        crate::ordered_key::decode_key(&self.0)
+            .map_err(FjallValueError::DeserializationError)
+    }
+
     /// Try to convert FjallValue to Value using TryFrom pattern.
     ///
     /// **RECOMMENDED FOR PRODUCTION USE**: Returns Result for safe error handling.

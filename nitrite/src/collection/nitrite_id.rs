@@ -113,7 +113,29 @@ impl NitriteId {
         self.id_value
     }
 
-    pub(crate) fn valid_id(id_value: u64) -> NitriteResult<bool> {    
+    /// Returns a sentinel `NitriteId` that sorts strictly below every real id.
+    ///
+    /// Real ids are always in `[10^18, 10^19)`, so `0` is guaranteed to be smaller
+    /// than any valid id (and its little-endian byte encoding is all-zero, the
+    /// lexicographic minimum). Used as the lower bracket when range-scanning the
+    /// composite-key layout of non-unique indexes, where each entry is keyed by
+    /// `(value, id)`.
+    pub(crate) fn min_sentinel() -> NitriteId {
+        NitriteId { id_value: u64::MIN }
+    }
+
+    /// Returns a sentinel `NitriteId` that sorts strictly above every real id.
+    ///
+    /// Real ids are always in `[10^18, 10^19)`, so `u64::MAX` is guaranteed to be
+    /// greater than any valid id (and its little-endian byte encoding is all-`0xFF`,
+    /// the lexicographic maximum). Used as the upper bracket when range-scanning the
+    /// composite-key layout of non-unique indexes, where each entry is keyed by
+    /// `(value, id)`.
+    pub(crate) fn max_sentinel() -> NitriteId {
+        NitriteId { id_value: u64::MAX }
+    }
+
+    pub(crate) fn valid_id(id_value: u64) -> NitriteResult<bool> {
         if id_value >= *MAX_VALUE {
             log::error!("Id value is too large");
             return Err(ID_TOO_LARGE_ERROR.clone());

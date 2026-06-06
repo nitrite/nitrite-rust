@@ -15,4 +15,5 @@ mod collection_index_negative_test;
 mod collection_find_negative_test;
 mod collection_insert_negative_test;
 mod collection_delete_negative_test;
+mod non_unique_index_scale_test;
 

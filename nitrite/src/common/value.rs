@@ -225,15 +225,17 @@ impl Ord for Value {
         let other_is_numeric = other.is_integer() || other.is_decimal();
 
         if self_is_numeric && other_is_numeric {
-            // Both are numeric - compare by converting to f64
+            // Both numeric. Compare by magnitude as f64 — using *signed* integer values, so
+            // negatives sort below positives (the previous `as_integer()` cast to u128 wrapped
+            // negatives to huge positives and mis-ordered them).
             let self_f64 = if self.is_integer() {
-                self.as_integer().map(|i| i as f64)
+                self.as_signed_integer().map(|i| i as f64)
             } else {
                 self.as_decimal()
             };
 
             let other_f64 = if other.is_integer() {
-                other.as_integer().map(|i| i as f64)
+                other.as_signed_integer().map(|i| i as f64)
             } else {
                 other.as_decimal()
             };
@@ -244,12 +246,16 @@ impl Ord for Value {
                 if value_cmp != std::cmp::Ordering::Equal {
                     return value_cmp;
                 }
-                // If values are equal, further distinguish by type to ensure i32(5) != f64(5) for key identity
-                // Integers come before floats when values are equal
-                return match (self.is_integer(), other.is_integer()) {
-                    (true, false) => std::cmp::Ordering::Less,
-                    (false, true) => std::cmp::Ordering::Greater,
-                    _ => std::cmp::Ordering::Equal, // Both same category
+                // Equal magnitude: integers come before floats (so I32(5) != F64(5.0) and keeps
+                // a stable key identity).
+                return match (self.as_signed_integer(), other.as_signed_integer()) {
+                    // Both integers — break the f64-magnitude tie by exact value, so integers
+                    // beyond f64's 2^53 precision (e.g. nanosecond timestamps) still order and
+                    // compare correctly instead of collapsing to "equal".
+                    (Some(si), Some(oi)) => si.cmp(&oi),
+                    (Some(_), None) => std::cmp::Ordering::Less,
+                    (None, Some(_)) => std::cmp::Ordering::Greater,
+                    (None, None) => std::cmp::Ordering::Equal,
                 };
             }
         }
@@ -583,6 +589,31 @@ impl Value {
             Value::U128(v) => Some(*v),
             Value::ISize(v) => Some(*v as u128),
             Value::USize(v) => Some(*v as u128),
+            _ => None,
+        }
+    }
+
+    /// Returns the value as a signed `i128` if it is any integer variant.
+    ///
+    /// Unlike [`as_integer`](Self::as_integer) (which casts to `u128` and so wraps negative
+    /// values to huge positives), this preserves sign, giving a correct ordering for negative
+    /// integers. Unsigned 128-bit values that exceed `i128::MAX` wrap, matching the storage
+    /// layer's numeric normalization.
+    #[inline]
+    pub fn as_signed_integer(&self) -> Option<i128> {
+        match self {
+            Value::I8(v) => Some(*v as i128),
+            Value::U8(v) => Some(*v as i128),
+            Value::I16(v) => Some(*v as i128),
+            Value::U16(v) => Some(*v as i128),
+            Value::I32(v) => Some(*v as i128),
+            Value::U32(v) => Some(*v as i128),
+            Value::I64(v) => Some(*v as i128),
+            Value::U64(v) => Some(*v as i128),
+            Value::I128(v) => Some(*v),
+            Value::U128(v) => Some(*v as i128),
+            Value::ISize(v) => Some(*v as i128),
+            Value::USize(v) => Some(*v as i128),
             _ => None,
         }
     }

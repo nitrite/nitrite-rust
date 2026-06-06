@@ -18,6 +18,113 @@ static INDEX_CORRUPT_ERROR: Lazy<NitriteError> = Lazy::new(|| {
     )
 });
 
+/// Storage layout used by an [`IndexMap`].
+///
+/// Non-unique indexes on low-cardinality fields would otherwise store every matching
+/// `NitriteId` in a single ever-growing array keyed by the indexed value, making each
+/// insert an O(k) read-modify-write of that array (O(n²) for a bulk load). The
+/// [`IndexLayout::Composite`] layout instead stores one row per `(value, id)` pair —
+/// keyed by `Value::Array([value, NitriteId])` with an empty value — so inserts and
+/// removals are O(1) point operations and an equality lookup is a range scan over the
+/// `(value, *)` prefix.
+///
+/// [`IndexLayout::Array`] is the classic `value -> Array[ids]` layout, still used for
+/// unique simple indexes (array length ≤ 1, where the uniqueness check depends on the
+/// single-array shape), compound-index sub-maps, and in-memory maps.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub(crate) enum IndexLayout {
+    Array,
+    Composite,
+}
+
+/// Canonicalizes a value used as the first component of a composite key.
+///
+/// Backends order keys by their serialized bytes (e.g. the Fjall adapter normalizes
+/// unsigned integers to their signed equivalents before serializing keys). The
+/// composite key is a `Value::Array`, and that per-element normalization does not
+/// recurse into arrays, so we apply the same unsigned→signed mapping here. This keeps
+/// the stored composite keys and the lookup bounds byte-identical regardless of the
+/// numeric variant the caller used, matching how the classic array layout behaved.
+pub(crate) fn normalize_index_value(value: &Value) -> Value {
+    match value {
+        Value::U8(v) => Value::I8(*v as i8),
+        Value::U16(v) => Value::I16(*v as i16),
+        Value::U32(v) => Value::I32(*v as i32),
+        Value::U64(v) => Value::I64(*v as i64),
+        Value::U128(v) => Value::I128(*v as i128),
+        Value::USize(v) => Value::ISize(*v as isize),
+        other => other.clone(),
+    }
+}
+
+/// Builds the composite key `[value, id]` for the [`IndexLayout::Composite`] layout.
+pub(crate) fn composite_key(value: &Value, id: &NitriteId) -> Key {
+    Value::Array(vec![normalize_index_value(value), Value::NitriteId(*id)])
+}
+
+/// Upper bracket for a single-field (`arity == 1`) `(value, *)` composite-key range. Every real
+/// id is `< u64::MAX`, so `[value, MAX]` sorts at or above every `[value, id]` but below any
+/// `[value', _]` with `value' > value`.
+fn composite_upper(value: &Value) -> Key {
+    Value::Array(vec![
+        normalize_index_value(value),
+        Value::NitriteId(NitriteId::max_sentinel()),
+    ])
+}
+
+/// Lower bracket for the whole `(value, *)` group, independent of the index arity. A 1-element
+/// array `[value]` sorts immediately *before* every `[value, ...]` key (a shorter tuple is the
+/// smaller key in both `Value::Ord` and the persisted order-preserving codec) and after every
+/// entry of a smaller leading value, so `ceiling_key([value])` lands on the first key of the
+/// group.
+fn composite_prefix(value: &Value) -> Key {
+    Value::Array(vec![normalize_index_value(value)])
+}
+
+/// The leading (first-field) component of a composite key.
+fn composite_lead(key: &Key) -> Option<&Value> {
+    match key {
+        Value::Array(parts) if !parts.is_empty() => Some(&parts[0]),
+        _ => None,
+    }
+}
+
+/// Rebuilds the nested value the index scanner expects for one leading-value group, from the
+/// flat composite keys.
+///
+/// `rows` are the per-key component tails that share the same leading value, each shaped
+/// `[next_field, ..., last_field, id]`; `value_fields` is how many indexed fields remain in a
+/// row before the trailing id. The result mirrors the classic nested layout: with no remaining
+/// value fields it is `Array[ids]`, otherwise `Map{ field_value -> <nested> }`. The rows arrive
+/// already sorted, so equal leading components form contiguous runs.
+fn reconstruct_group(rows: &[&[Value]], value_fields: usize) -> Value {
+    if value_fields == 0 {
+        // Each row is just `[id]`.
+        let ids = rows
+            .iter()
+            .filter_map(|r| r.first().cloned())
+            .collect::<Vec<_>>();
+        return Value::Array(ids);
+    }
+
+    let mut map: BTreeMap<Value, Value> = BTreeMap::new();
+    let mut i = 0;
+    while i < rows.len() {
+        let Some(field_value) = rows[i].first() else {
+            i += 1;
+            continue;
+        };
+        let field_value = field_value.clone();
+        let mut tails: Vec<&[Value]> = Vec::new();
+        while i < rows.len() && rows[i].first() == Some(&field_value) {
+            tails.push(&rows[i][1..]);
+            i += 1;
+        }
+        map.insert(field_value, reconstruct_group(&tails, value_fields - 1));
+    }
+    Value::Map(map)
+}
+
 #[derive(Clone)]
 /// Provides efficient key-value access for index data with navigable operations.
 ///
@@ -70,7 +177,24 @@ impl IndexMap {
         nitrite_map: Option<NitriteMap>,
         sub_map: Option<BTreeMap<Value, Value>>,
     ) -> Self {
-        let inner_map = IndexMapInner::new(nitrite_map, sub_map);
+        let inner_map = IndexMapInner::new(nitrite_map, sub_map, IndexLayout::Array, 1);
+        IndexMap {
+            inner: Arc::new(inner_map),
+        }
+    }
+
+    /// Creates a new IndexMap over a persisted map that uses the composite-key layout
+    /// (one row per `(field-values…, id)`), used for non-unique simple and compound indexes.
+    ///
+    /// `arity` is the number of indexed fields: `1` for a simple index (keys `[value, id]`),
+    /// `K` for a `K`-field compound index (keys `[v0, v1, …, v(K-1), id]`). All navigation and
+    /// lookup methods translate transparently between the caller's nested, value-keyed view
+    /// (`get(v0)` returns `Array[ids]` for a simple index, or the reconstructed nested
+    /// `Map{ v1 -> … }` for a compound index; navigation walks distinct leading values) and the
+    /// underlying flat `[v0, …, id] -> ()` rows.
+    pub(crate) fn composite(nitrite_map: NitriteMap, arity: usize) -> Self {
+        let inner_map =
+            IndexMapInner::new(Some(nitrite_map), None, IndexLayout::Composite, arity.max(1));
         IndexMap {
             inner: Arc::new(inner_map),
         }
@@ -249,6 +373,10 @@ impl Debug for IndexMap {
 struct IndexMapInner {
     nitrite_map: Option<NitriteMap>,
     sub_map: Option<InMemoryIndexMap>,
+    layout: IndexLayout,
+    /// Number of indexed fields for a [`IndexLayout::Composite`] map (1 = simple index,
+    /// K = K-field compound index). Ignored for the array layout.
+    arity: usize,
     reverse_scan: AtomicBool,
 }
 
@@ -256,17 +384,87 @@ impl IndexMapInner {
     fn new(
         nitrite_map: Option<NitriteMap>,
         sub_map: Option<BTreeMap<Value, Value>>,
+        layout: IndexLayout,
+        arity: usize,
     ) -> Self {
         let in_memory_map = sub_map.map(InMemoryIndexMap::new);
 
         IndexMapInner {
             nitrite_map,
             sub_map: in_memory_map,
+            layout,
+            arity,
             reverse_scan: AtomicBool::from(false),
         }
     }
 
+    /// The persisted map backing a [`IndexLayout::Composite`] index.
+    fn composite_map(&self) -> NitriteResult<&NitriteMap> {
+        self.nitrite_map.as_ref().ok_or_else(|| {
+            log::error!("Composite index is in corrupt state: missing backing map");
+            INDEX_CORRUPT_ERROR.clone()
+        })
+    }
+
+    /// Equality lookup in the composite layout: range-scan the leading-value group and
+    /// reconstruct the value the scanner expects — `Array[ids]` for a simple index, or the
+    /// nested `Map{ … }` for a compound index — mirroring the classic array/nested layout.
+    fn composite_get(&self, value: &Key) -> NitriteResult<Option<Value>> {
+        let map = self.composite_map()?;
+        // Stored leading components are normalized, so compare against the normalized query
+        // value for an exact match consistent with the seek bounds.
+        let target = normalize_index_value(value);
+        let mut rows: Vec<Vec<Value>> = Vec::new();
+        let mut key = map.ceiling_key(&composite_prefix(value))?;
+        while let Some(k) = key {
+            match &k {
+                Value::Array(parts)
+                    if parts.first().map(|p| *p == target).unwrap_or(false) =>
+                {
+                    // Tail after the leading value: [v1, …, id].
+                    rows.push(parts[1..].to_vec());
+                    key = map.higher_key(&k)?;
+                }
+                _ => break,
+            }
+        }
+        if rows.is_empty() {
+            Ok(None)
+        } else {
+            let refs: Vec<&[Value]> = rows.iter().map(|r| r.as_slice()).collect();
+            Ok(Some(reconstruct_group(&refs, self.arity - 1)))
+        }
+    }
+
+    /// Returns the leading value component of an underlying composite key, or `None` when the
+    /// map is empty / the key is not a well-formed composite key.
+    fn composite_value_of(key: Option<Key>) -> Option<Key> {
+        key.and_then(|k| composite_lead(&k).cloned())
+    }
+
+    /// First distinct leading value strictly greater than `value`, walking the persisted map.
+    /// Used for the compound (`arity > 1`) navigation where a per-id sentinel bracket does not
+    /// apply because the second key component is a field value, not the id.
+    fn composite_higher_scan(&self, value: &Key) -> NitriteResult<Option<Key>> {
+        let map = self.composite_map()?;
+        let target = normalize_index_value(value);
+        let mut key = map.ceiling_key(&composite_prefix(value))?;
+        while let Some(k) = key {
+            match composite_lead(&k) {
+                Some(lead) if *lead == target => {
+                    key = map.higher_key(&k)?;
+                }
+                Some(lead) => return Ok(Some(lead.clone())),
+                None => return Ok(None),
+            }
+        }
+        Ok(None)
+    }
+
     pub fn get(&self, key: &Key) -> NitriteResult<Option<Value>> {
+        if self.layout == IndexLayout::Composite {
+            return self.composite_get(key);
+        }
         if let Some(ref nitrite_map) = self.nitrite_map {
             let value = nitrite_map.get(key)?;
             Ok(value)
@@ -281,6 +479,9 @@ impl IndexMapInner {
     }
 
     pub fn first_key(&self) -> NitriteResult<Option<Key>> {
+        if self.layout == IndexLayout::Composite {
+            return Ok(Self::composite_value_of(self.composite_map()?.first_key()?));
+        }
         if let Some(ref nitrite_map) = &self.nitrite_map {
             let key = nitrite_map.first_key()?;
             Ok(key)
@@ -294,6 +495,9 @@ impl IndexMapInner {
     }
 
     pub fn last_key(&self) -> NitriteResult<Option<Key>> {
+        if self.layout == IndexLayout::Composite {
+            return Ok(Self::composite_value_of(self.composite_map()?.last_key()?));
+        }
         if let Some(ref nitrite_map) = &self.nitrite_map {
             let key = nitrite_map.last_key()?;
             Ok(key)
@@ -307,6 +511,20 @@ impl IndexMapInner {
     }
 
     pub fn higher_key(&self, key: &Key) -> NitriteResult<Option<Key>> {
+        if self.layout == IndexLayout::Composite {
+            // Next distinct leading value strictly greater than `key`.
+            if self.arity == 1 {
+                // Single field: everything `[key, *]` is `<= [key, MAX_id]`, so the first
+                // underlying key past `[key, MAX_id]` is the first entry of the next value —
+                // an O(log n) seek.
+                return Ok(Self::composite_value_of(
+                    self.composite_map()?.higher_key(&composite_upper(key))?,
+                ));
+            }
+            // Compound: the second component is a field value (not the id), so there is no
+            // per-id sentinel; skip past the group by walking.
+            return self.composite_higher_scan(key);
+        }
         if let Some(ref nitrite_map) = &self.nitrite_map {
             let key = nitrite_map.higher_key(key)?;
             Ok(key)
@@ -320,6 +538,13 @@ impl IndexMapInner {
     }
 
     pub fn ceiling_key(&self, key: &Key) -> NitriteResult<Option<Key>> {
+        if self.layout == IndexLayout::Composite {
+            // First distinct leading value `>= key`: `[key]` sorts before every `[key, *]`, so
+            // the ceiling of `[key]` is the first entry whose leading value is `>= key`.
+            return Ok(Self::composite_value_of(
+                self.composite_map()?.ceiling_key(&composite_prefix(key))?,
+            ));
+        }
         if let Some(ref nitrite_map) = &self.nitrite_map {
             let key = nitrite_map.ceiling_key(key)?;
             Ok(key)
@@ -333,6 +558,14 @@ impl IndexMapInner {
     }
 
     pub fn lower_key(&self, key: &Key) -> NitriteResult<Option<Key>> {
+        if self.layout == IndexLayout::Composite {
+            // Largest distinct leading value strictly less than `key`: `[key]` sorts before
+            // every `[key, *]`, so the largest underlying key below `[key]` belongs to the
+            // previous value.
+            return Ok(Self::composite_value_of(
+                self.composite_map()?.lower_key(&composite_prefix(key))?,
+            ));
+        }
         if let Some(ref nitrite_map) = &self.nitrite_map {
             let key = nitrite_map.lower_key(key)?;
             Ok(key)
@@ -346,6 +579,31 @@ impl IndexMapInner {
     }
 
     pub fn floor_key(&self, key: &Key) -> NitriteResult<Option<Key>> {
+        if self.layout == IndexLayout::Composite {
+            // Largest distinct leading value `<= key`.
+            if self.arity == 1 {
+                // Single field: every `[key, *]` is `<= [key, MAX_id]`, so the floor of
+                // `[key, MAX_id]` lands on the last entry of `key` (or the previous value).
+                return Ok(Self::composite_value_of(
+                    self.composite_map()?.floor_key(&composite_upper(key))?,
+                ));
+            }
+            // Compound: if `key` itself has entries the floor is `key`; otherwise it is the
+            // largest leading value below `key`.
+            let target = normalize_index_value(key);
+            let ceiling = self.composite_map()?.ceiling_key(&composite_prefix(key))?;
+            if ceiling
+                .as_ref()
+                .and_then(composite_lead)
+                .map(|lead| *lead == target)
+                .unwrap_or(false)
+            {
+                return Ok(Some(target));
+            }
+            return Ok(Self::composite_value_of(
+                self.composite_map()?.lower_key(&composite_prefix(key))?,
+            ));
+        }
         if let Some(ref nitrite_map) = &self.nitrite_map {
             let key = nitrite_map.floor_key(key)?;
             Ok(key)
@@ -359,6 +617,15 @@ impl IndexMapInner {
     }
 
     pub fn entries(&self) -> NitriteResult<IndexMapIterator> {
+        if self.layout == IndexLayout::Composite {
+            // Group the sorted flat `[v0, …, id] -> ()` rows back into one entry per distinct
+            // leading value — `(v0, Array[ids])` for a simple index, `(v0, Map{…})` for a
+            // compound index — so callers (full scans, not-equals/not-in) see the same shape as
+            // the classic layout. Order is irrelevant to those callers (their results are
+            // sorted/deduped downstream), so grouping is forward-only.
+            let iterator = self.composite_map()?.entries()?;
+            return Ok(IndexMapIterator::new_composite(iterator, self.arity));
+        }
         if let Some(ref nitrite_map) = &self.nitrite_map {
             let iterator = nitrite_map.entries()?;
             Ok(IndexMapIterator::new(
@@ -534,6 +801,13 @@ pub struct IndexMapIterator {
     cached_index_map: Option<InMemoryIndexMap>,
     current: Option<Key>,
     reverse_scan: bool,
+    /// When set, iterate the composite layout: group consecutive flat `[v0, …, id] -> ()`
+    /// rows from this underlying iterator into one entry per distinct leading value.
+    composite_iterator: Option<EntryIterator>,
+    /// Number of indexed fields, for reconstructing the grouped value shape.
+    composite_arity: usize,
+    /// One-row lookahead buffer used by the composite grouping in `next()`.
+    composite_pending: Option<(Key, Value)>,
 }
 
 impl IndexMapIterator {
@@ -547,7 +821,76 @@ impl IndexMapIterator {
             cached_index_map,
             current: None,
             reverse_scan,
+            composite_iterator: None,
+            composite_arity: 1,
+            composite_pending: None,
         }
+    }
+
+    fn new_composite(iterator: EntryIterator, arity: usize) -> Self {
+        IndexMapIterator {
+            nitrite_map_iterator: None,
+            cached_index_map: None,
+            current: None,
+            reverse_scan: false,
+            composite_iterator: Some(iterator),
+            composite_arity: arity,
+            composite_pending: None,
+        }
+    }
+
+    /// Pulls the next grouped entry (one distinct leading value) from the composite iterator,
+    /// reconstructing `Array[ids]` (simple index) or the nested `Map{…}` (compound index).
+    fn next_composite(&mut self) -> Option<NitriteResult<(Key, Value)>> {
+        let arity = self.composite_arity;
+        let iterator = self.composite_iterator.as_mut()?;
+
+        // Seed the group from the pending lookahead or the next underlying row.
+        let first = match self.composite_pending.take() {
+            Some(kv) => kv,
+            None => match iterator.next() {
+                Some(Ok(kv)) => kv,
+                Some(Err(e)) => return Some(Err(e)),
+                None => return None,
+            },
+        };
+
+        let (group_value, first_tail) = match &first.0 {
+            Value::Array(parts) if !parts.is_empty() => {
+                (parts[0].clone(), parts[1..].to_vec())
+            }
+            _ => {
+                log::error!("Composite index is in corrupt state: malformed key {:?}", first.0);
+                return Some(Err(INDEX_CORRUPT_ERROR.clone()));
+            }
+        };
+
+        let mut rows: Vec<Vec<Value>> = vec![first_tail];
+        loop {
+            match iterator.next() {
+                Some(Ok(kv)) => match &kv.0 {
+                    Value::Array(parts)
+                        if parts.first().map(|p| *p == group_value).unwrap_or(false) =>
+                    {
+                        rows.push(parts[1..].to_vec());
+                    }
+                    Value::Array(_) => {
+                        // Reached the next distinct leading value — buffer it for the next call.
+                        self.composite_pending = Some(kv);
+                        break;
+                    }
+                    _ => {
+                        log::error!("Composite index is in corrupt state: malformed key {:?}", kv.0);
+                        return Some(Err(INDEX_CORRUPT_ERROR.clone()));
+                    }
+                },
+                Some(Err(e)) => return Some(Err(e)),
+                None => break,
+            }
+        }
+
+        let refs: Vec<&[Value]> = rows.iter().map(|r| r.as_slice()).collect();
+        Some(Ok((group_value, reconstruct_group(&refs, arity - 1))))
     }
 
     fn higher_key(&self, btree_map: &InMemoryIndexMap) -> NitriteResult<Option<Key>> {
@@ -569,6 +912,9 @@ impl Iterator for IndexMapIterator {
     type Item = NitriteResult<(Key, Value)>;
 
     fn next(&mut self) -> Option<Self::Item> {
+        if self.composite_iterator.is_some() {
+            return self.next_composite();
+        }
         if !self.reverse_scan {
             if let Some(nitrite_map_iterator) = &mut self.nitrite_map_iterator {
                 let next = nitrite_map_iterator.next();
@@ -631,6 +977,10 @@ impl Iterator for IndexMapIterator {
 
 impl DoubleEndedIterator for IndexMapIterator {
     fn next_back(&mut self) -> Option<Self::Item> {
+        if self.composite_iterator.is_some() {
+            // Composite grouping is forward-only; its consumers don't rely on order.
+            return self.next_composite();
+        }
         if !self.reverse_scan {
             if let Some(nitrite_map_iterator) = &mut self.nitrite_map_iterator {
                 let next = nitrite_map_iterator.next_back();

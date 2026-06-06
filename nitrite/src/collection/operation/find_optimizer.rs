@@ -556,69 +556,18 @@ impl FindOptimizerInner {
         find_plan: &mut FindPlan,
     ) -> NitriteResult<()> {
         if let Some(sort_by) = &find_options.sort_by {
-            if find_plan.index_descriptor().is_none() {
-                find_plan.set_blocking_sort_order(sort_by.sorting_order());
-            } else {
-                self.try_index_based_sort(find_plan, sort_by)?;
-            }
-        }
-
-        Ok(())
-    }
-
-    fn try_index_based_sort(
-        &self,
-        find_plan: &mut FindPlan,
-        sort_by: &SortableFields,
-    ) -> NitriteResult<()> {
-        let index_descriptor = find_plan.index_descriptor().unwrap();
-        let fields = index_descriptor.index_fields().field_names();
-        let mut can_use_index = false;
-        let mut index_scan_order = HashMap::new();
-
-        let sort_orders = sort_by.sorting_order();
-        let len = sort_orders.len();
-
-        if fields.len() >= len {
-            can_use_index =
-                self.compute_index_scan_order(&fields, &sort_orders, &mut index_scan_order)?;
-        }
-
-        if can_use_index {
-            find_plan.set_index_scan_order(index_scan_order);
-        } else {
+            // Always apply an explicit (blocking) sort to the result set. The index is still
+            // used to *filter* (select the matching ids); ordering is applied to that result.
+            //
+            // We deliberately do not try to satisfy the sort directly from the index scan: the
+            // index scanner deduplicates matching ids by `NitriteId`, which discards the field
+            // order it walked, so "the index already returns rows sorted by the field" does not
+            // actually hold. Sorting here keeps results correct regardless of index coverage or
+            // scan direction (ascending or descending).
             find_plan.set_blocking_sort_order(sort_by.sorting_order());
         }
 
         Ok(())
-    }
-
-    fn compute_index_scan_order(
-        &self,
-        fields: &[String],
-        sort_orders: &[(String, SortOrder)],
-        index_scan_order: &mut HashMap<String, bool>,
-    ) -> NitriteResult<bool> {
-        let mut can_use_index = true;
-
-        for i in 0..sort_orders.len() {
-            let field_name = &fields[i];
-            let (sort_field, sort_order) = &sort_orders[i];
-
-            if field_name != sort_field {
-                can_use_index = false;
-                break;
-            }
-
-            let reverse_scan = match sort_order {
-                SortOrder::Ascending => false,
-                SortOrder::Descending => true,
-            };
-
-            index_scan_order.insert(field_name.clone(), reverse_scan);
-        }
-
-        Ok(can_use_index)
     }
 
     fn read_limit_options(

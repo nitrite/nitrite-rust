@@ -1,5 +1,6 @@
 use super::{
-    index_scanner::IndexScanner, nitrite_index::NitriteIndexProvider, IndexDescriptor, IndexMap,
+    index_map::composite_key, index_scanner::IndexScanner, nitrite_index::NitriteIndexProvider,
+    IndexDescriptor, IndexMap,
 };
 use crate::{
     collection::{FindPlan, NitriteId},
@@ -92,6 +93,13 @@ impl SimpleIndexInner {
         field_values: &FieldValues,
         value: &Value,
     ) -> NitriteResult<()> {
+        if !self.is_unique() {
+            // Non-unique indexes use the composite-key layout: one O(1) point write per
+            // `(value, id)` pair, instead of an O(k) read-modify-write of a shared array.
+            index_map.put(composite_key(value, field_values.nitrite_id()), Value::Null)?;
+            return Ok(());
+        }
+
         let existing = index_map.get(value)?;
 
         let mut nitrite_ids = match existing {
@@ -110,6 +118,12 @@ impl SimpleIndexInner {
         field_values: &FieldValues,
         value: &Value,
     ) -> NitriteResult<()> {
+        if !self.is_unique() {
+            // Composite-key layout: remove the single `(value, id)` row in O(1).
+            index_map.remove(&composite_key(value, field_values.nitrite_id()))?;
+            return Ok(());
+        }
+
         let nitrite_ids = index_map.get(value)?;
         let mut nitrite_ids = nitrite_ids.unwrap_or(Value::Array(Vec::new()));
 
@@ -203,7 +217,11 @@ impl SimpleIndexInner {
         let filters = index_scan_filter.filters();
         let index_scan_order = find_plan.index_scan_order().unwrap_or_default();
 
-        let i_map = IndexMap::new(Some(index_map), None);
+        let i_map = if self.is_unique() {
+            IndexMap::new(Some(index_map), None)
+        } else {
+            IndexMap::composite(index_map, 1)
+        };
         let index_scanner = IndexScanner::new(i_map);
         index_scanner.scan(filters, index_scan_order)
     }

@@ -5,6 +5,73 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.0] - 2026-06-06
+
+This release makes the index engine production-ready for high-volume, ordered workloads such as
+an email client's initial sync (the motivating use case). It eliminates an O(n²) index build,
+fixes long-standing key-ordering bugs that made integer/float range and descending-sorted index
+queries return wrong results on the persistent store, and corrects `Value`'s numeric ordering.
+It changes the on-disk index/key format, hence the `0.3.x` → `0.4.0` bump.
+
+### ⚠️ Breaking Changes
+
+- **On-disk format (indexes + keys).** Two storage-format changes mean databases created with
+  `0.3.x` must be rebuilt (indexes are derived data; re-create the database or drop and
+  re-create indexes):
+  - **Non-unique simple and compound indexes** now use a flat composite-key layout — one
+    `(field-values…, id)` row per entry — instead of a single `value → [ids]` array (or nested
+    map) per key.
+  - **`nitrite-fjall-adapter`** now serializes **keys** with an order-preserving codec instead
+    of `bincode`, so the store's byte order matches `Value` ordering.
+
+### Fixed
+
+- **`nitrite` — O(n²) non-unique index build.** A non-unique index stored every matching
+  `NitriteId` in one ever-growing array per indexed value, so each insert on a low-cardinality
+  field (e.g. `account_id`, `folder_id`) did an O(k) read-modify-write + re-sort of that array —
+  O(n²) total and O(n) per-insert serialized memory. Non-unique simple **and** compound indexes
+  now store one composite `(value…, id)` row per entry: inserts and removals are O(1) point
+  operations, equality is a prefix range scan, and per-insert memory is flat. Read behavior is
+  unchanged (verified for parity against the old layout).
+- **`nitrite-fjall-adapter` — wrong results for ordered index queries.** Keys were serialized
+  with little-endian `bincode` and the LSM store orders by raw bytes, so integer/float range
+  scans and sorted index walks were wrong across byte boundaries (e.g. `I32(255)` sorted after
+  `I32(256)`; `seq BETWEEN 100 AND 199` could return a single row). Keys now use an
+  order-preserving codec, so range, `between`, and sorted index scans are exact — including
+  negative and large integers (nanosecond timestamps order exactly, beyond `f64` precision).
+- **`nitrite` — `Value` numeric ordering.** `Value::cmp` compared integers via `as u128`, which
+  wrapped negative integers to huge positives (sorting them *after* positives) and collapsed
+  integers beyond `2^53` to "equal". It now compares signed (`i128`) with an exact tie-break, so
+  negative and very large integers order correctly and consistently across the in-memory and
+  persistent stores. Added `Value::as_signed_integer`.
+- **`nitrite` — descending sort over an index-covered query.** An `order_by` whose field matched
+  the queried index relied on the index scan emitting rows already in order, but the scanner
+  deduplicates by `NitriteId` and discarded that order — so descending (and some ascending)
+  sorts silently returned index/id order. `order_by` now always applies an explicit field sort
+  to the filtered result, so ascending/descending sorts are correct regardless of index
+  coverage.
+
+### Performance
+
+- Micro-benchmark (per-message insert into a collection with a unique `id` index
+  plus non-unique `account_id`/`folder_id` indexes, release build, `Durability::Periodic`):
+
+  | messages | 0.3.x | 0.4.0 |
+  | --- | --- | --- |
+  | 2,000 | 2.26 s (885 msg/s) | 0.11 s (~17,800 msg/s) |
+  | 10,000 | 38.0 s (263 msg/s) | 0.24 s (~41,600 msg/s) |
+  | 50,000 | ~16 min (extrapolated) | 1.12 s (~44,600 msg/s) |
+
+  Throughput is now flat-to-rising with collection size (O(1) per insert) instead of collapsing
+  (O(n²)).
+
+### Added
+
+- **`nitrite-int-test`** — regression tests for the composite-key layout (equality / `in` /
+  `not in` / range / removal parity with the array layout, exact integer range plus ascending
+  and descending sorted scans, compound prefix and full-tuple equality, and low-cardinality
+  bulk-load scaling), and an ignored `index_write_bench` throughput benchmark.
+
 ## [0.3.1] - 2026-06-05
 
 ### Fixed

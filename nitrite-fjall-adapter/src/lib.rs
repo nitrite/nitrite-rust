@@ -3,6 +3,7 @@ extern crate core;
 mod config;
 mod map;
 mod module;
+mod ordered_key;
 mod store;
 mod tx_scope;
 mod version;

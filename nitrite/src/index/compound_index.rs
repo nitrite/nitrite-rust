@@ -1,12 +1,13 @@
 use super::{
-    index_scanner::IndexScanner, nitrite_index::NitriteIndexProvider, IndexDescriptor, IndexMap,
+    index_map::normalize_index_value, index_scanner::IndexScanner,
+    nitrite_index::NitriteIndexProvider, IndexDescriptor, IndexMap,
 };
 use crate::{
     collection::{FindPlan, NitriteId},
     derive_index_map_name,
     errors::{ErrorKind, NitriteError, NitriteResult},
     store::{NitriteMap, NitriteMapProvider, NitriteStore, NitriteStoreProvider},
-    validate_index_field, FieldValues, Value, UNIQUE_INDEX,
+    validate_index_field, common::Key, FieldValues, Value, UNIQUE_INDEX,
 };
 use itertools::Itertools;
 use once_cell::sync::Lazy;
@@ -183,221 +184,104 @@ impl CompoundIndexInner {
         self.nitrite_store.open_map(&map_name)
     }
 
+    /// Number of indexed fields (the arity of the composite key, excluding the trailing id).
+    fn field_count(&self) -> usize {
+        self.index_descriptor.index_fields().field_names().len()
+    }
+
+    /// Builds the flat composite key `[v0, v1, …, v(K-1), id]` for one first-field value.
+    ///
+    /// `first_value` is a single value for the first field (one element when that field is a
+    /// multikey array); the remaining components come from the other indexed fields in order.
+    /// Only the first field may be an array — a multikey array in any later field is rejected.
+    fn composite_key(
+        &self,
+        field_values: &FieldValues,
+        first_value: &Value,
+    ) -> NitriteResult<Key> {
+        let values = field_values.values();
+        let mut parts = Vec::with_capacity(values.len() + 1);
+        parts.push(normalize_index_value(first_value));
+
+        for (_, value) in values.iter().skip(1) {
+            match value {
+                Value::Array(_) => {
+                    log::error!(
+                        "Compound multikey index is supported on the first field of the index only"
+                    );
+                    return Err(COMPOUND_INDEX_ERROR.clone());
+                }
+                Value::Null => parts.push(Value::Null),
+                v if v.is_comparable() => parts.push(normalize_index_value(v)),
+                v => {
+                    log::error!(
+                        "Found non comparable value {} in compound index {:?}",
+                        v,
+                        self.index_descriptor
+                    );
+                    return Err(NitriteError::new(
+                        &format!("{} is not comparable", v),
+                        ErrorKind::IndexingError,
+                    ));
+                }
+            }
+        }
+
+        parts.push(Value::NitriteId(*field_values.nitrite_id()));
+        Ok(Value::Array(parts))
+    }
+
+    /// Inserts one composite-key row in O(1). For a unique index, first verifies no other id is
+    /// already stored for the same field-value tuple.
     fn add_index_element(
         &self,
         index_map: &NitriteMap,
         field_values: &FieldValues,
         value: &Value,
     ) -> NitriteResult<()> {
-        let existing = index_map.get(value)?;
-        // index are always in ascending order
-        let mut sub_map = match existing {
-            Some(map) => map,
-            None => Value::Map(BTreeMap::new())
-        };
-        
-        self.populate_sub_map(&mut sub_map, field_values, 1)?;
-        index_map.put(value.clone(), sub_map)
+        let key = self.composite_key(field_values, value)?;
+        if self.is_unique() {
+            self.check_unique(index_map, &key)?;
+        }
+        index_map.put(key, Value::Null)
     }
 
+    /// Enforces a unique compound constraint: the field-value tuple (the composite key without
+    /// its trailing id) must not already map to a different id. A prefix `ceiling_key` probe
+    /// finds any existing row for the tuple in O(log n).
+    fn check_unique(&self, index_map: &NitriteMap, key: &Key) -> NitriteResult<()> {
+        let Value::Array(parts) = key else {
+            return Ok(());
+        };
+        let k = self.field_count();
+        if parts.len() != k + 1 {
+            return Ok(());
+        }
+        let tuple = &parts[..k];
+        let id = &parts[k];
+
+        // `[tuple]` (k elements) sorts immediately before `[tuple, id]` (k+1 elements), so the
+        // ceiling lands on the first stored row for this tuple, if any.
+        let probe = Value::Array(tuple.to_vec());
+        if let Some(Value::Array(existing)) = index_map.ceiling_key(&probe)? {
+            if existing.len() == k + 1 && existing[..k] == *tuple && existing[k] != *id {
+                log::error!("Unique constraint violated for {:?}", tuple);
+                return Err(UNIQUE_CONSTRAINT_ERROR.clone());
+            }
+        }
+        Ok(())
+    }
+
+    /// Removes one composite-key row in O(1).
     fn remove_index_element(
         &self,
         index_map: NitriteMap,
         field_values: &FieldValues,
         value: &Value,
     ) -> NitriteResult<()> {
-        let sub_map = index_map.get(value)?;
-        let mut sub_map = sub_map.unwrap_or(Value::Map(BTreeMap::new()));
-        self.delete_from_sub_map(&mut sub_map, field_values, 1)?;
-        index_map.put(value.clone(), sub_map)
-    }
-
-    fn populate_sub_map(
-        &self,
-        sub_map: &mut Value,
-        field_values: &FieldValues,
-        depth: usize,
-    ) -> NitriteResult<()> {
-        if depth >= field_values.values().len() {
-            return Ok(());
-        }
-
-        let values = field_values.values();
-        // Safely get the field value at the specified depth, returning error if out of bounds
-        let (_, value) = values.get(depth)
-            .ok_or_else(|| NitriteError::new(
-                &format!("Field value at depth {} not found in compound index", depth),
-                ErrorKind::IndexingError,
-            ))?;
-
-        let db_value = match value {
-            Value::Array(_) => {
-                log::error!("Compound multikey index is supported on the first field of the index only");
-                return Err(COMPOUND_INDEX_ERROR.clone());
-            }
-            value => {
-                if !value.is_comparable() {
-                    log::error!("Found non comparable value {} in compound index {:?}", value, self.index_descriptor);
-                    return Err(NitriteError::new(
-                        &format!("{} is not comparable", value),
-                        ErrorKind::IndexingError,
-                    ));
-                }
-                value.clone()
-            }
-        };
-
-        if depth == field_values.values().len() - 1 {
-            // Safely get the mutable map reference
-            let sub_map_inner = sub_map.as_map_mut()
-                .ok_or_else(|| NitriteError::new(
-                    &format!("Compound index corruption: expected map at depth {} for field values {:?}", depth, field_values.values()),
-                    ErrorKind::IndexingError
-                ))?;
-            
-            let mut nitrite_ids = sub_map_inner.remove(&db_value)
-                .unwrap_or_else(|| Value::Array(Vec::new()));
-            
-            // Validate the retrieved value is an array
-            let nitrite_ids_arr = nitrite_ids.as_array_mut()
-                .ok_or_else(|| NitriteError::new(
-                    &format!("Compound index error: expected array of NitriteIds for key {:?} at depth {}", db_value, depth),
-                    ErrorKind::IndexingError
-                ))?;
-            let nitrite_ids = self.add_nitrite_ids(nitrite_ids_arr, field_values)?;
-            
-            sub_map_inner.insert(db_value, Value::Array(nitrite_ids));
-        } else {
-            // Safely get the mutable map reference
-            let sub_map_inner = sub_map.as_map_mut()
-                .ok_or_else(|| NitriteError::new(
-                    &format!("Compound index corruption: expected map at depth {} for field values {:?}", depth, field_values.values()),
-                    ErrorKind::IndexingError
-                ))?;
-            
-            let mut sub_map2 = sub_map_inner.remove(&db_value)
-                .unwrap_or_else(|| Value::Map(BTreeMap::new()));
-            
-            self.populate_sub_map(&mut sub_map2, field_values, depth + 1)?;
-            sub_map_inner.insert(db_value, sub_map2);
-        }
-
+        let key = self.composite_key(field_values, value)?;
+        index_map.remove(&key)?;
         Ok(())
-    }
-
-    fn delete_from_sub_map(
-        &self,
-        sub_map: &mut Value,
-        field_values: &FieldValues,
-        depth: usize,
-    ) -> NitriteResult<()> {
-        let values = field_values.values();
-        // Safely get the field value at the specified depth, returning error if out of bounds
-        let (_, value) = values.get(depth)
-            .ok_or_else(|| NitriteError::new(
-                &format!("Field value at depth {} not found in compound index", depth),
-                ErrorKind::IndexingError,
-            ))?;
-
-        let db_value = match value {
-            Value::Null => Value::Null,
-            value => {
-                if !value.is_comparable() {
-                    return Ok(());
-                }
-                value.clone()
-            }
-        };
-
-        if depth == field_values.values().len() - 1 {
-            // Safely get mutable map reference and remove/update in place
-            let sub_map_inner = sub_map.as_map_mut()
-                .ok_or_else(|| NitriteError::new(
-                    &format!("Compound index corruption during deletion: expected map at depth {} for field values {:?}", depth, field_values.values()),
-                    ErrorKind::IndexingError
-                ))?;
-            
-            let mut nitrite_ids = sub_map_inner.remove(&db_value)
-                .unwrap_or_else(|| Value::Array(Vec::new()));
-            
-            // Validate the retrieved value is an array
-            let nitrite_ids_arr = nitrite_ids.as_array_mut()
-                .ok_or_else(|| NitriteError::new(
-                    &format!("Compound index error during deletion: expected array of NitriteIds for key {:?} at depth {}", db_value, depth),
-                    ErrorKind::IndexingError
-                ))?;
-            let nitrite_ids = self.remove_nitrite_ids(nitrite_ids_arr, field_values)?;
-
-            if !nitrite_ids.is_empty() {
-                sub_map_inner.insert(db_value, Value::Array(nitrite_ids));
-            }
-        } else {
-            // Safely get mutable map reference
-            let sub_map_inner = sub_map.as_map_mut()
-                .ok_or_else(|| NitriteError::new(
-                    &format!("Compound index corruption during deletion: expected map at depth {} for field values {:?}", depth, field_values.values()),
-                    ErrorKind::IndexingError
-                ))?;
-            
-            let mut sub_map2 = sub_map_inner.remove(&db_value)
-                .unwrap_or_else(|| Value::Map(BTreeMap::new()));
-
-            let is_empty = sub_map2.as_map()
-                .map(|m| m.is_empty())
-                .unwrap_or(true);
-                
-            if !is_empty {
-                self.delete_from_sub_map(&mut sub_map2, field_values, depth + 1)?;
-                sub_map_inner.insert(db_value, sub_map2);
-            }
-        }
-
-        Ok(())
-    }
-
-    fn add_nitrite_ids(
-        &self,
-        nitrite_ids: &mut Vec<Value>,
-        field_values: &FieldValues,
-    ) -> NitriteResult<Vec<Value>> {
-        if self.is_unique() && nitrite_ids.len() == 1 {
-            // if key is already exists for unique type, throw error
-            log::error!(
-                "Unique constraint violated for {:?}",
-                field_values.values()
-            );
-            return Err(UNIQUE_CONSTRAINT_ERROR.clone());
-        }
-
-        // index always are in ascending format
-        nitrite_ids.push(Value::NitriteId(*field_values.nitrite_id()));
-
-        // Use itertools::unique which is more efficient than collecting and deduplicating
-        nitrite_ids.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
-        nitrite_ids.dedup();
-        
-        Ok(std::mem::take(nitrite_ids))
-    }
-
-    fn remove_nitrite_ids(
-        &self,
-        nitrite_ids: &mut Vec<Value>,
-        field_values: &FieldValues,
-    ) -> NitriteResult<Vec<Value>> {
-        if !nitrite_ids.is_empty() {
-            let target_id = field_values.nitrite_id();
-            nitrite_ids.retain(|x| {
-                // Gracefully handle invalid IDs - keep them if they can't be converted
-                match x.as_nitrite_id() {
-                    Some(id) => id != target_id,
-                    None => {
-                        log::warn!("Invalid NitriteId value in compound index: {:?}", x);
-                        true // Keep invalid IDs
-                    }
-                }
-            });
-        }
-        Ok(std::mem::take(nitrite_ids))
     }
 
     fn scan_index(
@@ -418,7 +302,9 @@ impl CompoundIndexInner {
             .filters();
         let index_scan_order = find_plan.index_scan_order().unwrap_or_default();
 
-        let i_map = IndexMap::new(Some(index_map), None);
+        // The compound index stores flat composite keys `[v0, …, v(K-1), id]`; the composite
+        // IndexMap reconstructs the nested per-leading-value view the scanner expects.
+        let i_map = IndexMap::composite(index_map, self.field_count());
         let index_scanner = IndexScanner::new(i_map);
         index_scanner.scan(filters, index_scan_order)
     }
@@ -581,55 +467,24 @@ mod tests {
     }
 
     #[test]
-    fn test_compound_index_populate_sub_map() {
-        let index_descriptor = create_test_index_descriptor();
-        let nitrite_store = NitriteStore::default();
-        let compound_index = CompoundIndex::new(index_descriptor, nitrite_store);
-
-        let mut sub_map = Value::Map(BTreeMap::new());
-        let field_values = create_test_field_values();
-
-        let result = compound_index.populate_sub_map(&mut sub_map, &field_values, 0);
-        assert!(result.is_ok());
-    }
-
-    #[test]
-    fn test_compound_index_delete_from_sub_map() {
-        let index_descriptor = create_test_index_descriptor();
-        let nitrite_store = NitriteStore::default();
-        let compound_index = CompoundIndex::new(index_descriptor, nitrite_store);
-
-        let mut sub_map = Value::Map(BTreeMap::new());
-        let field_values = create_test_field_values();
-
-        let result = compound_index.delete_from_sub_map(&mut sub_map, &field_values, 0);
-        assert!(result.is_ok());
-    }
-
-    #[test]
-    fn test_compound_index_add_nitrite_ids() {
-        let index_descriptor = create_test_index_descriptor();
-        let nitrite_store = NitriteStore::default();
-        let compound_index = CompoundIndex::new(index_descriptor, nitrite_store);
-
-        let mut nitrite_ids = Vec::new();
-        let field_values = create_test_field_values();
-
-        let result = compound_index.add_nitrite_ids(&mut nitrite_ids, &field_values);
-        assert!(result.is_ok());
-    }
-
-    #[test]
-    fn test_compound_index_remove_nitrite_ids() {
+    fn test_compound_index_composite_key_layout() {
+        // A compound write stores one flat composite key `[v0, v1, id]` per first-field value.
         let index_descriptor = create_test_index_descriptor();
         let nitrite_store = NitriteStore::default();
         let compound_index = CompoundIndex::new(index_descriptor, nitrite_store);
 
         let field_values = create_test_field_values();
-        let mut nitrite_ids = vec![*field_values.nitrite_id()];
-
-        let result = compound_index.remove_nitrite_ids(&mut nitrite_ids, &field_values);
-        assert!(result.is_ok());
+        let first = Value::String("value1".to_string());
+        let key = compound_index.composite_key(&field_values, &first).unwrap();
+        match key {
+            Value::Array(parts) => {
+                assert_eq!(parts.len(), 3); // [field1, field2, id]
+                assert_eq!(parts[0], Value::String("value1".to_string()));
+                assert_eq!(parts[1], Value::String("value2".to_string()));
+                assert!(parts[2].is_nitrite_id());
+            }
+            other => panic!("expected composite array key, got {other:?}"),
+        }
     }
 
     #[test]
@@ -736,94 +591,27 @@ mod tests {
         // If it errors, it should be a proper NitriteError, not a panic
     }
 
-    // remove_nitrite_ids error handling tests
     #[test]
-    fn test_remove_nitrite_ids_with_invalid_ids() {
-        // Test that remove_nitrite_ids handles invalid NitriteId values gracefully
-        // instead of panicking with unwrap
+    fn test_compound_index_rejects_multikey_in_later_field() {
+        // Only the first field may be a multikey array; a later array field is rejected.
         let index_descriptor = create_test_index_descriptor();
         let nitrite_store = NitriteStore::default();
         let compound_index = CompoundIndex::new(index_descriptor, nitrite_store);
 
-        // Create a vector with mixed valid and invalid values
-        let mut nitrite_ids = vec![
-            Value::String("not_an_id".to_string()), // Invalid - will be logged and retained
-            Value::I32(42),                          // Invalid - will be logged and retained
-            Value::Null,                             // Invalid - will be logged and retained
-        ];
-
-        let field_values = create_test_field_values();
-        
-        // This should not panic - it should handle the invalid IDs gracefully
-        let result = compound_index.inner.remove_nitrite_ids(&mut nitrite_ids, &field_values);
-        assert!(result.is_ok());
-        
-        // Invalid IDs should be retained since they couldn't be converted
-        // The function returns the retained IDs
-        let retained_ids = result.unwrap();
-        assert_eq!(retained_ids.len(), 3);
-    }
-
-    #[test]
-    fn test_remove_nitrite_ids_removes_matching_ids() {
-        // Test that remove_nitrite_ids correctly removes matching NitriteId values
-        let index_descriptor = create_test_index_descriptor();
-        let nitrite_store = NitriteStore::default();
-        let compound_index = CompoundIndex::new(index_descriptor, nitrite_store);
-
-        let field_values = create_test_field_values();
-        let target_id = *field_values.nitrite_id();
-        
-        // Create a vector with the target ID that should be removed
-        let mut nitrite_ids = vec![Value::NitriteId(target_id)];
-
-        let result = compound_index.inner.remove_nitrite_ids(&mut nitrite_ids, &field_values);
-        assert!(result.is_ok());
-        
-        // The target ID should be removed (result should be empty)
-        let retained_ids = result.unwrap();
-        assert_eq!(retained_ids.len(), 0);
-    }
-
-    #[test]
-    fn test_remove_nitrite_ids_preserves_non_matching_ids() {
-        // Test that remove_nitrite_ids preserves IDs that don't match target
-        let index_descriptor = create_test_index_descriptor();
-        let nitrite_store = NitriteStore::default();
-        let compound_index = CompoundIndex::new(index_descriptor, nitrite_store);
-
-        let field_values = create_test_field_values();
-        let other_id = NitriteId::new();
-        
-        // Create a vector with IDs that don't match the target
-        let mut nitrite_ids = vec![Value::NitriteId(other_id)];
-
-        let result = compound_index.inner.remove_nitrite_ids(&mut nitrite_ids, &field_values);
-        assert!(result.is_ok());
-        
-        // Non-matching IDs should be preserved in the return value
-        let retained_ids = result.unwrap();
-        assert_eq!(retained_ids.len(), 1);
+        let field_values = FieldValues::new(
+            vec![
+                ("field1".to_string(), Value::String("a".to_string())),
+                ("field2".to_string(), Value::Array(vec![Value::I32(1)])),
+            ],
+            NitriteId::new(),
+            Fields::with_names(vec!["field1", "field2"]).unwrap(),
+        );
+        let first = Value::String("a".to_string());
+        let result = compound_index.composite_key(&field_values, &first);
+        assert!(result.is_err());
     }
 
     // Performance optimization tests
-    #[test]
-    fn test_populate_sub_map_avoids_excessive_cloning() {
-        // Test that populate_sub_map uses remove() instead of cloned() for efficiency
-        let index_descriptor = create_test_index_descriptor();
-        let nitrite_store = NitriteStore::default();
-        let compound_index = CompoundIndex::new(index_descriptor, nitrite_store);
-
-        let mut sub_map = Value::Map(BTreeMap::new());
-        let field_values = create_test_field_values();
-
-        // Populate multiple times to ensure no excessive cloning
-        for _ in 0..5 {
-            let result = compound_index.populate_sub_map(&mut sub_map, &field_values, 0);
-            assert!(result.is_ok() || result.is_err());
-        }
-    }
-
     #[test]
     fn test_delete_from_sub_map_avoids_excessive_cloning() {
         // Test that delete_from_sub_map uses efficient map operations
