@@ -568,18 +568,23 @@ impl FjallStoreInner {
     fn compact(&self) -> NitriteResult<()> {
         if let Some(ks) = self.keyspace() {
             let partitions = ks.list_partitions();
-            let maps: Vec<&str> = partitions
+            let maps: Vec<String> = partitions
                 .iter()
-                .map(|partition| partition.trim())
+                .map(|partition| partition.trim().to_string())
                 .collect();
-            let wait_group = WaitGroup::new();
 
-            for map in maps {
+            // Phase 1 — blob garbage collection for every partition, in parallel.
+            // GC rewrites live KV-separated blobs and updates their pointers in the
+            // LSM tree, so it MUST run before the memtable flush below: otherwise
+            // GC's own writes would re-pin fresh journal segments right after we
+            // flushed, defeating the journal reclamation.
+            let wait_group = WaitGroup::new();
+            for map in &maps {
                 let cloned_keyspace = ks.clone();
                 let cloned_options = self.store_config.partition_config().clone();
                 let space_amp_factor = self.store_config.space_amp_factor();
                 let stale_threshold = self.store_config.staleness_threshold();
-                let cloned_map = map.to_string();
+                let cloned_map = map.clone();
                 let cloned_wait_group = wait_group.clone();
 
                 async_task(move || {
@@ -615,8 +620,45 @@ impl FjallStoreInner {
                     drop(cloned_wait_group);
                 });
             }
-
             wait_group.wait();
+
+            // Phase 2 — flush every partition's active memtable to a disk segment,
+            // sequentially.
+            //
+            // Fjall keeps every committed write in the keyspace-wide journal (WAL)
+            // until *every* partition that wrote into a given sealed journal segment
+            // has persisted (flushed memtable -> disk segment) past it
+            // (`JournalManager::maintenance`). Each journal file is also preallocated
+            // to a fixed 32 MiB and is sealed by rename, never truncated to its real
+            // content length. So a low-traffic partition whose memtable never reaches
+            // the rotation threshold pins the whole stack of mostly-empty 32 MiB
+            // journals, which then grows toward `max_journaling_size` (512 MB by
+            // default) and never shrinks while the store stays open — the dominant
+            // on-disk cost for a small-record workload (e.g. a freshly bulk-synced
+            // mailbox). Flushing every partition advances its persisted seqno so the
+            // post-flush maintenance pass can reclaim the now-unpinned segments,
+            // collapsing the journal directory back to a single active file. The
+            // flushes run after the Phase 1 GC and in order so the final flush's
+            // maintenance pass observes every partition persisted and reclaims the
+            // entire sealed-journal backlog. `rotate_memtable_and_wait` is a no-op
+            // for a partition whose memtable is already empty.
+            let options = self.store_config.partition_config();
+            for map in &maps {
+                match ks.open_partition(map, options.clone()) {
+                    Ok(partition) => {
+                        if let Err(err) = partition.inner().rotate_memtable_and_wait() {
+                            log::error!(
+                                "Failed to flush partition '{}' during compaction: {}",
+                                map,
+                                err
+                            );
+                        }
+                    }
+                    Err(err) => {
+                        log::error!("Failed to open partition '{}' to flush: {}", map, err);
+                    }
+                }
+            }
             Ok(())
         } else {
             Ok(())

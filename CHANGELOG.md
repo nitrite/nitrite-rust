@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.1] - 2026-06-19
+
+### Fixed
+
+- **`nitrite-fjall-adapter` — space amplification / disk usage blowup.** During write bursts, Fjall's preallocated 32 MiB journal files could accumulate on disk and fail to be reclaimed because low-traffic partitions never rotated their memtables, pinning the keyspace-wide journal. Compaction (`FjallStore::compact`) now sequentially flushes the active memtable of every open partition, unpinning and reclaiming the sealed-journal backlog.
+- **`nitrite-int-test`** — added a regression test for multi-partition journal reclamation (`disk_usage_repro_test.rs`).
+
 ## [0.4.0] - 2026-06-06
 
 This release makes the index engine production-ready for high-volume, ordered workloads such as
