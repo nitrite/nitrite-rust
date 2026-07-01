@@ -1,0 +1,52 @@
+[package]
+name = "nitrite_vector"
+version = "0.4.1"
+edition = "2021"
+description = "Vector / HNSW ANN indexing and RAG store for the Nitrite database"
+license = "Apache-2.0"
+repository = "https://github.com/nitrite/nitrite-rust"
+readme = "README.md"
+keywords = ["database", "vector", "hnsw", "ann", "rag"]
+categories = ["database", "science"]
+
+[dependencies]
+# Core nitrite dependency
+nitrite = { version = "0.4.1", path = "../nitrite" }
+
+# Serialization of the persisted HNSW graph
+serde = { version = "1.0", features = ["derive"] }
+bincode = { version = "2.0", features = ["serde"] }
+
+# Concurrency
+parking_lot = "0.12"
+
+# Level assignment RNG for HNSW / k-means init for PQ
+rand = { version = "0.8", features = ["small_rng"] }
+
+# Half-precision (F16) stored-vector encoding
+half = "2"
+
+# Memory-mapped flat store for the disk-resident DiskANN backend
+memmap2 = "0.9"
+
+# Portable SIMD (f32x8) for the distance kernels — pure Rust, no C dependency,
+# cross-compiles cleanly to mobile targets (ARM NEON) unlike simsimd.
+wide = "0.7"
+
+# Fast non-cryptographic hasher for internal integer keys on the query hot path
+# (SipHash, the std default, is ~5–10× slower for these lookups).
+rustc-hash = "2"
+
+# Utilities
+thiserror = "2.0"
+log = "0.4"
+
+[dev-dependencies]
+nitrite_fjall_adapter = { path = "../nitrite-fjall-adapter" }
+tempfile = "3.15"
+env_logger = "0.11"
+criterion = "0.8"
+
+[[bench]]
+name = "vector_bench"
+harness = false

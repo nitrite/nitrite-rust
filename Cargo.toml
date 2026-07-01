@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["nitrite", "nitrite-derive", "nitrite-spatial", "nitrite-tantivy-fts", "nitrite-int-test", "nitrite-fjall-adapter", "nitrite-bench"]
+members = ["nitrite", "nitrite-derive", "nitrite-spatial", "nitrite-tantivy-fts", "nitrite-int-test", "nitrite-fjall-adapter", "nitrite-bench", "nitrite-vector"]
 
 [profile.release]
 debug = true
