@@ -58,6 +58,10 @@ jobs:
         if: ${{ github.event.inputs.dry_run != 'true' }}
         run: sleep 30
 
+      - name: Wait for crates.io index update
+        if: ${{ github.event.inputs.dry_run != 'true' }}
+        run: sleep 30
+
       - name: Publish nitrite-fjall-adapter
         if: ${{ github.event.inputs.dry_run != 'true' }}
         run: cargo publish -p nitrite_fjall_adapter --token ${{ secrets.CARGO_REGISTRY_TOKEN }}
@@ -70,6 +74,10 @@ jobs:
         if: ${{ github.event.inputs.dry_run != 'true' }}
         run: cargo publish -p nitrite_tantivy_fts --token ${{ secrets.CARGO_REGISTRY_TOKEN }}
 
+      - name: Publish nitrite-vector
+        if: ${{ github.event.inputs.dry_run != 'true' }}
+        run: cargo publish -p nitrite_vector --token ${{ secrets.CARGO_REGISTRY_TOKEN }}
+
       # Dry run mode - just verify packages
       - name: Dry run - Verify packages
         if: ${{ github.event.inputs.dry_run == 'true' }}
@@ -77,6 +85,7 @@ jobs:
           echo "Dry run mode - verifying packages..."
           cargo package -p nitrite_derive --allow-dirty
           cargo package -p nitrite --allow-dirty
+          cargo package -p nitrite_vector --allow-dirty
           cargo package -p nitrite_fjall_adapter --allow-dirty
           cargo package -p nitrite_spatial --allow-dirty
           cargo package -p nitrite_tantivy_fts --allow-dirty
