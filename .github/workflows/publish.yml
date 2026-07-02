@@ -85,8 +85,8 @@ jobs:
           echo "Dry run mode - verifying packages..."
           cargo package -p nitrite_derive --allow-dirty
           cargo package -p nitrite --allow-dirty
-          cargo package -p nitrite_vector --allow-dirty
           cargo package -p nitrite_fjall_adapter --allow-dirty
           cargo package -p nitrite_spatial --allow-dirty
           cargo package -p nitrite_tantivy_fts --allow-dirty
+          cargo package -p nitrite_vector --allow-dirty
           echo "All packages verified successfully!"
