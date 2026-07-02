@@ -270,6 +270,12 @@ impl IndexScannerInner {
 
         let mut nitrite_ids: Vec<NitriteId> = Vec::new();
         while let Some(k) = key {
+            // the null key is never part of a range result; skip it instead of
+            // comparing, since the mixed-type Value ordering is unreliable for Null
+            if k.is_null() {
+                key = self.index_map.higher_key(&k)?;
+                continue;
+            }
             let within_upper = if upper_incl { k <= upper_val } else { k < upper_val };
             if !within_upper {
                 break;

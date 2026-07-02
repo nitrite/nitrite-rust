@@ -167,6 +167,12 @@ impl SortingAwareFilter {
             // if reverse scan then get the last key
             let mut last_key = index_map.last_key()?;
             while let Some(ref key) = last_key {
+                // the null key is never part of a range result; skip it instead of
+                // comparing, since the mixed-type Value ordering is unreliable for Null
+                if key.is_null() {
+                    last_key = index_map.lower_key(key)?;
+                    continue;
+                }
                 if key > field_value {
                     let value = index_map.get(key)?;
                     self.process_index_value(value, sub_map, nitrite_ids);
@@ -179,6 +185,10 @@ impl SortingAwareFilter {
             // if forward scan then get the higher key
             let mut higher_key = index_map.higher_key(field_value)?;
             while let Some(ref key) = higher_key {
+                if key.is_null() {
+                    higher_key = index_map.higher_key(key)?;
+                    continue;
+                }
                 let value = index_map.get(key)?;
                 self.process_index_value(value, sub_map, nitrite_ids);
                 higher_key = index_map.higher_key(key)?;
@@ -203,6 +213,12 @@ impl SortingAwareFilter {
             // if reverse scan then get the last key
             let mut last_key = index_map.last_key()?;
             while let Some(ref key) = last_key {
+                // the null key is never part of a range result; skip it instead of
+                // comparing, since the mixed-type Value ordering is unreliable for Null
+                if key.is_null() {
+                    last_key = index_map.lower_key(key)?;
+                    continue;
+                }
                 if key >= field_value {
                     let value = index_map.get(key)?;
                     self.process_index_value(value, sub_map, nitrite_ids);
@@ -215,6 +231,10 @@ impl SortingAwareFilter {
             // if forward scan then get the ceiling key
             let mut ceiling_key = index_map.ceiling_key(field_value)?;
             while let Some(ref key) = ceiling_key {
+                if key.is_null() {
+                    ceiling_key = index_map.higher_key(key)?;
+                    continue;
+                }
                 let value = index_map.get(key)?;
                 self.process_index_value(value, sub_map, nitrite_ids);
                 ceiling_key = index_map.higher_key(key)?;
@@ -239,6 +259,12 @@ impl SortingAwareFilter {
             // if reverse scan then get the lower key
             let mut lower_key = index_map.lower_key(field_value)?;
             while let Some(ref key) = lower_key {
+                // the null key is never part of a range result; skip it instead of
+                // comparing, since the mixed-type Value ordering is unreliable for Null
+                if key.is_null() {
+                    lower_key = index_map.lower_key(key)?;
+                    continue;
+                }
                 let value = index_map.get(key)?;
                 self.process_index_value(value, sub_map, nitrite_ids);
                 lower_key = index_map.lower_key(key)?;
@@ -247,6 +273,10 @@ impl SortingAwareFilter {
             // if forward scan then get the first key
             let mut first_key = index_map.first_key()?;
             while let Some(ref key) = first_key {
+                if key.is_null() {
+                    first_key = index_map.higher_key(key)?;
+                    continue;
+                }
                 if key < field_value {
                     let value = index_map.get(key)?;
                     self.process_index_value(value, sub_map, nitrite_ids);
@@ -275,6 +305,12 @@ impl SortingAwareFilter {
             // if reverse scan then get the floor key
             let mut floor_key = index_map.floor_key(field_value)?;
             while let Some(ref key) = floor_key {
+                // the null key is never part of a range result; skip it instead of
+                // comparing, since the mixed-type Value ordering is unreliable for Null
+                if key.is_null() {
+                    floor_key = index_map.lower_key(key)?;
+                    continue;
+                }
                 let value = index_map.get(key)?;
                 self.process_index_value(value, sub_map, nitrite_ids);
                 floor_key = index_map.lower_key(key)?;
@@ -283,6 +319,10 @@ impl SortingAwareFilter {
             // if forward scan then get the first key
             let mut first_key = index_map.first_key()?;
             while let Some(ref key) = first_key {
+                if key.is_null() {
+                    first_key = index_map.higher_key(key)?;
+                    continue;
+                }
                 if key <= field_value {
                     let value = index_map.get(key)?;
                     self.process_index_value(value, sub_map, nitrite_ids);
@@ -319,7 +359,14 @@ impl FilterProvider for SortingAwareFilter {
     fn apply(&self, entry: &Document) -> NitriteResult<bool> {
         let value = entry.get(self.field_name.get().expect("field_name not initialized"))?;
         let field_value = self.field_value.get().expect("field_value not initialized");
-        
+
+        // a null (or missing) field value is never lesser or greater than the
+        // search term; without this check the mixed-type Value ordering would
+        // compare Null by its string form and let null documents match
+        if value.is_null() {
+            return Ok(false);
+        }
+
         match self.comparison_mode {
             ComparisonMode::Greater => Ok(&value > field_value),
             ComparisonMode::GreaterEqual => Ok(&value >= field_value),

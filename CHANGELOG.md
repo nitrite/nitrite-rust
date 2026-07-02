@@ -5,6 +5,25 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.2] - 2026-07-02
+
+### Fixed
+
+- **`nitrite` — range filters mishandled null values.** `Value`'s mixed-type ordering falls
+  back to string comparison, which made `Null` compare as the string `"null"`. As a result:
+  - collection-scan `gt`/`gte` (and, depending on the store's key order, other range filters)
+    matched documents whose field is null or missing;
+  - indexed `lt`/`lte` returned an **empty** result as soon as the indexed field was null in
+    any document, because the forward scan seeded from the null index key and terminated
+    immediately.
+  Range filters now explicitly treat null/missing values as never lesser or greater than the
+  search term: the document-scan path rejects null field values, and every index range scan
+  (all four comparison modes, both scan directions, plus the bounded `ceiling(lower) ..
+  floor(upper)` scan) skips the null index key. Mirrors nitrite-java issue
+  [#1262](https://github.com/nitrite/nitrite-java/issues/1262).
+- **`nitrite-int-test`** — added regression tests for range scans over indexed, unique-indexed
+  and non-indexed fields containing nulls (`index_null_key_scan_test.rs`).
+
 ## [0.4.1] - 2026-06-19
 
 ### Fixed
