@@ -51,7 +51,29 @@ fn open_index(
     precision: Precision,
     cfg: DiskAnnConfig,
 ) -> DiskAnnIndex {
-    DiskAnnIndex::open(&db.config(), base, dim, metric, precision, &cfg).expect("open diskann")
+    DiskAnnIndex::open(&db.config(), base, dim, metric, precision, &cfg)
+        .expect("open diskann")
+        .0
+}
+
+/// PQ training runs in the background off the insert path; wait for it so
+/// assertions about trained state are deterministic.
+fn wait_for_pq(index: &DiskAnnIndex) {
+    let mut waited = 0;
+    while !index.pq_trained() && waited < 60_000 {
+        std::thread::sleep(std::time::Duration::from_millis(20));
+        waited += 20;
+    }
+}
+
+/// The on-disk file name is a sanitized+hashed form of the base name; find the
+/// single `.dann` data file in the db directory.
+fn find_dann_file(dir: &std::path::Path) -> std::path::PathBuf {
+    std::fs::read_dir(dir)
+        .unwrap()
+        .filter_map(|e| e.ok().map(|e| e.path()))
+        .find(|p| p.extension().map(|e| e == "dann").unwrap_or(false))
+        .expect("no .dann data file found")
 }
 
 // ---- direct DiskAnnIndex tests ------------------------------------------
@@ -78,6 +100,7 @@ fn recall_is_high_vs_brute_force_with_pq() {
     for (id, v) in &vectors {
         index.insert(*id, v.clone()).unwrap();
     }
+    wait_for_pq(&index);
     assert!(index.pq_trained(), "PQ should be trained past the threshold");
 
     let k = 10;
@@ -110,7 +133,7 @@ fn vectors_are_disk_resident_and_queries_are_correct() {
     index.flush().unwrap();
 
     // The full vectors live in the memory-mapped file on disk, not the heap.
-    let data_file = dir.path().join("resident.dann");
+    let data_file = find_dann_file(dir.path());
     let file_len = std::fs::metadata(&data_file).unwrap().len() as usize;
     assert!(
         file_len >= n * dim * 4,
@@ -139,6 +162,7 @@ fn survives_close_and_reopen() {
         for (id, v) in &vectors {
             index.insert(*id, v.clone()).unwrap();
         }
+        wait_for_pq(&index); // deterministic: query with the trained PQ both times
         expected = index.search(&query, 5, Some(120)).unwrap()
             .into_iter().map(|(id, _)| id.id_value()).collect::<Vec<_>>();
         index.flush().unwrap();
@@ -189,7 +213,7 @@ fn precision_drives_on_disk_vector_size() {
             index.insert(id, v).unwrap();
         }
         index.flush().unwrap();
-        std::fs::metadata(dir.path().join("prec.dann")).unwrap().len()
+        std::fs::metadata(find_dann_file(dir.path())).unwrap().len()
     }
     let f32_len = data_file_len(Precision::F32);
     let i8_len = data_file_len(Precision::I8);

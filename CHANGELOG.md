@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.4.2] - 2026-07-02
 
+### Added
+
+- **`nitrite_vector`** — new approximate-nearest-neighbour (ANN) vector index and RAG store
+  extension crate, with two backends (in-memory HNSW and disk-resident DiskANN) selectable per
+  database or per index, cosine/Euclidean/dot metrics, and `F32`/`F16`/`I8` stored-vector
+  precision.
+- **`nitrite_vector` — automatic index rebuild.** Both backends detect stale/corrupt index
+  storage on open (torn writes, missing/corrupt sidecar, crash before checkpoint, format
+  change) and transparently re-index from the collection's documents.
+- **`nitrite_vector` — per-index configuration.** `VectorModule::builder(...).index_config(
+  collection, field, config)` lets collections with different embedding dimensions, metrics,
+  precisions, or backends coexist in one database.
+- **`nitrite_vector` — DiskANN crash-consistency machinery**: data-file dirty bit + generation
+  stamping, checksummed sidecar replaced atomically (tmp + rename), structural validation of
+  everything read from disk, and a periodic sidecar checkpoint (every ~8k mutations) in
+  addition to flush-on-close.
+- **`nitrite_vector`** — HNSW deletes now reconnect the orphaned neighborhood (diversity-pruned),
+  so sustained insert/delete churn no longer fragments the graph.
+
 ### Fixed
 
 - **`nitrite` — range filters mishandled null values.** `Value`'s mixed-type ordering falls
@@ -23,6 +42,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   [#1262](https://github.com/nitrite/nitrite-java/issues/1262).
 - **`nitrite-int-test`** — added regression tests for range scans over indexed, unique-indexed
   and non-indexed fields containing nulls (`index_null_key_scan_test.rs`).
+- **`nitrite_vector` — torn HNSW persists could panic searches.** Each mutation now persists as
+  a single atomic `put_all` batch (records + header), traversal skips dangling neighbor
+  references instead of panicking, and loading sanitizes the graph (bad records dropped,
+  dangling links pruned, entry point re-elected).
+- **`nitrite_vector` — DiskANN writer races.** Inserts, removes, delete-consolidation, and the
+  PQ encode step now serialize on a per-index write gate (background passes take it per chunk),
+  eliminating lost adjacency updates and stale-edge reattachment; only slots pending at the
+  start of a consolidation sweep are reclaimed.
+- **`nitrite_vector`** — PQ training runs in the background (single-flight) instead of stalling
+  the insert that crosses the threshold; queries fall back to exact distances for nodes not yet
+  encoded, so they can never become invisible mid-training.
+- **`nitrite_vector`** — `DiskAnnIndex::flush` no longer permanently disables background
+  consolidation; it is now a safe, repeatable checkpoint.
+- **`nitrite_vector`** — the HNSW backend now honors the configured stored-vector `Precision`
+  (F32/F16/I8) as documented; adjacency-only changes no longer rewrite full vectors, cutting
+  per-insert write amplification by roughly an order of magnitude; persistence happens outside
+  the graph lock so searches are never blocked on storage I/O.
+- **`nitrite_vector`** — a racing double-open of the same index could create two live instances
+  over the same storage (double-checked registry lock); DiskANN file names are sanitized +
+  digest-suffixed so hostile collection/field names cannot escape the database directory;
+  `min_score` now over-fetches (4×k) before applying the cutoff so it no longer starves `k`.
 
 ## [0.4.1] - 2026-06-19
 

@@ -117,9 +117,15 @@ fn bench_diskann(c: &mut Criterion) {
     // Query throughput on a pre-built (PQ-trained) index.
     let (_dir, db) = temp_db();
     let index = DiskAnnIndex::open(&db.config(), "q", dim, Metric::Cosine, Precision::F32, &diskann_cfg(16, 500))
-        .unwrap();
+        .unwrap()
+        .0;
     for (id, v) in gen(2000, dim, 42, id_base) {
         index.insert(id, v).unwrap();
+    }
+    // PQ training is asynchronous; wait so the query bench measures the
+    // PQ-guided path.
+    while !index.pq_trained() {
+        std::thread::sleep(std::time::Duration::from_millis(20));
     }
     let query = gen(1, dim, 7, 0)[0].1.clone();
     c.bench_function("diskann_query_2k", |b| {
@@ -169,7 +175,8 @@ fn bench_diskann(c: &mut Criterion) {
                         Precision::F32,
                         &diskann_cfg(0, usize::MAX),
                     )
-                    .unwrap();
+                    .unwrap()
+                    .0;
                     (dir, db, index, build_set.clone())
                 },
                 |(_dir, _db, index, set)| {

@@ -2,11 +2,17 @@
 //!
 //! Implements the Malkov & Yashunin algorithm with the pruned, diversity
 //! preserving neighbor-selection heuristic (Algorithm 4), a multi-layer
-//! navigable graph, and exact deletion with neighbor unlinking.
+//! navigable graph, and exact deletion with neighbor unlinking plus
+//! FreshDiskANN-style reconnection of the orphaned neighborhood.
 //!
-//! The graph owns [`NodeRecord`]s directly, so the same structure is used
-//! in memory and (via bincode) on disk. Mutations mark touched nodes dirty;
-//! the persistence layer drains those to write through to a `NitriteMap`.
+//! The graph owns [`NodeRecord`]s directly. Mutations mark touched nodes
+//! dirty — vectors and adjacency separately, so the persistence layer only
+//! rewrites what actually changed — and the persistence layer drains those
+//! via [`Hnsw::take_dirty`] to write through to a `NitriteMap`.
+//!
+//! Traversal never assumes referential integrity: a neighbor id whose node is
+//! missing (possible after a torn persist) is skipped, and [`Hnsw::from_parts`]
+//! prunes such links on load, so a damaged graph degrades instead of panicking.
 
 use std::cmp::Ordering;
 use std::collections::BinaryHeap;
@@ -50,6 +56,24 @@ impl PartialOrd for Cand {
     }
 }
 
+/// Changes accumulated since the last [`Hnsw::take_dirty`], for write-through.
+#[derive(Debug, Default)]
+pub struct DirtyChanges {
+    /// Nodes whose vector must be (re)written: `(id, prepared vector)`.
+    pub vectors: Vec<(u64, Vec<f32>)>,
+    /// Nodes whose adjacency must be (re)written: `(id, per-level neighbors)`.
+    pub adjacency: Vec<(u64, Vec<Vec<u64>>)>,
+    /// Nodes whose records must be deleted from the backing store.
+    pub deleted: Vec<u64>,
+}
+
+impl DirtyChanges {
+    /// Whether there is nothing to persist.
+    pub fn is_empty(&self) -> bool {
+        self.vectors.is_empty() && self.adjacency.is_empty() && self.deleted.is_empty()
+    }
+}
+
 /// The HNSW graph.
 pub struct Hnsw {
     nodes: FxHashMap<u64, NodeRecord>,
@@ -65,7 +89,12 @@ pub struct Hnsw {
     ml: f64,
 
     rng: SmallRng,
-    dirty: FxHashSet<u64>,
+    /// Nodes whose vector changed (new/updated inserts).
+    dirty_vec: FxHashSet<u64>,
+    /// Nodes whose adjacency changed. Vectors are much larger than neighbor
+    /// lists, so tracking them separately avoids rewriting a full vector every
+    /// time one of its neighbors gains a link.
+    dirty_adj: FxHashSet<u64>,
     deleted: FxHashSet<u64>,
 }
 
@@ -93,13 +122,25 @@ impl Hnsw {
             // Fixed seed: reproducible builds and tests. Level distribution
             // quality does not depend on cryptographic randomness.
             rng: SmallRng::seed_from_u64(0x9E3779B97F4A7C15),
-            dirty: FxHashSet::default(),
+            dirty_vec: FxHashSet::default(),
+            dirty_adj: FxHashSet::default(),
             deleted: FxHashSet::default(),
         }
     }
 
-    /// Rebuilds a graph from a persisted header and node records.
-    pub fn from_records(header: HnswHeader, records: Vec<NodeRecord>) -> Self {
+    /// Rebuilds a graph from persisted parts, sanitizing as it goes:
+    /// vectors of the wrong dimension are dropped, a node without adjacency
+    /// becomes an isolated level-0 node, neighbor links to absent nodes are
+    /// pruned, and a missing entry point is re-elected. A torn persist thus
+    /// degrades recall instead of corrupting the graph.
+    ///
+    /// Nothing is marked dirty; sanitization is re-applied on every load and
+    /// the next organic mutation persists the touched nodes anyway.
+    pub fn from_parts(
+        header: HnswHeader,
+        vectors: Vec<(u64, Vec<f32>)>,
+        mut adjacency: FxHashMap<u64, Vec<Vec<u64>>>,
+    ) -> Self {
         let mut graph = Hnsw::new(
             header.dim,
             header.metric,
@@ -109,8 +150,45 @@ impl Hnsw {
         );
         graph.entry_point = header.entry_point;
         graph.max_level = header.max_level;
-        for rec in records {
-            graph.nodes.insert(rec.id, rec);
+
+        let mut dropped = 0usize;
+        for (id, vector) in vectors {
+            if vector.len() != graph.dim {
+                dropped += 1;
+                continue;
+            }
+            let neighbors = adjacency.remove(&id).unwrap_or_else(|| vec![Vec::new()]);
+            let neighbors = if neighbors.is_empty() { vec![Vec::new()] } else { neighbors };
+            graph.nodes.insert(id, NodeRecord { id, vector, neighbors });
+        }
+
+        // Prune links to nodes that don't exist (torn persist / lost record).
+        let ids: Vec<u64> = graph.nodes.keys().copied().collect();
+        let present: FxHashSet<u64> = ids.iter().copied().collect();
+        let mut pruned = 0usize;
+        for id in ids {
+            if let Some(node) = graph.nodes.get_mut(&id) {
+                for level in node.neighbors.iter_mut() {
+                    let before = level.len();
+                    level.retain(|n| present.contains(n));
+                    pruned += before - level.len();
+                }
+            }
+        }
+
+        // Entry point must exist; max_level must not exceed any real level.
+        let entry_ok = graph
+            .entry_point
+            .map(|ep| graph.nodes.contains_key(&ep))
+            .unwrap_or(false);
+        if !entry_ok || graph.nodes.is_empty() {
+            graph.reelect_entry_point();
+        }
+
+        if dropped > 0 || pruned > 0 {
+            log::warn!(
+                "HNSW load repaired a damaged graph: dropped {dropped} bad node(s), pruned {pruned} dangling link(s)"
+            );
         }
         graph
     }
@@ -148,16 +226,26 @@ impl Hnsw {
         self.nodes.get(&id).map(|n| n.vector.as_slice())
     }
 
-    /// Drains the set of nodes that must be persisted and the set of nodes that
-    /// must be deleted from the backing store since the last call.
-    pub fn take_dirty(&mut self) -> (Vec<NodeRecord>, Vec<u64>) {
-        let dirty: Vec<NodeRecord> = self
-            .dirty
-            .drain()
-            .filter_map(|id| self.nodes.get(&id).cloned())
+    /// Drains everything that must be persisted since the last call. Nodes with
+    /// a changed vector also report their adjacency (a new node needs both).
+    pub fn take_dirty(&mut self) -> DirtyChanges {
+        let mut adj_ids: FxHashSet<u64> = self.dirty_adj.drain().collect();
+        let mut vectors = Vec::with_capacity(self.dirty_vec.len());
+        for id in self.dirty_vec.drain() {
+            if let Some(node) = self.nodes.get(&id) {
+                vectors.push((id, node.vector.clone()));
+                adj_ids.insert(id);
+            }
+        }
+        let adjacency = adj_ids
+            .into_iter()
+            .filter_map(|id| self.nodes.get(&id).map(|n| (id, n.neighbors.clone())))
             .collect();
-        let deleted: Vec<u64> = self.deleted.drain().collect();
-        (dirty, deleted)
+        DirtyChanges {
+            vectors,
+            adjacency,
+            deleted: self.deleted.drain().collect(),
+        }
     }
 
     #[inline]
@@ -176,10 +264,12 @@ impl Hnsw {
         level.min(MAX_LEVEL_CAP)
     }
 
+    /// Distance from `query` to node `id`, or `None` if the node is absent
+    /// (dangling reference). Traversal treats an absent node as unreachable
+    /// rather than panicking, so a damaged graph stays usable.
     #[inline]
-    fn distance_to(&self, query: &[f32], id: u64) -> f32 {
-        // Node is guaranteed present when called from traversal.
-        self.metric.distance(query, &self.nodes[&id].vector)
+    fn distance_to(&self, query: &[f32], id: u64) -> Option<f32> {
+        self.nodes.get(&id).map(|n| self.metric.distance(query, &n.vector))
     }
 
     /// Inserts (or replaces) a vector for `id`.
@@ -206,7 +296,11 @@ impl Hnsw {
                 neighbors: vec![Vec::new(); level + 1],
             },
         );
-        self.dirty.insert(id);
+        self.dirty_vec.insert(id);
+        // An update (remove-then-insert of the same id) must not leave the id
+        // in the deleted set: the persist pass would remove-then-put the same
+        // keys, and a crash between those two steps would lose a live node.
+        self.deleted.remove(&id);
 
         let entry = match self.entry_point {
             Some(ep) => ep,
@@ -221,15 +315,18 @@ impl Hnsw {
         // Phase 1: greedy descent from the top down to the layer just above the
         // new node's top level, tracking the single closest node.
         let mut cur = entry;
-        let mut cur_dist = self.distance_to(&vector, cur);
+        let mut cur_dist = self.distance_to(&vector, cur).unwrap_or(f32::INFINITY);
         let mut lc = self.max_level;
         while lc > level {
             let mut changed = true;
             while changed {
                 changed = false;
-                let neighbors = self.nodes[&cur].neighbors[lc].clone();
+                let neighbors = match self.nodes.get(&cur) {
+                    Some(n) if lc < n.neighbors.len() => n.neighbors[lc].clone(),
+                    _ => Vec::new(),
+                };
                 for n in neighbors {
-                    let d = self.distance_to(&vector, n);
+                    let Some(d) = self.distance_to(&vector, n) else { continue };
                     if d < cur_dist {
                         cur_dist = d;
                         cur = n;
@@ -256,7 +353,7 @@ impl Hnsw {
             // Connect each neighbor back and prune if over capacity.
             for &n in &selected {
                 self.connect_and_prune(n, id, lc, m_lc);
-                self.dirty.insert(n);
+                self.dirty_adj.insert(n);
             }
 
             // Next level starts from all candidates found here.
@@ -286,13 +383,13 @@ impl Hnsw {
         list.push(new_neighbor);
 
         if list.len() > m_lc {
-            let base = self.nodes[&node].vector.clone();
+            let base = match self.nodes.get(&node) {
+                Some(n) => n.vector.clone(),
+                None => return,
+            };
             let cands: Vec<Cand> = list
                 .iter()
-                .map(|&e| Cand {
-                    dist: self.distance_to(&base, e),
-                    id: e,
-                })
+                .filter_map(|&e| self.distance_to(&base, e).map(|dist| Cand { dist, id: e }))
                 .collect();
             list = self.select_neighbors(&base, &cands, m_lc);
         }
@@ -312,10 +409,10 @@ impl Hnsw {
         let mut results: BinaryHeap<Cand> = BinaryHeap::new();
 
         for &ep in entry_points {
-            if !self.nodes.contains_key(&ep) || !visited.insert(ep) {
+            if !visited.insert(ep) {
                 continue;
             }
-            let d = self.distance_to(query, ep);
+            let Some(d) = self.distance_to(query, ep) else { continue };
             candidates.push(std::cmp::Reverse(Cand { dist: d, id: ep }));
             results.push(Cand { dist: d, id: ep });
         }
@@ -333,7 +430,7 @@ impl Hnsw {
                 if !visited.insert(e) {
                     continue;
                 }
-                let d = self.distance_to(query, e);
+                let Some(d) = self.distance_to(query, e) else { continue };
                 let farthest = results.peek().map(|x| x.dist).unwrap_or(f32::INFINITY);
                 if d < farthest || results.len() < ef {
                     candidates.push(std::cmp::Reverse(Cand { dist: d, id: e }));
@@ -360,9 +457,13 @@ impl Hnsw {
             if selected.len() >= m {
                 break;
             }
+            let Some(cand_vec) = self.nodes.get(&cand.id).map(|n| &n.vector) else {
+                continue; // dangling reference: never select it
+            };
             let mut keep = true;
             for &r in &selected {
-                let d_to_r = self.metric.distance(&self.nodes[&cand.id].vector, &self.nodes[&r].vector);
+                let Some(r_vec) = self.nodes.get(&r).map(|n| &n.vector) else { continue };
+                let d_to_r = self.metric.distance(cand_vec, r_vec);
                 if d_to_r < cand.dist {
                     keep = false;
                     break;
@@ -382,11 +483,11 @@ impl Hnsw {
             return Vec::new();
         }
         let query = self.metric.prepare(raw.to_vec());
-        let entry = self.entry_point.expect("non-empty graph has an entry point");
+        let Some(entry) = self.entry_point else { return Vec::new() };
 
         // Greedy descent from the top to layer 1.
         let mut cur = entry;
-        let mut cur_dist = self.distance_to(&query, cur);
+        let mut cur_dist = self.distance_to(&query, cur).unwrap_or(f32::INFINITY);
         let mut lc = self.max_level;
         while lc >= 1 {
             let mut changed = true;
@@ -397,7 +498,7 @@ impl Hnsw {
                     _ => Vec::new(),
                 };
                 for n in neighbors {
-                    let d = self.distance_to(&query, n);
+                    let Some(d) = self.distance_to(&query, n) else { continue };
                     if d < cur_dist {
                         cur_dist = d;
                         cur = n;
@@ -417,7 +518,9 @@ impl Hnsw {
             .collect()
     }
 
-    /// Removes `id` from the graph, unlinking it from all neighbors and
+    /// Removes `id` from the graph, unlinking it from all neighbors,
+    /// reconnecting the orphaned neighborhood through the deleted node's other
+    /// neighbors (so sustained churn does not fragment the graph), and
     /// re-electing the entry point if necessary. Returns whether it existed.
     pub fn remove(&mut self, id: u64) -> bool {
         let node = match self.nodes.remove(&id) {
@@ -431,13 +534,50 @@ impl Hnsw {
                 if let Some(nn) = self.nodes.get_mut(&n) {
                     if level < nn.neighbors.len() {
                         nn.neighbors[level].retain(|&x| x != id);
-                        self.dirty.insert(n);
+                        self.dirty_adj.insert(n);
                     }
                 }
             }
         }
 
-        self.dirty.remove(&id);
+        // Reconnect: offer each surviving neighbor the deleted node's other
+        // neighbors as candidates and re-select with the diversity heuristic,
+        // so paths that ran through the deleted node are patched around it.
+        for (level, neighbors) in node.neighbors.iter().enumerate() {
+            let m_lc = self.m_max(level);
+            for &n in neighbors {
+                let (base, mut cand_ids) = match self.nodes.get(&n) {
+                    Some(nn) if level < nn.neighbors.len() => {
+                        (nn.vector.clone(), nn.neighbors[level].clone())
+                    }
+                    _ => continue,
+                };
+                let mut grew = false;
+                for &o in neighbors {
+                    if o != n && self.nodes.contains_key(&o) && !cand_ids.contains(&o) {
+                        cand_ids.push(o);
+                        grew = true;
+                    }
+                }
+                if !grew {
+                    continue;
+                }
+                let cands: Vec<Cand> = cand_ids
+                    .iter()
+                    .filter_map(|&e| self.distance_to(&base, e).map(|dist| Cand { dist, id: e }))
+                    .collect();
+                let selected = self.select_neighbors(&base, &cands, m_lc);
+                if let Some(nn) = self.nodes.get_mut(&n) {
+                    if level < nn.neighbors.len() {
+                        nn.neighbors[level] = selected;
+                        self.dirty_adj.insert(n);
+                    }
+                }
+            }
+        }
+
+        self.dirty_vec.remove(&id);
+        self.dirty_adj.remove(&id);
         self.deleted.insert(id);
 
         // Re-elect entry point / recompute max level if needed.
@@ -596,6 +736,85 @@ mod tests {
             let res = hnsw.search(&vectors[0].1, 3, Some(64));
             assert!(!res.is_empty());
         }
+    }
+
+    #[test]
+    fn from_parts_prunes_dangling_links_and_stays_searchable() {
+        // Simulate a torn persist: adjacency references node 99 whose vector
+        // record was never written, and the entry point is gone too.
+        let header = HnswHeader {
+            dim: 2,
+            metric: Metric::Euclidean,
+            m: 4,
+            ef_construction: 32,
+            ef_search: 16,
+            entry_point: Some(99),
+            max_level: 0,
+        };
+        let vectors = vec![
+            (1u64, vec![0.0, 0.0]),
+            (2u64, vec![1.0, 0.0]),
+            (3u64, vec![0.0, 5.0]), // wrong-dim record below must be dropped
+            (4u64, vec![1.0]),
+        ];
+        let mut adjacency = FxHashMap::default();
+        adjacency.insert(1u64, vec![vec![2, 99]]);
+        adjacency.insert(2u64, vec![vec![1, 99, 4]]);
+        adjacency.insert(3u64, vec![vec![1]]);
+
+        let graph = Hnsw::from_parts(header, vectors, adjacency);
+        assert_eq!(graph.len(), 3); // node 4 dropped (bad dim)
+        // Search must not panic and must return real nodes only.
+        let res = graph.search(&[0.1, 0.1], 3, Some(16));
+        assert!(!res.is_empty());
+        assert!(res.iter().all(|(id, _)| [1, 2, 3].contains(id)));
+    }
+
+    #[test]
+    fn heavy_delete_churn_keeps_graph_connected() {
+        let dim = 8;
+        let vectors = gen_vectors(400, dim);
+        let mut hnsw = Hnsw::new(dim, Metric::Euclidean, 8, 100, 64);
+        for (id, v) in &vectors {
+            hnsw.insert(*id, v.clone()).unwrap();
+        }
+        // Delete half the graph in id order (worst case for fragmentation).
+        for id in 0..200u64 {
+            assert!(hnsw.remove(id));
+        }
+        // Every survivor must still be findable by its own vector.
+        let mut found = 0;
+        for (id, v) in vectors.iter().skip(200) {
+            let res = hnsw.search(v, 1, Some(64));
+            if res.first().map(|(rid, _)| rid == id).unwrap_or(false) {
+                found += 1;
+            }
+        }
+        assert!(found >= 190, "only {found}/200 survivors findable after churn");
+    }
+
+    #[test]
+    fn take_dirty_splits_vectors_and_adjacency() {
+        let mut hnsw = Hnsw::new(2, Metric::Euclidean, 4, 32, 16);
+        hnsw.insert(1, vec![0.0, 0.0]).unwrap();
+        hnsw.insert(2, vec![1.0, 0.0]).unwrap();
+        let changes = hnsw.take_dirty();
+        assert_eq!(changes.vectors.len(), 2);
+        assert!(changes.adjacency.len() >= 2);
+        assert!(changes.deleted.is_empty());
+
+        // A delete only produces adjacency updates + a deletion, no vectors.
+        hnsw.remove(1);
+        let changes = hnsw.take_dirty();
+        assert!(changes.vectors.is_empty());
+        assert_eq!(changes.deleted, vec![1]);
+
+        // Update of the same id in one persist window must NOT report it deleted.
+        hnsw.remove(2);
+        hnsw.insert(2, vec![5.0, 5.0]).unwrap();
+        let changes = hnsw.take_dirty();
+        assert!(changes.deleted.is_empty());
+        assert_eq!(changes.vectors.len(), 1);
     }
 
     #[test]

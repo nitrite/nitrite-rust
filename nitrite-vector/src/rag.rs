@@ -55,9 +55,11 @@ impl RagStore {
     /// Opens (or creates) a RAG store backed by the named collection, ensuring
     /// a vector index exists on the `embedding` field.
     ///
-    /// `metric` must match the one configured on the loaded
-    /// [`VectorModule`](crate::VectorModule); it is used to convert distances
-    /// into similarity scores.
+    /// `metric` **must** match the one configured on the loaded
+    /// [`VectorModule`](crate::VectorModule) for this collection's `embedding`
+    /// index; it is used to convert distances into similarity scores, and a
+    /// mismatch silently produces wrong scores/`min_score` cutoffs (the index
+    /// itself still ranks by its own configured metric).
     pub fn create(db: &Nitrite, name: &str, metric: Metric) -> NitriteResult<Self> {
         let collection = db.collection(name)?;
         if !collection.has_index(vec![EMBEDDING_FIELD])? {

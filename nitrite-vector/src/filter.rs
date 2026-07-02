@@ -103,17 +103,20 @@ fn clone_once(field: &OnceLock<String>) -> OnceLock<String> {
 }
 
 impl FilterProvider for VectorNearestFilter {
-    /// Full-scan fallback: without a vector index a per-document call cannot
-    /// perform kNN ranking, so this only reports whether the document carries a
-    /// vector of the right shape. kNN correctness requires the index path.
-    fn apply(&self, entry: &Document) -> NitriteResult<bool> {
-        let field = self.field_name()?;
-        match entry.get(&field) {
-            Ok(value) => Ok(value_to_vector(&value)
-                .map(|v| v.len() == self.inner.query.len())
-                .unwrap_or(false)),
-            Err(_) => Ok(false),
-        }
+    /// A per-document predicate cannot perform kNN ranking, so evaluating this
+    /// filter outside the index path is always a mistake (it would silently
+    /// match every document carrying a right-shaped vector). The query planner
+    /// already rejects index-only filters without an index; this error is the
+    /// defense-in-depth for any other route into `apply`.
+    fn apply(&self, _entry: &Document) -> NitriteResult<bool> {
+        Err(NitriteError::new(
+            &format!(
+                "kNN filter on '{}' requires a vector index; create one with \
+                 collection.create_index([field], &vector_index_options())",
+                self.field_name().unwrap_or_else(|_| "<unknown>".into())
+            ),
+            ErrorKind::FilterError,
+        ))
     }
 
     fn has_field(&self) -> bool {

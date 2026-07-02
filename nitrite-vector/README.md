@@ -7,16 +7,19 @@ It plugs into Nitrite as a standard index extension (like `nitrite-spatial` /
 `nitrite-tantivy-fts`): load a module, create a vector index on a field, and
 query it through the normal collection API — or use the higher-level `RagStore`.
 
-- **Two backends**, chosen per database:
+- **Two backends**, chosen per database or per index:
   - **HNSW** (default) — in-memory Malkov–Yashunin graph, persisted to Nitrite's
-    own KV store (`NitriteMap`) and **crash-safe on every write**. Fastest when
-    the index fits in RAM.
+    own KV store (`NitriteMap`): every mutation is written through as **one
+    atomic batch**, loading tolerates torn state, and a damaged index is
+    **rebuilt automatically** from the collection. Fastest when the index fits
+    in RAM.
   - **DiskANN** — disk-resident Vamana graph + full vectors in a
     **memory-mapped flat file**, with product-quantized (PQ) codes resident in
     RAM for traversal and **exact re-ranking** from the on-disk vectors.
     Resident memory is bounded by the OS page cache (hot pages stay, cold pages
     are reclaimed under pressure — the index cannot OOM from its vector data), so
-    it serves **indexes larger than RAM**, e.g. on mobile.
+    it serves **indexes larger than RAM**, e.g. on mobile. Requires a
+    persistent `db_path` (refuses in-memory databases).
 - **Metrics**: cosine, Euclidean (L2), and dot product.
 - **Configurable precision**: store vectors as `F32`, `F16`, or `I8` (scalar
   quantized) to trade size for exactness.
@@ -123,6 +126,12 @@ let module = VectorModule::builder(384, Metric::Cosine)
     .ef_construction(200)
     .ef_search(64)                      // default query search width
     .build();
+
+// Different dimensions / metrics / backends per index in one database:
+let module = VectorModule::builder(384, Metric::Cosine)   // default for all indexes
+    .index_config("images", "clip",
+        VectorIndexConfig::new(512, Metric::Dot))          // override for images.clip
+    .build();
 ```
 
 ### Configuration reference
@@ -139,7 +148,7 @@ let module = VectorModule::builder(384, Metric::Cosine)
 | `search_beam` | DiskANN | default query search width `L` | 100 |
 | `alpha` | DiskANN | RobustPrune slack (≥ 1.0) | 1.2 |
 | `pq_subvectors` | DiskANN | PQ bytes per code; `0` = exact traversal | 16 |
-| `pq_train_threshold` | DiskANN | train PQ once N vectors are indexed | 10 000 |
+| `pq_train_threshold` | DiskANN | train PQ once N vectors are indexed (runs in the background; queries fall back to exact distances for not-yet-encoded nodes) | 10 000 |
 | `consolidate_threshold` | DiskANN | run background consolidation past N deletes; `0` = manual | 1000 |
 | `cache_bytes` | DiskANN | advisory RAM budget (see below) | 64 MiB |
 
@@ -163,14 +172,20 @@ For DiskANN, PQ codes (used only to *guide* traversal) are separate; final
 ranking is always an exact re-rank against the stored vectors at the chosen
 precision.
 
-## Deletes & consolidation (DiskANN)
+## Deletes & consolidation
 
-- A delete is **correct immediately**: the freed slot is held aside (never reused
-  until cleaned), and stale in-edges resolve to a dead sentinel that queries skip.
+- **HNSW**: a delete unlinks the node exactly and **reconnects the orphaned
+  neighborhood** through the deleted node's other neighbors (diversity-pruned),
+  so sustained insert/delete churn does not fragment the graph.
+- **DiskANN**: a delete is **correct immediately**: the freed slot is held aside
+  (never reused until cleaned), and stale in-edges resolve to a dead sentinel
+  that queries skip.
 - Once `consolidate_threshold` deletes accumulate, a **background thread**
-  (single-flight, chunked so queries interleave) runs a FreshDiskANN-style pass:
-  it drops references to deleted nodes, reconnects through their surviving
-  neighbors, re-prunes to `degree`, and reclaims the slots.
+  (single-flight, gated per chunk so writers and queries interleave) runs a
+  FreshDiskANN-style pass: it drops references to deleted nodes, reconnects
+  through their surviving neighbors, re-prunes to `degree`, and reclaims the
+  slots. Writers and the consolidation pass serialize on a per-index write
+  gate, so concurrent mutations cannot lose updates.
 - On close (`flush`), a final synchronous consolidation runs so the persisted
   state is clean. You can also call `DiskAnnIndex::consolidate()` manually.
 
@@ -178,17 +193,46 @@ precision.
 
 | Backend | Storage | Durability |
 |---------|---------|-----------|
-| HNSW | Nitrite `NitriteMap` (fjall) | **per-write**, atomic with the DB |
-| DiskANN | memory-mapped flat file + sidecar next to the DB | **flush-on-close** |
+| HNSW | Nitrite `NitriteMap` (fjall) | **per-write**: each mutation persists as one atomic batch |
+| DiskANN | memory-mapped flat file + checksummed sidecar next to the DB | **checkpointed**: on close, and automatically every ~8k mutations |
 
-The DiskANN index is *derived data* (rebuildable from the documents), so a crash
-before flush costs at most a reindex — the documents themselves are always safe
-in the main store. Use the HNSW backend if you need per-write index durability.
+Both backends treat the index as *derived data* and **fail safe, never silently
+wrong**:
+
+- **HNSW** batches every touched record + header into a single atomic
+  `put_all`; loading sanitizes the graph (dangling links pruned, bad records
+  dropped), and an unreadable header wipes the index and **rebuilds it
+  automatically from the collection** on open.
+- **DiskANN** marks its data file *dirty* on the first mutation after a
+  checkpoint and clears the flag only after the checksummed sidecar has been
+  atomically replaced (tmp + rename) under a matching generation. On open, a
+  dirty flag, checksum mismatch, or generation skew is detected, the files are
+  wiped, and the index is **rebuilt automatically from the collection**. A
+  crash therefore costs a bounded re-index, silent corruption never.
+
+Note that Nitrite writes documents and index entries as separate store
+operations; a crash exactly between them can leave one document unindexed.
+`collection.rebuild_index(...)` heals this; the automatic rebuild above covers
+all index-side damage.
 
 `cache_bytes` is **advisory** for DiskANN: because the store is memory-mapped,
 the OS page cache bounds resident memory and reclaims cold pages under pressure
 (the index can't OOM from its vector data). The knob is reserved for future
 `madvise` hinting.
+
+## Security & privacy
+
+- Vectors are stored **in plaintext** by both backends. Embeddings are
+  generally invertible back to their source content — treat them with the same
+  sensitivity as the documents themselves.
+- DiskANN files live next to the database (named after a **sanitized + hashed**
+  form of the collection/field, so hostile names cannot escape the directory)
+  and are **not** covered by any encryption or at-rest features a storage
+  adapter might provide.
+- The DiskANN backend refuses in-memory databases rather than writing
+  embeddings into a shared temp directory.
+- The sidecar is checksummed and structurally validated on load; corrupt or
+  tampered files are wiped and rebuilt, not trusted.
 
 ## Performance
 
@@ -236,7 +280,17 @@ parity of both backends through the collection / RAG APIs.
 
 ## Known limitations
 
-- DiskANN durability is flush-on-close, not per-write (see above).
+- DiskANN durability is checkpoint-based, not per-write (see above); a crash
+  costs an automatic rebuild of that index on next open.
+- PQ codebooks are trained once (in the background, off the insert path) and
+  not retrained; under heavy distribution drift, traversal quality can degrade
+  (final ranking stays exact via re-rank). PQ's ADC guide assumes squared-L2
+  ordering, which is monotone for Cosine/Euclidean; for `Metric::Dot` it is a
+  heuristic guide only.
+- Querying a vector filter without a vector index is an error (a kNN filter
+  cannot be evaluated as a per-document predicate).
+- With `min_score`, the index over-fetches 4× `k` before applying the cutoff;
+  extremely selective cutoffs can still return fewer than `k` hits.
 - SIMD is portable (f32x8), not AVX-512-tuned; on AVX-512 servers a hand-tuned
   kernel would still be faster.
 - DiskANN traversal maps external ids ↔ dense slots and allocates a small

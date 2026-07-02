@@ -3,15 +3,30 @@
 //! atomicity.
 //!
 //! Layout (one map per index, named by [`derive_vector_map_name`]):
-//! - `Value::String("__hnsw_meta__")` → bincode of [`HnswHeader`].
-//! - `Value::U64(doc_id)` → bincode of a [`NodeRecord`].
+//! - `Value::String("__hnsw_meta__")` → bincode of [`StoredHeader`]
+//!   (format version + stored-vector precision + graph header).
+//! - `Value::String("v{doc_id}")` → the node's vector, encoded at the
+//!   configured [`Precision`].
+//! - `Value::String("a{doc_id}")` → bincode of the node's per-level neighbor
+//!   lists.
 //!
-//! On open the whole graph is loaded into memory. Each mutation updates memory
-//! then writes through only the touched node records plus the header.
+//! Vectors and adjacency are separate records because adjacency churns on
+//! every insert while vectors are written once; splitting them cuts the
+//! per-insert write amplification by roughly the vector/neighbor-list size
+//! ratio (an order of magnitude for typical embedding dimensions).
+//!
+//! Each persist batches every touched record plus the header into a single
+//! atomic `put_all`, and the batch is written *after* the graph lock is
+//! released so searches are never blocked on storage I/O. On open the whole
+//! graph is loaded and sanitized ([`Hnsw::from_parts`]); if the header is
+//! missing or unreadable while data exists, the map is wiped and the caller is
+//! told to rebuild the index from the collection.
 
 use std::sync::Arc;
 
-use parking_lot::RwLock;
+use parking_lot::{Mutex, RwLock};
+use rustc_hash::FxHashMap;
+use serde::{Deserialize, Serialize};
 
 use nitrite::collection::NitriteId;
 use nitrite::common::Value;
@@ -22,12 +37,27 @@ use nitrite::store::NitriteMap;
 
 use crate::diskann::{DiskAnnConfig, DiskAnnIndex};
 use crate::distance::Metric;
-use crate::hnsw::Hnsw;
-use crate::node::{from_bytes, to_bytes, HnswHeader, NodeRecord};
+use crate::filter::value_to_vector;
+use crate::hnsw::{DirtyChanges, Hnsw};
+use crate::node::{from_bytes, to_bytes, HnswHeader};
 use crate::precision::Precision;
 
-/// Reserved key holding the serialized [`HnswHeader`].
+/// Reserved key holding the serialized [`StoredHeader`].
 const META_KEY: &str = "__hnsw_meta__";
+
+/// Bumped whenever the persisted HNSW layout changes; a mismatch triggers a
+/// rebuild from the collection instead of misreading old bytes.
+const HNSW_FORMAT_VERSION: u32 = 2;
+
+/// The persisted per-index header: storage format concerns plus the graph
+/// parameters. Kept separate from [`HnswHeader`] so the in-memory graph stays
+/// oblivious to storage details like precision.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+struct StoredHeader {
+    format_version: u32,
+    precision: Precision,
+    graph: HnswHeader,
+}
 
 /// Which index backend to use.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -180,23 +210,41 @@ pub enum VectorIndex {
 impl VectorIndex {
     /// Opens (loading from the store) or creates a vector index using the
     /// configured backend.
+    ///
+    /// If the persisted index is detected as stale or corrupt (torn HNSW
+    /// header, DiskANN files from a crashed session, checksum mismatch, …) the
+    /// damaged storage is wiped and the index is **rebuilt automatically** from
+    /// the collection's documents — the index is derived data, so a rebuild is
+    /// always safe.
     pub fn open(
         descriptor: &IndexDescriptor,
         config: &NitriteConfig,
         params: &VectorIndexConfig,
     ) -> NitriteResult<Self> {
         let base = derive_vector_map_name(descriptor);
-        match params.backend {
-            IndexBackend::Hnsw => Ok(VectorIndex::Hnsw(HnswBackend::open(&base, config, params)?)),
-            IndexBackend::DiskAnn => Ok(VectorIndex::DiskAnn(DiskAnnIndex::open(
-                config,
-                &base,
-                params.dim,
-                params.metric,
-                params.precision,
-                &params.diskann,
-            )?)),
+        let (index, needs_rebuild) = match params.backend {
+            IndexBackend::Hnsw => {
+                let (backend, rebuild) = HnswBackend::open(&base, config, params)?;
+                (VectorIndex::Hnsw(backend), rebuild)
+            }
+            IndexBackend::DiskAnn => {
+                let (backend, rebuild) = DiskAnnIndex::open(
+                    config,
+                    &base,
+                    params.dim,
+                    params.metric,
+                    params.precision,
+                    &params.diskann,
+                )?;
+                (VectorIndex::DiskAnn(backend), rebuild)
+            }
+        };
+        if needs_rebuild {
+            let n = rebuild_from_collection(&index, descriptor, config)?;
+            log::info!("vector index '{base}' was stale or damaged; rebuilt from collection ({n} vectors)");
+            index.flush()?;
         }
+        Ok(index)
     }
 
     /// The index metric.
@@ -270,6 +318,43 @@ impl VectorIndex {
     }
 }
 
+/// Rebuilds a vector index from its collection's documents (the collection map
+/// is named after the collection). Used to heal a stale or corrupt index.
+fn rebuild_from_collection(
+    index: &VectorIndex,
+    descriptor: &IndexDescriptor,
+    config: &NitriteConfig,
+) -> NitriteResult<usize> {
+    let field = descriptor
+        .index_fields()
+        .field_names()
+        .first()
+        .cloned()
+        .ok_or_else(|| {
+            NitriteError::new("Vector index has no field", ErrorKind::IndexingError)
+        })?;
+    let store = config.nitrite_store()?;
+    let collection = store.open_map(&descriptor.collection_name())?;
+
+    let mut count = 0usize;
+    for entry in collection.entries()? {
+        let (key, value) = entry?;
+        let Value::Document(mut doc) = value else { continue };
+        let id = match key {
+            Value::NitriteId(nid) => nid.id_value(),
+            _ => match doc.id() {
+                Ok(nid) => nid.id_value(),
+                Err(_) => continue,
+            },
+        };
+        let Ok(field_value) = doc.get(&field) else { continue };
+        let Some(vector) = value_to_vector(&field_value) else { continue };
+        index.insert(id, vector)?;
+        count += 1;
+    }
+    Ok(count)
+}
+
 /// The in-memory HNSW backend persisted to a single fjall map.
 #[derive(Clone)]
 pub struct HnswBackend {
@@ -278,50 +363,62 @@ pub struct HnswBackend {
 
 struct HnswInner {
     hnsw: RwLock<Hnsw>,
+    /// Serializes persist batches so two write-throughs cannot interleave
+    /// their `put_all` calls out of order. Held *after* the graph lock is
+    /// released, so searches never wait on storage I/O.
+    persist_gate: Mutex<()>,
     map: NitriteMap,
+    precision: Precision,
 }
 
 impl HnswBackend {
-    /// Opens (loading from the store) or creates the HNSW backend.
+    /// Opens (loading from the store) or creates the HNSW backend. The second
+    /// return value is `true` when existing index data was unreadable and the
+    /// (now wiped) index must be rebuilt from the collection.
     pub fn open(
         base: &str,
         config: &NitriteConfig,
         params: &VectorIndexConfig,
-    ) -> NitriteResult<Self> {
+    ) -> NitriteResult<(Self, bool)> {
         let store = config.nitrite_store()?;
         let map = store.open_map(base)?;
 
-        let hnsw = match map.get(&Value::String(META_KEY.to_string()))? {
-            Some(Value::Bytes(bytes)) => {
-                let header: HnswHeader = decode(&bytes)?;
-                let records = load_records(&map)?;
-                Hnsw::from_records(header, records)
-            }
-            _ => {
-                if params.dim == 0 {
-                    return Err(NitriteError::new(
-                        "Vector index dimension must be greater than zero",
-                        ErrorKind::IndexingError,
-                    ));
-                }
-                let graph = Hnsw::new(
-                    params.dim,
-                    params.metric,
-                    params.m,
-                    params.ef_construction,
-                    params.ef_search,
-                );
-                persist_header(&map, &graph.header())?;
-                graph
-            }
+        let stored = match map.get(&Value::String(META_KEY.to_string()))? {
+            Some(Value::Bytes(bytes)) => match decode::<StoredHeader>(&bytes) {
+                Ok(h) if h.format_version == HNSW_FORMAT_VERSION => Some(Ok(h)),
+                _ => Some(Err(())), // unreadable or old format
+            },
+            _ if map.is_empty()? => None, // fresh index
+            _ => Some(Err(())),           // data without a readable header
         };
 
-        Ok(HnswBackend {
+        let (graph, precision, needs_rebuild) = match stored {
+            Some(Ok(header)) => {
+                let precision = header.precision;
+                let (vectors, adjacency) = load_parts(&map, &header)?;
+                (Hnsw::from_parts(header.graph, vectors, adjacency), precision, false)
+            }
+            Some(Err(())) => {
+                log::warn!("HNSW index '{base}' has an unreadable header; wiping for rebuild");
+                map.clear()?;
+                let graph = new_graph(params)?;
+                (graph, params.precision, true)
+            }
+            None => (new_graph(params)?, params.precision, false),
+        };
+
+        let backend = HnswBackend {
             inner: Arc::new(HnswInner {
-                hnsw: RwLock::new(hnsw),
+                hnsw: RwLock::new(graph),
+                persist_gate: Mutex::new(()),
                 map,
+                precision,
             }),
-        })
+        };
+        // Make sure a fresh index has its header on disk before first use.
+        let header = backend.inner.hnsw.read().header();
+        backend.persist(DirtyChanges::default(), header)?;
+        Ok((backend, needs_rebuild))
     }
 
     /// The index dimension.
@@ -346,18 +443,24 @@ impl HnswBackend {
 
     /// Inserts or replaces the vector for `id`, persisting the change.
     pub fn insert(&self, id: u64, vector: Vec<f32>) -> NitriteResult<()> {
-        let mut guard = self.inner.hnsw.write();
-        guard.insert(id, vector).map_err(|e| {
-            NitriteError::new(&format!("Vector insert failed: {e}"), ErrorKind::IndexingError)
-        })?;
-        self.persist(&mut guard)
+        let (changes, header) = {
+            let mut guard = self.inner.hnsw.write();
+            guard.insert(id, vector).map_err(|e| {
+                NitriteError::new(&format!("Vector insert failed: {e}"), ErrorKind::IndexingError)
+            })?;
+            (guard.take_dirty(), guard.header())
+        };
+        self.persist(changes, header)
     }
 
     /// Removes the vector for `id`, persisting the change.
     pub fn remove(&self, id: u64) -> NitriteResult<()> {
-        let mut guard = self.inner.hnsw.write();
-        guard.remove(id);
-        self.persist(&mut guard)
+        let (changes, header) = {
+            let mut guard = self.inner.hnsw.write();
+            guard.remove(id);
+            (guard.take_dirty(), guard.header())
+        };
+        self.persist(changes, header)
     }
 
     /// Returns the `k` nearest document ids to `query` with their distances
@@ -376,43 +479,89 @@ impl HnswBackend {
             .collect()
     }
 
-    /// Writes through the graph's dirty/deleted nodes and the header.
-    fn persist(&self, hnsw: &mut Hnsw) -> NitriteResult<()> {
-        let (dirty, deleted) = hnsw.take_dirty();
-        for rec in dirty {
-            let bytes = encode(&rec)?;
-            self.inner
-                .map
-                .put(Value::U64(rec.id), Value::Bytes(bytes))?;
+    /// Writes through the drained changes: deletions first, then one atomic
+    /// `put_all` batch containing every touched record plus the header, so a
+    /// crash can never persist half an insert. (A crash between the deletions
+    /// and the batch leaves dangling links, which the sanitizing loader
+    /// prunes.) Runs outside the graph lock — searches proceed concurrently.
+    fn persist(&self, changes: DirtyChanges, header: HnswHeader) -> NitriteResult<()> {
+        let _gate = self.inner.persist_gate.lock();
+
+        for id in &changes.deleted {
+            self.inner.map.remove(&Value::String(format!("v{id}")))?;
+            self.inner.map.remove(&Value::String(format!("a{id}")))?;
         }
-        for id in deleted {
-            self.inner.map.remove(&Value::U64(id))?;
+
+        let mut batch: Vec<(Value, Value)> =
+            Vec::with_capacity(changes.vectors.len() + changes.adjacency.len() + 1);
+        for (id, vector) in &changes.vectors {
+            batch.push((
+                Value::String(format!("v{id}")),
+                Value::Bytes(self.inner.precision.encode(vector)),
+            ));
         }
-        persist_header(&self.inner.map, &hnsw.header())
+        for (id, neighbors) in &changes.adjacency {
+            batch.push((
+                Value::String(format!("a{id}")),
+                Value::Bytes(encode(neighbors)?),
+            ));
+        }
+        let stored = StoredHeader {
+            format_version: HNSW_FORMAT_VERSION,
+            precision: self.inner.precision,
+            graph: header,
+        };
+        batch.push((Value::String(META_KEY.to_string()), Value::Bytes(encode(&stored)?)));
+        self.inner.map.put_all(batch)
     }
 }
 
-fn load_records(map: &NitriteMap) -> NitriteResult<Vec<NodeRecord>> {
-    // Every non-header entry is a node record; the record carries its own id, so
-    // we ignore the key entirely (the store's codec may normalize the integer
-    // key type, e.g. U64 -> I64, on round-trip).
-    let meta_key = Value::String(META_KEY.to_string());
-    let mut records = Vec::new();
+fn new_graph(params: &VectorIndexConfig) -> NitriteResult<Hnsw> {
+    if params.dim == 0 {
+        return Err(NitriteError::new(
+            "Vector index dimension must be greater than zero",
+            ErrorKind::IndexingError,
+        ));
+    }
+    Ok(Hnsw::new(
+        params.dim,
+        params.metric,
+        params.m,
+        params.ef_construction,
+        params.ef_search,
+    ))
+}
+
+/// Loads all vector and adjacency records. Unparseable entries are skipped
+/// (the sanitizing loader also drops any node left inconsistent by that).
+#[allow(clippy::type_complexity)]
+fn load_parts(
+    map: &NitriteMap,
+    header: &StoredHeader,
+) -> NitriteResult<(Vec<(u64, Vec<f32>)>, FxHashMap<u64, Vec<Vec<u64>>>)> {
+    let mut vectors = Vec::new();
+    let mut adjacency = FxHashMap::default();
+    let expected_len = header.precision.encoded_len(header.graph.dim);
+
     for entry in map.entries()? {
         let (key, value) = entry?;
-        if key == meta_key {
-            continue;
-        }
-        if let Value::Bytes(bytes) = value {
-            records.push(decode::<NodeRecord>(&bytes)?);
+        let Value::String(key) = key else { continue };
+        let Value::Bytes(bytes) = value else { continue };
+        if let Some(id_str) = key.strip_prefix('v') {
+            if let Ok(id) = id_str.parse::<u64>() {
+                if bytes.len() == expected_len {
+                    vectors.push((id, header.precision.decode(&bytes, header.graph.dim)));
+                }
+            }
+        } else if let Some(id_str) = key.strip_prefix('a') {
+            if let Ok(id) = id_str.parse::<u64>() {
+                if let Ok(neighbors) = decode::<Vec<Vec<u64>>>(&bytes) {
+                    adjacency.insert(id, neighbors);
+                }
+            }
         }
     }
-    Ok(records)
-}
-
-fn persist_header(map: &NitriteMap, header: &HnswHeader) -> NitriteResult<()> {
-    let bytes = encode(header)?;
-    map.put(Value::String(META_KEY.to_string()), Value::Bytes(bytes))
+    Ok((vectors, adjacency))
 }
 
 fn encode<T: serde::Serialize>(value: &T) -> NitriteResult<Vec<u8>> {

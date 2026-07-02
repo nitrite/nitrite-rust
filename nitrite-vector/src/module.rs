@@ -3,7 +3,7 @@
 //!
 //! ```rust,ignore
 //! use nitrite::nitrite::Nitrite;
-//! use nitrite_vector::{VectorModule, IndexBackend, Precision, Metric};
+//! use nitrite_vector::{VectorModule, VectorIndexConfig, IndexBackend, Precision, Metric};
 //!
 //! // Simple in-memory HNSW:
 //! let db = Nitrite::builder()
@@ -18,7 +18,14 @@
 //!     .degree(64)
 //!     .pq_subvectors(16)
 //!     .build();
+//!
+//! // Different dimensions/metrics per index in one database:
+//! let module = VectorModule::builder(384, Metric::Cosine)
+//!     .index_config("images", "clip", VectorIndexConfig::new(512, Metric::Dot))
+//!     .build();
 //! ```
+
+use std::collections::HashMap;
 
 use nitrite::common::{NitriteModule, NitritePlugin, PluginRegistrar};
 use nitrite::errors::NitriteResult;
@@ -47,6 +54,7 @@ impl VectorModule {
     pub fn builder(dim: usize, metric: Metric) -> VectorModuleBuilder {
         VectorModuleBuilder {
             config: VectorIndexConfig::new(dim, metric),
+            per_index: HashMap::new(),
         }
     }
 }
@@ -65,9 +73,24 @@ impl NitriteModule for VectorModule {
 /// [`VectorIndexConfig`] field that drives backend behavior.
 pub struct VectorModuleBuilder {
     config: VectorIndexConfig,
+    per_index: HashMap<(String, String), VectorIndexConfig>,
 }
 
 impl VectorModuleBuilder {
+    /// Registers a dedicated config for one `(collection, field)` index, so
+    /// collections with different embedding dimensions, metrics, or backends
+    /// can coexist in a single database. Indexes without a dedicated config
+    /// use the builder's defaults.
+    pub fn index_config(
+        mut self,
+        collection: impl Into<String>,
+        field: impl Into<String>,
+        config: VectorIndexConfig,
+    ) -> Self {
+        self.per_index.insert((collection.into(), field.into()), config);
+        self
+    }
+
     /// Selects the backend (`Hnsw` default, or `DiskAnn` for disk-resident).
     pub fn backend(mut self, backend: IndexBackend) -> Self {
         self.config = self.config.backend(backend);
@@ -157,6 +180,8 @@ impl VectorModuleBuilder {
 
     /// Builds the module.
     pub fn build(self) -> VectorModule {
-        VectorModule::new(self.config)
+        VectorModule {
+            indexer: VectorIndexer::with_configs(self.config, self.per_index),
+        }
     }
 }

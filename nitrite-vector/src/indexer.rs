@@ -24,7 +24,12 @@ pub struct VectorIndexer {
 
 struct VectorIndexerInner {
     registry: RwLock<HashMap<String, VectorIndex>>,
+    /// Default parameters for indexes without a dedicated config.
     params: VectorIndexConfig,
+    /// Per-index overrides keyed by `(collection, field)`, so collections with
+    /// different embedding dimensions/metrics can coexist in one database.
+    /// Immutable after module construction — no lock needed.
+    per_index: HashMap<(String, String), VectorIndexConfig>,
 }
 
 impl VectorIndexer {
@@ -34,8 +39,37 @@ impl VectorIndexer {
             inner: Arc::new(VectorIndexerInner {
                 registry: RwLock::new(HashMap::new()),
                 params,
+                per_index: HashMap::new(),
             }),
         }
+    }
+
+    /// Creates an indexer with a default config plus per-`(collection, field)`
+    /// overrides (see [`crate::VectorModuleBuilder::index_config`]).
+    pub fn with_configs(
+        params: VectorIndexConfig,
+        per_index: HashMap<(String, String), VectorIndexConfig>,
+    ) -> Self {
+        VectorIndexer {
+            inner: Arc::new(VectorIndexerInner {
+                registry: RwLock::new(HashMap::new()),
+                params,
+                per_index,
+            }),
+        }
+    }
+
+    /// The config for a given index: the per-index override if one was
+    /// registered, else the module default. (For an existing index the
+    /// persisted header still wins on structural parameters.)
+    fn params_for(&self, descriptor: &IndexDescriptor) -> VectorIndexConfig {
+        let collection = descriptor.collection_name();
+        let field = descriptor.index_fields().field_names().join("_");
+        self.inner
+            .per_index
+            .get(&(collection, field))
+            .copied()
+            .unwrap_or(self.inner.params)
     }
 
     fn get_or_open(
@@ -47,8 +81,15 @@ impl VectorIndexer {
         if let Some(index) = self.inner.registry.read().get(&name) {
             return Ok(index.clone());
         }
-        let index = VectorIndex::open(descriptor, config, &self.inner.params)?;
-        self.inner.registry.write().insert(name, index.clone());
+        // Double-checked under the write lock: two racing opens must not
+        // create two live instances over the same storage (two divergent HNSW
+        // graphs, or two mutable mmaps of the same DiskANN file).
+        let mut registry = self.inner.registry.write();
+        if let Some(index) = registry.get(&name) {
+            return Ok(index.clone());
+        }
+        let index = VectorIndex::open(descriptor, config, &self.params_for(descriptor))?;
+        registry.insert(name, index.clone());
         Ok(index)
     }
 
@@ -92,7 +133,11 @@ impl NitriteIndexerProvider for VectorIndexer {
         let removed = self.inner.registry.write().remove(&base);
         let index = match removed {
             Some(index) => index,
-            None => VectorIndex::open(index_descriptor, nitrite_config, &self.inner.params)?,
+            None => VectorIndex::open(
+                index_descriptor,
+                nitrite_config,
+                &self.params_for(index_descriptor),
+            )?,
         };
         index.destroy(&base, nitrite_config)
     }
@@ -148,7 +193,14 @@ impl NitriteIndexerProvider for VectorIndexer {
 
         let index = self.get_or_open(&descriptor, nitrite_config)?;
         let metric = index.metric();
-        let hits = index.search(knn.query(), knn.k(), knn.ef())?;
+        // A score cutoff discards hits after the fact, so over-fetch to still
+        // return up to k results that clear it.
+        let fetch = if knn.min_score().is_some() {
+            knn.k().saturating_mul(4)
+        } else {
+            knn.k()
+        };
+        let hits = index.search(knn.query(), fetch, knn.ef())?;
 
         let ids = hits
             .into_iter()
@@ -157,6 +209,7 @@ impl NitriteIndexerProvider for VectorIndexer {
                 None => true,
             })
             .map(|(id, _)| id)
+            .take(knn.k())
             .collect();
         Ok(ids)
     }

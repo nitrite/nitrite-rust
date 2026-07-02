@@ -32,13 +32,21 @@
 //! ## RAG store
 //!
 //! ```rust,ignore
-//! use nitrite_vector::{RagStore, VectorIndexConfig};
+//! use nitrite_vector::RagStore;
 //! use nitrite_vector::distance::Metric;
 //!
-//! let store = RagStore::create(&db, "kb", VectorIndexConfig::new(384, Metric::Cosine))?;
+//! // `Metric::Cosine` must match the metric configured on the VectorModule.
+//! let store = RagStore::create(&db, "kb", Metric::Cosine)?;
 //! store.add("hello world", embedding, doc!{ "source": "wiki" })?;
 //! let hits = store.search(query_vector, 5).run()?;
 //! ```
+//!
+//! ## Security note
+//!
+//! Vectors are stored **in plaintext** by both backends (embeddings are
+//! generally invertible back to content — treat them as the data itself). The
+//! DiskANN backend writes its files next to the database, outside whatever the
+//! storage adapter provides, and therefore requires a persistent `db_path`.
 
 pub mod diskann;
 pub mod distance;

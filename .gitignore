@@ -13,3 +13,4 @@ test-data
 .vs
 lcov.
 my-coverage-report/
+medium/

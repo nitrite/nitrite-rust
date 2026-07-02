@@ -5,23 +5,33 @@
 //!
 //! Resident RAM is bounded by the OS page cache + PQ codes + the id↔slot map, so
 //! the index can be much larger than memory — the target being mobile devices.
+//!
+//! # Concurrency model
+//!
+//! Queries are lock-free per node (one store read lock per query, see
+//! [`flat_store::FlatStore::read_view`]). All *structural* writers — inserts,
+//! removes, delete-consolidation, and the PQ encode step — serialize on a
+//! single `write_gate` mutex, because each of them performs multi-step
+//! read-modify-write sequences over the adjacency that would otherwise lose
+//! updates when interleaved. Background work (consolidation, PQ training)
+//! acquires the gate per chunk so writers interleave instead of stalling.
 
 pub mod flat_store;
 pub mod pq;
 pub mod vamana;
 
 use rustc_hash::FxHashSet;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::Arc;
 
-use parking_lot::RwLock;
+use parking_lot::{Mutex, RwLock};
 use serde::{Deserialize, Serialize};
 
 use nitrite::collection::NitriteId;
 use nitrite::errors::{ErrorKind, NitriteError, NitriteResult};
 use nitrite::nitrite_config::NitriteConfig;
 
-use crate::distance::Metric;
+use crate::distance::{squared_l2, Metric};
 use crate::precision::Precision;
 
 use flat_store::FlatStore;
@@ -30,6 +40,11 @@ use vamana::{greedy_search, robust_prune, GraphStore};
 
 /// Cap on how many vectors are sampled to train the PQ codebook.
 const PQ_TRAIN_SAMPLE: usize = 25_000;
+
+/// Checkpoint the sidecar every this many mutations, so a crash loses at most
+/// this window (detected on reopen → automatic rebuild) instead of the whole
+/// session. Amortized cost is a few KB per mutation at mobile-scale indexes.
+const AUTOSAVE_OPS: usize = 8_192;
 
 /// Tunable DiskANN parameters. Every field drives behavior (see call sites).
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
@@ -111,10 +126,18 @@ struct Inner {
     pq_subvectors: usize,
     pq_train_threshold: usize,
     consolidate_threshold: usize,
+    /// Serializes structural writers (insert / remove / consolidation chunks /
+    /// PQ encode). Their multi-step adjacency updates would lose writes if
+    /// interleaved; queries never take this.
+    write_gate: Mutex<()>,
     /// True while a background consolidation is in progress (single-flight).
     consolidating: AtomicBool,
-    /// Set on close so a running background consolidation stops promptly.
+    /// True while background PQ training is in progress (single-flight).
+    training: AtomicBool,
+    /// Set during flush so background work stops promptly; cleared afterwards.
     shutdown: AtomicBool,
+    /// Mutations since the last sidecar checkpoint (see [`AUTOSAVE_OPS`]).
+    ops_since_save: AtomicUsize,
     state: RwLock<MutableState>,
 }
 
@@ -122,6 +145,10 @@ impl DiskAnnIndex {
     /// Opens (loading from the store) or creates a DiskANN index. On reopen the
     /// persisted header's structural params + precision + metric win; only
     /// `cache_bytes` comes from the passed config (runtime).
+    ///
+    /// The second return value is `true` when existing index files were stale
+    /// or corrupt (crash before flush, checksum mismatch, format change): the
+    /// files have been wiped and the caller must rebuild from the collection.
     pub fn open(
         config: &NitriteConfig,
         base: &str,
@@ -129,12 +156,12 @@ impl DiskAnnIndex {
         metric: Metric,
         precision: Precision,
         params: &DiskAnnConfig,
-    ) -> NitriteResult<Self> {
+    ) -> NitriteResult<(Self, bool)> {
         // Read the header (if any) before choosing dim/precision, so a reopened
-        // index keeps the settings it was built with.
+        // index keeps the settings it was built with. An unreadable header is
+        // treated as absent; the store-level staleness check below wipes it.
         let header = FlatStore::peek_header(config, base)?
-            .map(|b| decode::<DiskHeader>(&b))
-            .transpose()?;
+            .and_then(|b| decode::<DiskHeader>(&b).ok());
 
         let (dim, metric, precision, degree, alpha, build_beam, search_beam, pq_subvectors, pq_train_threshold, medoid, pq) =
             match header {
@@ -157,7 +184,10 @@ impl DiskAnnIndex {
                 }
             };
 
-        let store = FlatStore::open(config, base, dim, precision, degree, params.cache_bytes)?;
+        let (store, needs_rebuild) =
+            FlatStore::open(config, base, dim, precision, degree, params.cache_bytes)?;
+        // A wiped store must not keep a medoid/codebook from the dead session.
+        let (medoid, pq) = if needs_rebuild { (None, None) } else { (medoid, pq) };
 
         let index = DiskAnnIndex {
             inner: Arc::new(Inner {
@@ -172,13 +202,16 @@ impl DiskAnnIndex {
                 pq_subvectors,
                 pq_train_threshold,
                 consolidate_threshold: params.consolidate_threshold,
+                write_gate: Mutex::new(()),
                 consolidating: AtomicBool::new(false),
+                training: AtomicBool::new(false),
                 shutdown: AtomicBool::new(false),
+                ops_since_save: AtomicUsize::new(0),
                 state: RwLock::new(MutableState { medoid, pq }),
             }),
         };
         index.persist_header()?;
-        Ok(index)
+        Ok((index, needs_rebuild))
     }
 
     /// The index metric.
@@ -186,19 +219,27 @@ impl DiskAnnIndex {
         self.inner.metric
     }
 
-    /// Flushes the memory-mapped data and writes the sidecar (call on close).
-    ///
-    /// Signals any background consolidation to stop, does a final synchronous
-    /// consolidation so the persisted sidecar is clean, then flushes.
+    /// Checkpoints the index: stops background work, runs a final synchronous
+    /// consolidation so the persisted sidecar is clean, and flushes the data
+    /// file + sidecar. Safe to call at any time (background consolidation and
+    /// PQ training resume on later mutations); called automatically on close
+    /// and periodically every [`AUTOSAVE_OPS`] mutations.
     pub fn flush(&self) -> NitriteResult<()> {
         self.inner.shutdown.store(true, Ordering::SeqCst);
-        // Wait out an in-flight background consolidation so we don't flush a
-        // half-updated graph (it aborts promptly on the shutdown flag).
-        while self.inner.consolidating.load(Ordering::SeqCst) {
-            std::thread::yield_now();
+        // Wait out in-flight background work so we don't flush a half-updated
+        // graph (both abort promptly on the shutdown flag).
+        while self.inner.consolidating.load(Ordering::SeqCst)
+            || self.inner.training.load(Ordering::SeqCst)
+        {
+            std::thread::sleep(std::time::Duration::from_millis(1));
         }
-        self.consolidate()?;
-        self.inner.store.flush()
+        let result = self
+            .consolidate_impl(false)
+            .and_then(|_| self.inner.store.flush());
+        // Not a permanent close: re-enable background work either way.
+        self.inner.shutdown.store(false, Ordering::SeqCst);
+        self.inner.ops_since_save.store(0, Ordering::Relaxed);
+        result
     }
 
     /// Deletes the index's on-disk files.
@@ -224,6 +265,11 @@ impl DiskAnnIndex {
     /// Whether PQ has been trained.
     pub fn pq_trained(&self) -> bool {
         self.inner.state.read().pq.is_some()
+    }
+
+    /// Whether background PQ training is currently running (tests/introspection).
+    pub fn pq_training(&self) -> bool {
+        self.inner.training.load(Ordering::SeqCst)
     }
 
     /// Number of deleted slots awaiting consolidation (introspection/tests).
@@ -286,8 +332,11 @@ impl DiskAnnIndex {
                 ErrorKind::IndexingError,
             ));
         }
+
+        let gate = self.inner.write_gate.lock();
+
         if self.inner.store.contains(id) {
-            self.remove(id)?;
+            self.remove_locked(id)?;
         }
 
         let prepared = self.inner.metric.prepare(raw);
@@ -296,21 +345,24 @@ impl DiskAnnIndex {
         // First node becomes the medoid; nothing to connect. Encode the PQ code
         // and release the state lock BEFORE persist_header (which re-locks state;
         // parking_lot locks are not reentrant).
+        let mut first = false;
         {
             let mut st = self.inner.state.write();
             if st.medoid.is_none() {
                 st.medoid = Some(id);
-                let pq_code = st.pq.as_ref().map(|pq| pq.encode(&prepared));
-                drop(st);
-                if let Some(code) = pq_code {
-                    self.inner.store.set_pq_code(id, code)?;
-                }
-                self.persist_header()?;
-                return Ok(());
+                first = true;
             }
-            if let Some(pq) = &st.pq {
-                self.inner.store.set_pq_code(id, pq.encode(&prepared))?;
+            let pq_code = st.pq.as_ref().map(|pq| pq.encode(&prepared));
+            drop(st);
+            if let Some(code) = pq_code {
+                self.inner.store.set_pq_code(id, code)?;
             }
+        }
+        if first {
+            self.persist_header()?;
+            drop(gate);
+            self.after_mutation();
+            return Ok(());
         }
         let medoid = self.inner.state.read().medoid.expect("medoid set above");
 
@@ -341,20 +393,59 @@ impl DiskAnnIndex {
             }
         }
 
-        self.maybe_train_pq()?;
+        drop(gate);
+        self.maybe_spawn_pq_training();
+        self.after_mutation();
         Ok(())
     }
 
-    /// Trains PQ once the index crosses the threshold, then encodes every node.
-    fn maybe_train_pq(&self) -> NitriteResult<()> {
-        if self.inner.pq_subvectors == 0 || self.inner.store.pq_ready() {
-            return Ok(());
+    /// Bumps the mutation counter and checkpoints the sidecar every
+    /// [`AUTOSAVE_OPS`] mutations, so a crash costs a bounded rebuild window.
+    fn after_mutation(&self) {
+        let n = self.inner.ops_since_save.fetch_add(1, Ordering::Relaxed) + 1;
+        if n >= AUTOSAVE_OPS {
+            self.inner.ops_since_save.store(0, Ordering::Relaxed);
+            if let Err(e) = self.inner.store.flush() {
+                log::warn!("DiskANN autosave failed (state stays recoverable by rebuild): {e}");
+            }
         }
-        if self.inner.store.len() < self.inner.pq_train_threshold {
-            return Ok(());
-        }
+    }
 
-        // Sample vectors for training.
+    /// Spawns single-flight background PQ training once the index crosses the
+    /// threshold. Training (k-means over up to [`PQ_TRAIN_SAMPLE`] vectors) can
+    /// take seconds, so it must never run on a caller's insert.
+    fn maybe_spawn_pq_training(&self) {
+        if self.inner.pq_subvectors == 0
+            || self.inner.shutdown.load(Ordering::SeqCst)
+            || self.inner.state.read().pq.is_some()
+            || self.inner.store.len() < self.inner.pq_train_threshold
+        {
+            return;
+        }
+        if self
+            .inner
+            .training
+            .compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst)
+            .is_err()
+        {
+            return;
+        }
+        let index = self.clone();
+        std::thread::spawn(move || {
+            if let Err(e) = index.train_pq_impl() {
+                log::warn!("DiskANN background PQ training failed: {e}");
+            }
+            index.inner.training.store(false, Ordering::SeqCst);
+        });
+    }
+
+    /// Trains the PQ codebook (no locks held), then — under the write gate —
+    /// encodes every node and publishes the quantizer. Nodes inserted while
+    /// training ran are picked up because the id list is re-read under the
+    /// gate; queries fall back to exact distances for any node still missing a
+    /// code, so correctness never depends on complete coverage.
+    fn train_pq_impl(&self) -> NitriteResult<()> {
+        // Sample vectors for training (reads only; writers keep running).
         let ids = self.inner.store.ids();
         let mut sample = Vec::new();
         for id in ids.iter().take(PQ_TRAIN_SAMPLE) {
@@ -362,12 +453,20 @@ impl DiskAnnIndex {
                 sample.push(v);
             }
         }
+        if sample.is_empty() {
+            return Ok(());
+        }
         let pq = ProductQuantizer::train(&sample, self.inner.dim, self.inner.pq_subvectors);
 
-        // Encode every node once.
-        for id in &ids {
-            if let Some(v) = self.inner.store.vector(*id)? {
-                self.inner.store.set_pq_code(*id, pq.encode(&v))?;
+        // Encode every node once, under the gate so no insert interleaves
+        // between the id snapshot and its encoding.
+        let _gate = self.inner.write_gate.lock();
+        if self.inner.shutdown.load(Ordering::SeqCst) {
+            return Ok(()); // a later mutation re-triggers training
+        }
+        for id in self.inner.store.ids() {
+            if let Some(v) = self.inner.store.vector(id)? {
+                self.inner.store.set_pq_code(id, pq.encode(&v))?;
             }
         }
         self.inner.state.write().pq = Some(pq);
@@ -380,21 +479,27 @@ impl DiskAnnIndex {
     /// are correct immediately; a background pass later reclaims the slot and
     /// repairs adjacency.
     pub fn remove(&self, id: u64) -> NitriteResult<()> {
-        if !self.inner.store.contains(id) {
-            return Ok(());
-        }
-        self.inner.store.remove_node(id)?;
-
         {
-            let mut st = self.inner.state.write();
-            if st.medoid == Some(id) {
-                st.medoid = self.inner.store.ids().into_iter().next();
-                drop(st);
-                self.persist_header()?;
+            let _gate = self.inner.write_gate.lock();
+            if !self.inner.store.contains(id) {
+                return Ok(());
             }
+            self.remove_locked(id)?;
         }
-
         self.maybe_spawn_consolidation();
+        self.after_mutation();
+        Ok(())
+    }
+
+    /// Delete body; caller must hold the write gate.
+    fn remove_locked(&self, id: u64) -> NitriteResult<()> {
+        self.inner.store.remove_node(id)?;
+        let mut st = self.inner.state.write();
+        if st.medoid == Some(id) {
+            st.medoid = self.inner.store.ids().into_iter().next();
+            drop(st);
+            self.persist_header()?;
+        }
         Ok(())
     }
 
@@ -419,7 +524,9 @@ impl DiskAnnIndex {
         }
         let index = self.clone();
         std::thread::spawn(move || {
-            let _ = index.consolidate_impl(true);
+            if let Err(e) = index.consolidate_impl(true) {
+                log::warn!("DiskANN background consolidation failed: {e}");
+            }
             index.inner.consolidating.store(false, Ordering::SeqCst);
         });
     }
@@ -434,9 +541,15 @@ impl DiskAnnIndex {
         self.consolidate_impl(false)
     }
 
+    /// The sweep acquires the write gate **per chunk**, so inserts and removes
+    /// interleave with a running consolidation instead of stalling behind it.
+    /// Only the pending slots snapshotted at the start are reclaimed: a slot
+    /// deleted mid-sweep has unrepaired in-edges and must stay quarantined
+    /// until the next pass.
     fn consolidate_impl(&self, check_shutdown: bool) -> NitriteResult<()> {
         let store = &self.inner.store;
-        if store.pending_len() == 0 {
+        let pending = store.pending_slots();
+        if pending.is_empty() {
             return Ok(());
         }
         const CHUNK: usize = 256;
@@ -446,6 +559,7 @@ impl DiskAnnIndex {
 
         let live = store.live_slots();
         for chunk in live.chunks(CHUNK) {
+            let _gate = self.inner.write_gate.lock();
             if check_shutdown && self.inner.shutdown.load(Ordering::SeqCst) {
                 return Ok(()); // pending stays; a later pass finishes the job
             }
@@ -453,7 +567,8 @@ impl DiskAnnIndex {
                 self.repair_slot(slot, metric, degree, alpha);
             }
         }
-        store.reclaim_pending();
+        let _gate = self.inner.write_gate.lock();
+        store.reclaim(&pending);
         Ok(())
     }
 
@@ -543,13 +658,24 @@ impl DiskAnnIndex {
         // Traverse with PQ approximate distances when available, else exact.
         let candidates = if let Some(pq) = &st.pq {
             let tables = pq.query_tables(&prepared);
+            // A node inserted after training but not yet encoded has no code;
+            // fall back to an exact distance in the SAME space ADC lives in
+            // (squared L2 over prepared vectors) so the ordering stays
+            // consistent — such a node must never become invisible.
+            let buf = std::cell::RefCell::new(Vec::with_capacity(self.inner.dim));
             greedy_search(
                 &view,
                 medoid,
-                |id| {
-                    view.pq_code(id)
-                        .map(|c| pq.adc_distance(&tables, c))
-                        .unwrap_or(f32::INFINITY)
+                |id| match view.pq_code(id) {
+                    Some(c) => pq.adc_distance(&tables, c),
+                    None => {
+                        let mut b = buf.borrow_mut();
+                        if view.vector_into(id, &mut b) {
+                            squared_l2(&prepared, &b)
+                        } else {
+                            f32::INFINITY
+                        }
+                    }
                 },
                 beam,
             )
