@@ -106,6 +106,19 @@ impl FilterProvider for EqualsFilter {
                 "Equals filter error: field value not set - filter must be properly initialized before applying",
                 ErrorKind::InvalidOperation
             ))?;
+        // An array field matches by element containment, mirroring
+        // `apply_on_index` (arrays are indexed element-wise). Without this,
+        // `field.eq(x)` on an array field returns different results depending
+        // on whether an index exists / is chosen by the planner: an indexed
+        // array-eq that the planner relegates to a full scan (e.g. when a
+        // range filter on another field claims the index) would otherwise
+        // silently match nothing. The `!= array` guard keeps whole-array
+        // equality (`field.eq(the_whole_array)`) working too.
+        if let Value::Array(elements) = &value {
+            if field_value != &value {
+                return Ok(elements.contains(field_value));
+            }
+        }
         Ok(&value == field_value)
     }
 

@@ -703,4 +703,95 @@ mod tests {
             Ok(doc)
         }
     }
+
+    // ── Regression: array-field membership must be index-independent ──
+    // A query's results must not depend on which indexes happen to exist.
+    // `field.eq(x)`/`field.in([..])` on an array field is defined by the
+    // index path as element containment; before the fix the full-scan path
+    // did whole-value equality, so an indexed array-eq that the planner
+    // relegated to a full scan (e.g. when a range filter on another field
+    // claimed the index) silently matched nothing. See basic_filters.rs.
+
+    fn array_doc(created_at: i64, tags: Vec<&str>) -> Document {
+        let mut d = Document::new();
+        d.put("created_at", created_at).unwrap();
+        d.put("tags", tags.into_iter().map(|s| s.to_string()).collect::<Vec<_>>()).unwrap();
+        d
+    }
+
+    // days 0 & 2 tagged "todo", days 1 & 3 tagged "misc"; created_at = day*1000
+    fn seed_tagged(c: &DefaultNitriteCollection) {
+        for day in 0..4i64 {
+            let tags = if day % 2 == 0 { vec!["todo"] } else { vec!["misc"] };
+            c.insert(array_doc(day * 1000, tags)).unwrap();
+        }
+    }
+
+    #[test]
+    fn array_eq_matches_by_containment_without_an_index() {
+        let c = setup_collection();
+        seed_tagged(&c);
+        // No index at all: full scan must still match array membership.
+        assert_eq!(c.find(field("tags").eq("todo")).unwrap().count(), 2);
+        assert_eq!(c.find(field("tags").eq("nope")).unwrap().count(), 0);
+    }
+
+    #[test]
+    fn array_eq_result_is_the_same_with_and_without_an_index() {
+        let without = {
+            let c = setup_collection();
+            seed_tagged(&c);
+            c.find(field("tags").eq("todo")).unwrap().count()
+        };
+        let with = {
+            let c = setup_collection();
+            c.create_index(vec!["tags"], &crate::index::non_unique_index()).unwrap();
+            seed_tagged(&c);
+            c.find(field("tags").eq("todo")).unwrap().count()
+        };
+        assert_eq!(without, with, "index presence must not change results");
+        assert_eq!(with, 2);
+    }
+
+    #[test]
+    fn array_eq_combined_with_range_when_both_fields_indexed() {
+        // The reported bug: with indexes on BOTH the array field and the
+        // range field, the planner claims the range index and relegates the
+        // array-eq to a full scan. Every AND arrangement must return the one
+        // "todo" entry inside the [1000,3000] window (day 2).
+        let c = setup_collection();
+        c.create_index(vec!["tags"], &crate::index::non_unique_index()).unwrap();
+        c.create_index(vec!["created_at"], &crate::index::non_unique_index()).unwrap();
+        seed_tagged(&c);
+        use crate::filter::and;
+
+        let between = field("created_at").between_optional_inclusive(1000i64, 3000i64);
+        assert_eq!(c.find(and(vec![field("tags").eq("todo"), between.clone()])).unwrap().count(), 1);
+        // reversed order
+        assert_eq!(c.find(and(vec![between.clone(), field("tags").eq("todo")])).unwrap().count(), 1);
+        // chained .and()
+        assert_eq!(c.find(field("tags").eq("todo").and(between.clone())).unwrap().count(), 1);
+        // two explicit bounds instead of between
+        assert_eq!(
+            c.find(and(vec![field("tags").eq("todo"), field("created_at").gte(1000i64), field("created_at").lte(3000i64)])).unwrap().count(),
+            1
+        );
+        // single comparison still works (was already correct)
+        assert_eq!(c.find(and(vec![field("tags").eq("todo"), field("created_at").gte(1000i64)])).unwrap().count(), 1);
+    }
+
+    #[test]
+    fn array_in_matches_by_containment_on_full_scan() {
+        let c = setup_collection();
+        c.create_index(vec!["created_at"], &crate::index::non_unique_index()).unwrap();
+        seed_tagged(&c);
+        use crate::filter::and;
+        // `in` on the (unindexed here) array field is evaluated as a full
+        // scan; it must match element containment.
+        assert_eq!(c.find(field("tags").in_array(vec!["todo", "other"])).unwrap().count(), 2);
+        // combined with a range that claims the created_at index
+        let between = field("created_at").between_optional_inclusive(1000i64, 3000i64);
+        assert_eq!(c.find(and(vec![field("tags").in_array(vec!["todo"]), between])).unwrap().count(), 1);
+    }
 }
+

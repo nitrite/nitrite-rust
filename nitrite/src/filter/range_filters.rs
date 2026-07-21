@@ -613,9 +613,22 @@ impl FilterProvider for InFilter {
     #[inline]
     fn apply(&self, entry: &Document) -> NitriteResult<bool> {
         let value = entry.get(self.field_name.get().expect("field_name not initialized"))?;
+        // `in` is multi-value `eq`, so it matches array fields by element
+        // containment for the same index-independence reason as EqualsFilter
+        // (see basic_filters.rs): the index path already treats arrays
+        // element-wise, so a full scan must too.
+        let array_elements = match &value {
+            Value::Array(elements) => Some(elements),
+            _ => None,
+        };
         for field_value in self.field_values.get().expect("field_values not initialized") {
             if &value == field_value {
                 return Ok(true);
+            }
+            if let Some(elements) = array_elements {
+                if elements.contains(field_value) {
+                    return Ok(true);
+                }
             }
         }
         Ok(false)
