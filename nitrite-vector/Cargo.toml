@@ -1,6 +1,6 @@
 [package]
 name = "nitrite_vector"
-version = "0.4.2"
+version = "0.4.3"
 edition = "2021"
 description = "Vector / HNSW ANN indexing and RAG store for the Nitrite database"
 license = "Apache-2.0"
@@ -11,7 +11,7 @@ categories = ["database", "science"]
 
 [dependencies]
 # Core nitrite dependency
-nitrite = { version = "0.4.2", path = "../nitrite" }
+nitrite = { version = "0.4.3", path = "../nitrite" }
 
 # Serialization of the persisted HNSW graph
 serde = { version = "1.0", features = ["derive"] }

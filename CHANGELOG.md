@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.3] - 2026-07-20
+
+### Fixed
+
+- **Array-field membership is now index-independent.** `field.eq(x)` and `field.in([..])` on an
+  array field are matched by element containment on a full/collection scan, mirroring the index
+  path (arrays are indexed element-wise). Previously the full-scan path did whole-value equality,
+  so results depended on whether an index existed or was chosen by the planner: when both an
+  array field and a range field were indexed, the planner would claim the range index for a
+  `between` and relegate the array-eq to a full scan, which then silently matched nothing.
+
 ## [0.4.2] - 2026-07-02
 
 ### Added
