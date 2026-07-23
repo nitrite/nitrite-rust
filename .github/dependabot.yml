@@ -1,0 +1,12 @@
+version: 2
+updates:
+  - package-ecosystem: "cargo"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    ignore:
+      # rand is pinned to 0.8.5 across the workspace: rand 0.9's OsRng uses
+      # rand_core 0.9, but argon2's password-hash crate requires rand_core
+      # 0.6's CryptoRng/CryptoRngCore traits, which OsRng no longer satisfies.
+      - dependency-name: "rand"
+        versions: [">=0.9.0"]
