@@ -21,7 +21,7 @@ bincode = { version = "2.0", features = ["serde"] }
 parking_lot = "0.12"
 
 # Level assignment RNG for HNSW / k-means init for PQ
-rand = { version = "0.9", features = ["small_rng"] }
+rand = { version = "0.8", features = ["small_rng"] }
 
 # Half-precision (F16) stored-vector encoding
 half = "2"
