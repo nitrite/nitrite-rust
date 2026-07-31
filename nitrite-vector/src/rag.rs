@@ -150,6 +150,13 @@ pub struct SearchQuery<'a> {
 
 impl<'a> SearchQuery<'a> {
     /// Restricts results to those also matching a metadata filter.
+    ///
+    /// The filter is evaluated after the ANN traversal, so a *selective* filter
+    /// (the usual RAG shape — "search only this document's chunks") can reject
+    /// every one of the nearest neighbours. To avoid silently returning nothing,
+    /// [`run`](Self::run) widens the traversal and re-queries until `k` matching
+    /// hits are found or the index is exhausted; a filter matching very few
+    /// documents therefore costs a full index scan.
     pub fn filter(mut self, filter: Filter) -> Self {
         self.meta_filter = Some(filter);
         self
@@ -169,6 +176,9 @@ impl<'a> SearchQuery<'a> {
 
     /// Sets how many extra candidates to over-fetch per requested result when a
     /// metadata filter or score cutoff is in play (default 4).
+    ///
+    /// With a metadata filter this is only the *starting* window; see
+    /// [`filter`](Self::filter).
     pub fn oversample(mut self, factor: usize) -> Self {
         self.oversample = factor.max(1);
         self
@@ -176,18 +186,46 @@ impl<'a> SearchQuery<'a> {
 
     /// Executes the search, returning up to `k` hits ordered by descending
     /// score.
+    ///
+    /// With a metadata filter the traversal widens and repeats until `k`
+    /// matching hits are found or the index is exhausted, so a selective filter
+    /// never silently returns fewer hits than exist.
     pub fn run(self) -> NitriteResult<Vec<SearchHit>> {
         if self.k == 0 {
             return Ok(Vec::new());
         }
-        let metric = self.store.metric;
         // Over-fetch so metadata filtering / score cutoff still leaves k hits.
-        let fetch = if self.meta_filter.is_some() || self.min_score.is_some() {
+        let mut fetch = if self.meta_filter.is_some() || self.min_score.is_some() {
             self.k.saturating_mul(self.oversample)
         } else {
             self.k
         };
 
+        loop {
+            let (mut hits, candidates) = self.probe(fetch)?;
+            // Widening only helps a metadata filter: a `min_score` cutoff is
+            // monotone in the ANN ranking, so hits it drops are the tail and
+            // fetching further out cannot recover any.
+            let exhausted = candidates < fetch;
+            if self.meta_filter.is_none() || hits.len() >= self.k || exhausted {
+                // Rank by score (descending) and trim to k, independent of the
+                // order the cursor produced.
+                hits.sort_by(|a, b| b.score.total_cmp(&a.score));
+                hits.truncate(self.k);
+                return Ok(hits);
+            }
+            // Terminates: `fetch` saturates, at which point the index can never
+            // return `fetch` candidates and `exhausted` ends the loop.
+            fetch = fetch.saturating_mul(2);
+        }
+    }
+
+    /// One ANN probe: the `fetch` nearest neighbours, filtered and scored.
+    ///
+    /// Returns the surviving hits (unordered) and how many candidates the index
+    /// produced — fewer than `fetch` means the index has nothing further out.
+    fn probe(&self, fetch: usize) -> NitriteResult<(Vec<SearchHit>, usize)> {
+        let metric = self.store.metric;
         let mut builder = vector_field(EMBEDDING_FIELD).nearest(self.query.clone(), fetch);
         if let Some(ef) = self.ef {
             builder = builder.ef(ef);
@@ -198,8 +236,10 @@ impl<'a> SearchQuery<'a> {
         let prepared_query = metric.prepare(self.query.clone());
 
         let mut hits: Vec<SearchHit> = Vec::new();
+        let mut candidates = 0usize;
         for entry in cursor.iter_with_id() {
             let (id, document) = entry?;
+            candidates += 1;
 
             if let Some(mf) = &self.meta_filter {
                 if !mf.apply(&document)? {
@@ -227,10 +267,6 @@ impl<'a> SearchQuery<'a> {
             hits.push(SearchHit { id, text, score, document });
         }
 
-        // Rank by score (descending) and trim to k, independent of the order
-        // the cursor produced.
-        hits.sort_by(|a, b| b.score.total_cmp(&a.score));
-        hits.truncate(self.k);
-        Ok(hits)
+        Ok((hits, candidates))
     }
 }
