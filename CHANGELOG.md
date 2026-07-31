@@ -5,6 +5,31 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.4] - 2026-08-01
+
+### Fixed
+
+- **`nitrite_vector` — a selective metadata filter could silently return zero hits.**
+  `RagStore::search(...).filter(...)` fetched a fixed `k * oversample` (default 4) nearest
+  neighbours from the ANN index and applied the metadata filter *afterwards*. That works when
+  the filter keeps a large fraction of the index, but fails completely when it is selective —
+  the common RAG shape, "search only this document's chunks": every one of the `k * oversample`
+  candidates can fail the filter, and the search returns nothing while matching documents sit
+  further out. Measured on a real index: 41 records, one chunk each, `k = 5`, filtered to a
+  single record, query semantically closer to the other 40 — **0 hits**. The failure scales
+  with index size and is invisible in small-index testing. `oversample` was never a fix, only a
+  knob: the multiple needed is `index_size / matching_docs`, which the caller cannot know in
+  advance.
+
+  The traversal now widens and re-queries until `k` matching hits are found or the index is
+  exhausted, turning a silently wrong answer into a correct one; `oversample` becomes the
+  *starting* window rather than a hard ceiling. A filter matching very few documents therefore
+  costs a full index scan — for the single-document case an exact scan over that document's
+  chunks (`collection().find(meta_filter)`) remains both faster and more accurate than any ANN
+  path. Widening deliberately does **not** apply to `min_score`: a score cutoff is monotone in
+  the ANN ranking, so the hits it drops are the tail and fetching further out cannot recover
+  any.
+
 ## [0.4.3] - 2026-07-20
 
 ### Fixed
