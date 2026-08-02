@@ -41,7 +41,7 @@ impl Fields {
     /// Creates a new Fields instance with the provided field names.
     pub fn with_names(field_names: Vec<&str>) -> NitriteResult<Fields> {
         if field_names.is_empty() {
-            log::error!("Field names cannot be empty");
+            log::debug!("Field names cannot be empty");
             return Err(NitriteError::new(
                 "Field names cannot be empty",
                 ErrorKind::ValidationError,
@@ -116,7 +116,7 @@ impl Convertible for Fields {
                     match v.as_string() {
                         Some(name) => field_names.push(name.as_str()),
                         None => {
-                            log::error!("Field name must be a string, got: {:?}", v);
+                            log::debug!("Field name must be a string, got: {:?}", v);
                             return Err(NitriteError::new(
                                 "Field name must be a string",
                                 ErrorKind::ObjectMappingError,
@@ -127,7 +127,7 @@ impl Convertible for Fields {
                 Fields::with_names(field_names)
             }
             _ => {
-                log::error!("Value {} is not an array", value);
+                log::debug!("Value {} is not an array", value);
                 Err(NitriteError::new(
                     "Value is not an array",
                     ErrorKind::ObjectMappingError,
@@ -200,7 +200,7 @@ impl SortableFields {
 
     pub fn with_names(field_names: Vec<String>) -> NitriteResult<SortableFields> {
         if field_names.is_empty() {
-            log::error!("Field names cannot be empty");
+            log::debug!("Field names cannot be empty");
             return Err(NitriteError::new(
                 "Field names cannot be empty",
                 ErrorKind::ValidationError,
@@ -223,7 +223,7 @@ impl SortableFields {
         sorting_order: Vec<(String, SortOrder)>,
     ) -> NitriteResult<SortableFields> {
         if field_names.is_empty() {
-            log::error!("Field names cannot be empty");
+            log::debug!("Field names cannot be empty");
             return Err(NitriteError::new(
                 "Field names cannot be empty",
                 ErrorKind::ValidationError,

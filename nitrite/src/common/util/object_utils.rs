@@ -8,14 +8,14 @@ pub fn get_key_name(name: &str) -> NitriteResult<String> {
         if let Some((_, key_part)) = name.split_once(KEY_OBJ_SEPARATOR) {
             Ok(key_part.to_string())
         } else {
-            log::error!("Invalid keyed object format: {}", name);
+            log::debug!("Invalid keyed object format: {}", name);
             Err(NitriteError::new(
                 &format!("Invalid keyed object format: {}", name),
                 ErrorKind::ValidationError,
             ))
         }
     } else {
-        log::error!("{} is not a valid keyed object repository", name);
+        log::debug!("{} is not a valid keyed object repository", name);
         Err(NitriteError::new(
             &format!("{} is not a valid keyed object repository", name),
             ErrorKind::ValidationError,
@@ -29,14 +29,14 @@ pub fn get_keyed_repo_type(name: &str) -> NitriteResult<String> {
         if let Some((type_part, _)) = name.split_once(KEY_OBJ_SEPARATOR) {
             Ok(type_part.to_string())
         } else {
-            log::error!("Invalid keyed object format: {}", name);
+            log::debug!("Invalid keyed object format: {}", name);
             Err(NitriteError::new(
                 &format!("Invalid keyed object format: {}", name),
                 ErrorKind::ValidationError,
             ))
         }
     } else {
-        log::error!("{} is not a valid keyed object repository", name);
+        log::debug!("{} is not a valid keyed object repository", name);
         Err(NitriteError::new(
             &format!("{} is not a valid keyed object repository", name),
             ErrorKind::ValidationError,
@@ -54,7 +54,7 @@ where
 
 pub fn repository_name(entity_name: &str, key: Option<&str>) -> NitriteResult<String> {
     if entity_name.contains(KEY_OBJ_SEPARATOR) {
-        log::error!("{} is not a valid entity name", entity_name);
+        log::debug!("{} is not a valid entity name", entity_name);
         return Err(NitriteError::new(
             &format!("{} is not a valid entity name", entity_name),
             ErrorKind::ValidationError,

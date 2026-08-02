@@ -372,7 +372,7 @@ impl Value {
         } else if let Some(v) = any.downcast_ref::<Value>() {
             Ok(v.clone())
         } else {
-            log::error!("Unknown type to convert to Value");
+            log::debug!("Unknown type to convert to Value");
             Err(NitriteError::new(
                 "Unknown type to convert to Value",
                 ErrorKind::ObjectMappingError,

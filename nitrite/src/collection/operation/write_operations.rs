@@ -340,7 +340,7 @@ impl WriteOperationsInner {
             // Check for any duplicates found
             for result in results {
                 if let Some(duplicate_id) = result? {
-                    log::error!("Document already exists with id {}", duplicate_id);
+                    log::debug!("Document already exists with id {}", duplicate_id);
                     return Err(NitriteError::new(
                         &format!("Document already exists with id {}", duplicate_id),
                         ErrorKind::UniqueConstraintViolation,
@@ -352,7 +352,7 @@ impl WriteOperationsInner {
             for key in keys {
                 if self.nitrite_map.contains_key(key)? {
                     if let Value::NitriteId(id) = key {
-                        log::error!("Document already exists with id {}", id);
+                        log::debug!("Document already exists with id {}", id);
                         return Err(NitriteError::new(
                             &format!("Document already exists with id {}", id),
                             ErrorKind::UniqueConstraintViolation,
@@ -412,7 +412,7 @@ impl WriteOperationsInner {
         ).map_err(|e| NitriteError::new(&format!("Failed to store document in map during insert: {}", e), e.kind().clone()))?;
 
         if existing.is_some() {
-            log::error!("Document already exists with id {}", nitrite_id.clone());
+            log::debug!("Document already exists with id {}", nitrite_id.clone());
             return Err(NitriteError::new(
                 &format!("Document already exists with id {}", nitrite_id.clone()),
                 ErrorKind::UniqueConstraintViolation,
@@ -719,7 +719,7 @@ impl WriteOperationsInner {
                 let doc = match value.as_document() {
                     Some(d) => d.clone(),
                     None => {
-                        log::error!("Expected Document value in collection store for ID {:?}", id);
+                        log::debug!("Expected Document value in collection store for ID {:?}", id);
                         return Err(NitriteError::new(
                             "Invalid value type in collection store",
                             ErrorKind::ValidationError,
@@ -796,7 +796,7 @@ impl WriteOperationsInner {
         let mut document = match document {
             Some(Value::Document(doc)) => doc,
             Some(other_value) => {
-                log::error!("Data corruption: Expected Document in collection store, found {:?}", other_value);
+                log::debug!("Data corruption: Expected Document in collection store, found {:?}", other_value);
                 return Err(NitriteError::new(
                     "Expected Document value in collection store, found corrupted type",
                     ErrorKind::IndexingError,

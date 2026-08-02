@@ -101,7 +101,7 @@ impl RepositoryOperationsInner {
         let mut document = match value {
             Value::Document(doc) => doc,
             other => {
-                log::error!("Expected Document from entity Convertible, got {:?}", other);
+                log::debug!("Expected Document from entity Convertible, got {:?}", other);
                 return Err(NitriteError::new(
                     &format!("Entity conversion failed: Expected Document but got {:?}. Ensure the Convertible implementation returns a valid Document", other),
                     ErrorKind::ObjectMappingError,
@@ -118,7 +118,7 @@ impl RepositoryOperationsInner {
                 } else if !update {
                     // if it is an insert, then we should not allow to insert the
                     // document with user provided id
-                    log::error!("Cannot insert entity with user provided NitriteId on field '{}'", entity_id.field_name());
+                    log::debug!("Cannot insert entity with user provided NitriteId on field '{}'", entity_id.field_name());
                     return Err(NitriteError::new(
                         &format!("Cannot insert entity with user-provided NitriteId on field '{}'. Auto-generated IDs cannot be overwritten on insert", entity_id.field_name()),
                         ErrorKind::InvalidId
@@ -128,7 +128,7 @@ impl RepositoryOperationsInner {
             
             let id_value = document.get(entity_id.field_name())?;
             if id_value.is_null() {
-                log::error!("Entity ID field '{}' cannot be null", entity_id.field_name());
+                log::debug!("Entity ID field '{}' cannot be null", entity_id.field_name());
                 return Err(NitriteError::new(
                     &format!("Entity ID field '{}' cannot be null. Ensure all entities have a valid ID value set", entity_id.field_name()),
                     ErrorKind::InvalidId
@@ -160,7 +160,7 @@ impl RepositoryOperationsInner {
             let document = match value {
                 Value::Document(doc) => doc,
                 other => {
-                    log::error!("Expected Document from entity Convertible in create_unique_filter, got {:?}", other);
+                    log::debug!("Expected Document from entity Convertible in create_unique_filter, got {:?}", other);
                     return Err(NitriteError::new(
                         &format!("Cannot create unique filter: Expected Document from Convertible but got {:?}. Check your entity's Convertible implementation", other),
                         ErrorKind::ObjectMappingError,
@@ -171,7 +171,7 @@ impl RepositoryOperationsInner {
             let id_value = document.get(entity_id.field_name())?;
             entity_id.create_unique_filter(id_value)
         } else {
-            log::error!("Failed to create unique filter: entity id is not defined");
+            log::debug!("Failed to create unique filter: entity id is not defined");
             Err(NitriteError::new(
                 "Cannot create unique filter: Entity ID is not defined. Ensure the entity class has a @Id field or use @Embedded ID",
                 ErrorKind::NotIdentifiable
@@ -186,7 +186,7 @@ impl RepositoryOperationsInner {
         if let Some(entity_id) = self.entity_id.get() {
             entity_id.create_id_filter(id.to_value()?)
         } else {
-            log::error!("Failed to create id filter: entity id is not defined");
+            log::debug!("Failed to create id filter: entity id is not defined");
             Err(NitriteError::new(
                 "Cannot create ID filter: Entity ID is not defined. Ensure the entity class has a @Id field or use @Embedded ID",
                 ErrorKind::NotIdentifiable
@@ -280,7 +280,7 @@ mod tests {
             let doc = match value {
                 Value::Document(d) => d,
                 _ => {
-                    log::error!("Expected Document for TestEntity deserialization, got {:?}", value);
+                    log::debug!("Expected Document for TestEntity deserialization, got {:?}", value);
                     return Err(NitriteError::new(
                         "Expected Document value for entity deserialization",
                         ErrorKind::ObjectMappingError,
@@ -292,7 +292,7 @@ mod tests {
             let id = match temp.as_i32() {
                 Some(i) => Some(*i),
                 None => {
-                    log::error!("TestEntity id field must be i32, got: {:?}", temp);
+                    log::debug!("TestEntity id field must be i32, got: {:?}", temp);
                     return Err(NitriteError::new(
                         "TestEntity id field must be an i32",
                         ErrorKind::ObjectMappingError,

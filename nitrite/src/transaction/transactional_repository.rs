@@ -199,7 +199,7 @@ where
         let mut document = match value {
             Value::Document(doc) => doc,
             other => {
-                log::error!("Expected Document from entity Convertible, got {:?}", other);
+                log::debug!("Expected Document from entity Convertible, got {:?}", other);
                 return Err(NitriteError::new(
                     "Cannot update: Expected Document from Convertible",
                     ErrorKind::ObjectMappingError,

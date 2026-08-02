@@ -122,7 +122,7 @@ impl Document {
         let key = key.into();
         // key cannot be empty
         if key.is_empty() {
-            log::error!("Document does not support empty key");
+            log::debug!("Document does not support empty key");
             return Err(NitriteError::new(
                 "Document does not support empty key",
                 ErrorKind::InvalidOperation,
@@ -133,7 +133,7 @@ impl Document {
 
         // validate the _id field
         if key == DOC_ID && !value.is_nitrite_id() {
-            log::error!("Document id is an auto generated field and cannot be set manually");
+            log::debug!("Document id is an auto generated field and cannot be set manually");
             return Err(NitriteError::new(
                 "Document id is an auto generated field and cannot be set manually",
                 ErrorKind::InvalidOperation,
@@ -779,7 +779,7 @@ impl Document {
 
     fn deep_put(&mut self, splits: &[&str], value: Value) -> NitriteResult<()> {
         if splits.is_empty() {
-            log::error!("Empty embedded key");
+            log::debug!("Empty embedded key");
             return Err(NitriteError::new(
                 "Empty embedded key",
                 ErrorKind::ValidationError,
@@ -788,7 +788,7 @@ impl Document {
 
         let key = splits[0];
         if key.is_empty() {
-            log::error!("Document does not support empty key");
+            log::debug!("Document does not support empty key");
             return Err(NitriteError::new(
                 "Document does not support empty key",
                 ErrorKind::InvalidOperation,
@@ -817,7 +817,7 @@ impl Document {
 
     fn deep_remove(&mut self, splits: &[&str]) -> NitriteResult<()> {
         if splits.is_empty() {
-            log::error!("Empty embedded key");
+            log::debug!("Empty embedded key");
             return Err(NitriteError::new(
                 "Empty embedded key",
                 ErrorKind::ValidationError,
@@ -826,7 +826,7 @@ impl Document {
 
         let key = splits[0];
         if key.is_empty() {
-            log::error!("Document does not support empty key");
+            log::debug!("Document does not support empty key");
             return Err(NitriteError::new(
                 "Document does not support empty key",
                 ErrorKind::InvalidOperation,
@@ -859,7 +859,7 @@ impl Document {
                     // remove the element at the next level
                     if let Ok(index) = first.parse::<isize>() {
                         if index < 0 {
-                            log::error!(
+                            log::debug!(
                                 "Invalid array index {} to access array inside a document",
                                 &index
                             );
@@ -874,7 +874,7 @@ impl Document {
 
                         let index = index as usize;
                         if index >= arr.len() {
-                            log::error!("Array index {} out of bound", &index);
+                            log::debug!("Array index {} out of bound", &index);
                             return Err(NitriteError::new(
                                 &format!("Array index {} out of bound", &index),
                                 ErrorKind::ValidationError,
@@ -906,7 +906,7 @@ impl Document {
                             Ok(())
                         }
                     } else {
-                        log::error!(
+                        log::debug!(
                             "Invalid array index {} to access array inside a document",
                             first
                         );
@@ -938,7 +938,7 @@ impl Document {
 
         let first = splits[0];
         if first.is_empty() {
-            log::error!("Document does not support empty key");
+            log::debug!("Document does not support empty key");
             return Err(NitriteError::new(
                 "Document does not support empty key",
                 ErrorKind::InvalidOperation,
@@ -961,7 +961,7 @@ impl Document {
 
         let key = splits[0];
         if key.is_empty() {
-            log::error!("Document does not support empty key");
+            log::debug!("Document does not support empty key");
             return Err(NitriteError::new(
                 "Document does not support empty key",
                 ErrorKind::InvalidOperation,
@@ -979,7 +979,7 @@ impl Document {
                 if let Ok(index) = first.parse::<isize>() {
                     // check index lower bound
                     if index < 0 {
-                        log::error!(
+                        log::debug!(
                             "Invalid array index {} to access array inside a document",
                             &index
                         );
@@ -995,7 +995,7 @@ impl Document {
                     // check index upper bound
                     let index = index as usize;
                     if index >= arr.len() {
-                        log::error!("Array index {} out of bound", &index);
+                        log::debug!("Array index {} out of bound", &index);
                         return Err(NitriteError::new(
                             &format!("Array index {} out of bound", &index),
                             ErrorKind::ValidationError,

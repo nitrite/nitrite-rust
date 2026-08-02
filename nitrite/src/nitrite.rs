@@ -509,7 +509,7 @@ impl Nitrite {
             if result.is_err() {
                 self.inner.close()?;
 
-                log::error!("Failed to initialize Nitrite: {:?}", result.clone().err().unwrap());
+                log::debug!("Failed to initialize Nitrite: {:?}", result.clone().err().unwrap());
                 return Err(NitriteError::new_with_cause(
                     "Failed to initialize Nitrite",
                     ErrorKind::IOError,
@@ -577,7 +577,7 @@ impl NitriteInner {
         // Check if the name is a repository name (reserved)
         let repositories = self.list_repositories()?;
         if repositories.contains(name) {
-            log::error!("Collection name '{}' is a reserved repository name", name);
+            log::debug!("Collection name '{}' is a reserved repository name", name);
             return Err(NitriteError::new(
                 &format!("Cannot access repository '{}' as a collection", name),
                 ErrorKind::ValidationError,
@@ -667,7 +667,7 @@ impl NitriteInner {
         if let Some(metadata) = self.metadata.get() {
             Ok(metadata.clone())
         } else {
-            log::error!("Database metadata not set - database may not be properly initialized");
+            log::debug!("Database metadata not set - database may not be properly initialized");
             Err(NitriteError::new(
                 "Database metadata not set. The database must be opened and initialized before accessing metadata",
                 ErrorKind::IOError
@@ -684,7 +684,7 @@ impl NitriteInner {
             let store_info_doc = if let Value::Document(doc) = store_info_value {
                 doc
             } else {
-                log::error!("Invalid metadata format in store: {:?}", store_info_value);
+                log::debug!("Invalid metadata format in store: {:?}", store_info_value);
                 return Err(NitriteError::new(
                     "Invalid metadata format in store, expected Document",
                     ErrorKind::ObjectMappingError,
@@ -725,7 +725,7 @@ impl NitriteInner {
 
     fn validate_collection_name(&self, name: &str) -> NitriteResult<()> {
         if name.is_empty() {
-            log::error!("Collection name cannot be empty");
+            log::debug!("Collection name cannot be empty");
             return Err(NitriteError::new(
                 "Collection name cannot be empty",
                 ErrorKind::ValidationError,
@@ -733,7 +733,7 @@ impl NitriteInner {
         }
 
         if name.contains(' ') {
-            log::error!("Collection name cannot contain space");
+            log::debug!("Collection name cannot contain space");
             return Err(NitriteError::new(
                 "Collection name cannot contain space",
                 ErrorKind::ValidationError,
@@ -742,7 +742,7 @@ impl NitriteInner {
 
         for reserved_name in RESERVED_NAMES.iter() {
             if name.eq_ignore_ascii_case(reserved_name) {
-                log::error!("Collection name '{}' is reserved", reserved_name);
+                log::debug!("Collection name '{}' is reserved", reserved_name);
                 return Err(NitriteError::new(
                     &format!("Collection name '{}' is reserved", reserved_name),
                     ErrorKind::ValidationError,
@@ -755,7 +755,7 @@ impl NitriteInner {
 
     fn check_opened(&self) -> NitriteResult<()> {
         if self.store().is_closed()? {
-            log::error!("Nitrite store is closed");
+            log::debug!("Nitrite store is closed");
             return Err(NitriteError::new(
                 "Nitrite store is closed",
                 ErrorKind::IOError,
@@ -783,7 +783,7 @@ impl NitriteInner {
         }
 
         if username.is_none() || password.is_none() {
-            log::error!("Both username and password are required");
+            log::debug!("Both username and password are required");
             return Err(NitriteError::new(
                 "Both username and password are required",
                 ErrorKind::SecurityError,

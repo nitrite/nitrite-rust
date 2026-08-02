@@ -50,7 +50,7 @@ impl Scheduler {
                 self.guards.lock().push(guard);
             }
             Err(e) => {
-                log::error!(
+                log::warn!(
                     "Failed to convert duration to chrono::Duration: {}, skipping task scheduling",
                     e
                 );

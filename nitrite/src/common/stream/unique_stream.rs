@@ -51,7 +51,7 @@ where
                                 }
                                 Err(e) => {
                                     // Propagate ID extraction error instead of panicking
-                                    log::error!("Failed to extract document ID: {:?}", e);
+                                    log::debug!("Failed to extract document ID: {:?}", e);
                                     return Some(Err(e));
                                 }
                             }

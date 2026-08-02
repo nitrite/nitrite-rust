@@ -241,7 +241,7 @@ impl VectorIndex {
         };
         if needs_rebuild {
             let n = rebuild_from_collection(&index, descriptor, config)?;
-            log::info!("vector index '{base}' was stale or damaged; rebuilt from collection ({n} vectors)");
+            log::warn!("vector index '{base}' was stale or damaged; rebuilt from collection ({n} vectors)");
             index.flush()?;
         }
         Ok(index)

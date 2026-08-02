@@ -528,7 +528,7 @@ impl TransactionalCollectionInner {
             let filter = create_unique_filter(&mut document)?;
             self.update_with_options(filter, &document, &UpdateOptions::new(false, false))
         } else {
-            log::error!("Document does not have id");
+            log::debug!("Document does not have id");
             Err(NitriteError::new(
                 "Document does not have id",
                 ErrorKind::NotIdentifiable,
@@ -590,7 +590,7 @@ impl TransactionalCollectionInner {
 
     fn remove(&self, filter: crate::filter::Filter, just_once: bool) -> NitriteResult<WriteResult> {
         if is_all_filter(&filter) && just_once {
-            log::error!("Cannot remove all documents with just once as true");
+            log::debug!("Cannot remove all documents with just once as true");
             return Err(NitriteError::new(
                 "Cannot remove all documents with just once as true",
                 ErrorKind::InvalidOperation,
@@ -633,7 +633,7 @@ impl TransactionalCollectionInner {
 
     fn remove_one(&self, document: &Document) -> NitriteResult<WriteResult> {
         if !document.has_id() {
-            log::error!("Document does not have id");
+            log::debug!("Document does not have id");
             return Err(NitriteError::new(
                 "Document does not have id",
                 ErrorKind::NotIdentifiable,
@@ -649,7 +649,7 @@ impl TransactionalCollectionInner {
         // Check in the transactional operations, not the primary collection
         match self.operations.get_by_id(&doc_id)? {
             None => {
-                log::error!("Document not found");
+                log::debug!("Document not found");
                 Err(NitriteError::new("Document not found", ErrorKind::NotFound))
             }
             Some(original_doc) => {

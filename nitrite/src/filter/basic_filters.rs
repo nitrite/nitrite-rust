@@ -137,7 +137,7 @@ impl FilterProvider for EqualsFilter {
         self.collection_name.get()
             .cloned()
             .ok_or_else(|| {
-            log::error!("Collection name is not set for filter");
+            log::debug!("Collection name is not set for filter");
                 NitriteError::new(
                     "Collection name is not set",
                     ErrorKind::InvalidOperation,
@@ -279,7 +279,7 @@ impl FilterProvider for NotEqualsFilter {
         self.collection_name.get()
             .cloned()
             .ok_or_else(|| {
-            log::error!("Collection name is not set for filter");
+            log::debug!("Collection name is not set for filter");
                 NitriteError::new(
                     "Collection name is not set",
                     ErrorKind::InvalidOperation,

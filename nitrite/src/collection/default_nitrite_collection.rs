@@ -44,7 +44,7 @@ impl DefaultNitriteCollection {
     fn ensure_opened(&self) -> NitriteResult<()> {
         // Check dropped state first (cheapest check)
         if self.dropped.load(Ordering::Relaxed) {
-            log::error!("Collection '{}' is dropped and cannot be accessed", self.collection_name);
+            log::debug!("Collection '{}' is dropped and cannot be accessed", self.collection_name);
             return Err(NitriteError::new(
                 &format!("Collection '{}' is dropped and cannot be accessed", self.collection_name),
                 ErrorKind::InvalidOperation,
@@ -53,7 +53,7 @@ impl DefaultNitriteCollection {
 
         // Check store state
         if self.store.is_closed()? {
-            log::error!("Store is closed; cannot access collection '{}'", self.collection_name);
+            log::debug!("Store is closed; cannot access collection '{}'", self.collection_name);
             return Err(NitriteError::new(
                 "Nitrite store is closed. Close all collections and reopen the database to continue operations",
                 ErrorKind::InvalidOperation,
@@ -63,7 +63,7 @@ impl DefaultNitriteCollection {
         // Check map state only if necessary
         let map_closed = self.nitrite_map.is_closed()?;
         if map_closed {
-            log::error!("NitriteMap for collection '{}' is closed", self.collection_name);
+            log::debug!("NitriteMap for collection '{}' is closed", self.collection_name);
             return Err(NitriteError::new(
                 &format!("Collection '{}' underlying map is closed and cannot be accessed", self.collection_name),
                 ErrorKind::InvalidOperation,
@@ -72,7 +72,7 @@ impl DefaultNitriteCollection {
 
         let map_dropped = self.nitrite_map.is_dropped()?;
         if map_dropped {
-            log::error!("NitriteMap for collection '{}' is dropped", self.collection_name);
+            log::debug!("NitriteMap for collection '{}' is dropped", self.collection_name);
             return Err(NitriteError::new(
                 &format!("Collection '{}' underlying map is dropped; cannot perform further operations", self.collection_name),
                 ErrorKind::InvalidOperation,
@@ -143,7 +143,7 @@ impl PersistentCollection for DefaultNitriteCollection {
         let index_descriptor = match index_descriptor {
             Some(descriptor) => descriptor,
             None => {
-                log::error!("Index not found for fields {}", fields);
+                log::debug!("Index not found for fields {}", fields);
                 return Err(NitriteError::new(
                     "Index not found",
                     ErrorKind::IndexingError,
@@ -152,7 +152,7 @@ impl PersistentCollection for DefaultNitriteCollection {
         };
 
         if self.operations.is_indexing(&fields)? {
-            log::error!("Indexing is in progress for fields {}", fields);
+            log::debug!("Indexing is in progress for fields {}", fields);
             return Err(NitriteError::new(
                 "Indexing is in progress",
                 ErrorKind::IndexingError,
@@ -289,7 +289,7 @@ impl NitriteCollectionProvider for DefaultNitriteCollection {
             let filter = create_unique_filter(&mut document)?;
             self.update_with_options(filter, &document, &UpdateOptions::new(false, false))
         } else {
-            log::error!("Document does not have id");
+            log::debug!("Document does not have id");
             Err(NitriteError::new(
                 "Document does not have id",
                 ErrorKind::NotIdentifiable,
@@ -314,7 +314,7 @@ impl NitriteCollectionProvider for DefaultNitriteCollection {
         just_once: bool,
     ) -> NitriteResult<super::operation::WriteResult> {
         if is_all_filter(&filter) && just_once {
-            log::error!("Cannot remove all documents with just once as true");
+            log::debug!("Cannot remove all documents with just once as true");
             return Err(NitriteError::new(
                 "Cannot remove all documents with just once as true",
                 ErrorKind::InvalidOperation,
@@ -335,7 +335,7 @@ impl NitriteCollectionProvider for DefaultNitriteCollection {
             self.ensure_opened()?;
             self.operations.remove_document(document)
         } else {
-            log::error!("Document does not have id");
+            log::debug!("Document does not have id");
             Err(NitriteError::new(
                 "Document does not have id",
                 ErrorKind::NotIdentifiable,

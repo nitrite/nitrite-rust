@@ -27,7 +27,7 @@ impl Convertible for i8 {
         match value {
             Value::I8(i) => Ok(*i),
             _ => {
-                log::error!("Value {} is not an i8", value);
+                log::debug!("Value {} is not an i8", value);
                 Err(NitriteError::new(
                     "Value is not an i8",
                     ErrorKind::ObjectMappingError,
@@ -48,7 +48,7 @@ impl Convertible for i16 {
         match value {
             Value::I16(i) => Ok(*i),
             _ => {
-                log::error!("Value {} is not an i16", value);
+                log::debug!("Value {} is not an i16", value);
                 Err(NitriteError::new(
                     "Value is not an i16",
                     ErrorKind::ObjectMappingError,
@@ -69,7 +69,7 @@ impl Convertible for i32 {
         match value {
             Value::I32(i) => Ok(*i),
             _ => {
-                log::error!("Value {} is not an i32", value);
+                log::debug!("Value {} is not an i32", value);
                 Err(NitriteError::new(
                     "Value is not an i32",
                     ErrorKind::ObjectMappingError,
@@ -90,7 +90,7 @@ impl Convertible for i64 {
         match value {
             Value::I64(i) => Ok(*i),
             _ => {
-                log::error!("Value {} is not an i64", value);
+                log::debug!("Value {} is not an i64", value);
                 Err(NitriteError::new(
                     "Value is not an i64",
                     ErrorKind::ObjectMappingError,
@@ -111,7 +111,7 @@ impl Convertible for i128 {
         match value {
             Value::I128(i) => Ok(*i),
             _ => {
-                log::error!("Value {} is not an i128", value);
+                log::debug!("Value {} is not an i128", value);
                 Err(NitriteError::new(
                     "Value is not an i128",
                     ErrorKind::ObjectMappingError,
@@ -132,7 +132,7 @@ impl Convertible for u8 {
         match value {
             Value::U8(i) => Ok(*i),
             _ => {
-                log::error!("Value {} is not a u8", value);
+                log::debug!("Value {} is not a u8", value);
                 Err(NitriteError::new(
                     "Value is not a u8",
                     ErrorKind::ObjectMappingError,
@@ -153,7 +153,7 @@ impl Convertible for u16 {
         match value {
             Value::U16(i) => Ok(*i),
             _ => {
-                log::error!("Value {} is not a u16", value);
+                log::debug!("Value {} is not a u16", value);
                 Err(NitriteError::new(
                     "Value is not a u16",
                     ErrorKind::ObjectMappingError,
@@ -174,7 +174,7 @@ impl Convertible for u32 {
         match value {
             Value::U32(i) => Ok(*i),
             _ => {
-                log::error!("Value {} is not a u32", value);
+                log::debug!("Value {} is not a u32", value);
                 Err(NitriteError::new(
                     "Value is not a u32",
                     ErrorKind::ObjectMappingError,
@@ -195,7 +195,7 @@ impl Convertible for u64 {
         match value {
             Value::U64(i) => Ok(*i),
             _ => {
-                log::error!("Value {} is not a u64", value);
+                log::debug!("Value {} is not a u64", value);
                 Err(NitriteError::new(
                     "Value is not a u64",
                     ErrorKind::ObjectMappingError,
@@ -216,7 +216,7 @@ impl Convertible for u128 {
         match value {
             Value::U128(i) => Ok(*i),
             _ => {
-                log::error!("Value {} is not a u128", value);
+                log::debug!("Value {} is not a u128", value);
                 Err(NitriteError::new(
                     "Value is not a u128",
                     ErrorKind::ObjectMappingError,
@@ -237,7 +237,7 @@ impl Convertible for f32 {
         match value {
             Value::F32(i) => Ok(*i),
             _ => {
-                log::error!("Value {} is not a f32", value);
+                log::debug!("Value {} is not a f32", value);
                 Err(NitriteError::new(
                     "Value is not a f32",
                     ErrorKind::ObjectMappingError,
@@ -258,7 +258,7 @@ impl Convertible for f64 {
         match value {
             Value::F64(i) => Ok(*i),
             _ => {
-                log::error!("Value {} is not a f64", value);
+                log::debug!("Value {} is not a f64", value);
                 Err(NitriteError::new(
                     "Value is not a f64",
                     ErrorKind::ObjectMappingError,
@@ -279,7 +279,7 @@ impl Convertible for char {
         match value {
             Value::Char(i) => Ok(*i),
             _ => {
-                log::error!("Value {} is not a char", value);
+                log::debug!("Value {} is not a char", value);
                 Err(NitriteError::new(
                     "Value is not a char",
                     ErrorKind::ObjectMappingError,
@@ -300,7 +300,7 @@ impl Convertible for String {
         match value {
             Value::String(i) => Ok(i.clone()),
             _ => {
-                log::error!("Value {} is not a string", value);
+                log::debug!("Value {} is not a string", value);
                 Err(NitriteError::new(
                     "Value is not a string",
                     ErrorKind::ObjectMappingError,
@@ -321,7 +321,7 @@ impl Convertible for &str {
         match value {
             Value::String(i) => Ok(i.to_owned()),
             _ => {
-                log::error!("Value {} is not a string", value);
+                log::debug!("Value {} is not a string", value);
                 Err(NitriteError::new(
                     "Value is not a string",
                     ErrorKind::ObjectMappingError,
@@ -342,7 +342,7 @@ impl Convertible for bool {
         match value {
             Value::Bool(i) => Ok(*i),
             _ => {
-                log::error!("Value {} is not a bool", value);
+                log::debug!("Value {} is not a bool", value);
                 Err(NitriteError::new(
                     "Value is not a bool",
                     ErrorKind::ObjectMappingError,
@@ -363,7 +363,7 @@ impl Convertible for () {
         match value {
             Value::Null => Ok(()),
             _ => {
-                log::error!("Value {} is not a null", value);
+                log::debug!("Value {} is not a null", value);
                 Err(NitriteError::new(
                     "Value is not a null",
                     ErrorKind::ObjectMappingError,
@@ -384,7 +384,7 @@ impl Convertible for NitriteId {
         match value {
             Value::NitriteId(i) => Ok(*i),
             _ => {
-                log::error!("Value {} is not a nitrite id", value);
+                log::debug!("Value {} is not a nitrite id", value);
                 Err(NitriteError::new(
                     "Value is not a nitrite id",
                     ErrorKind::ObjectMappingError,
@@ -405,7 +405,7 @@ impl Convertible for Document {
         match value {
             Value::Document(i) => Ok(i.clone()),
             _ => {
-                log::error!("Value {} is not a document", value);
+                log::debug!("Value {} is not a document", value);
                 Err(NitriteError::new(
                     "Value is not a document",
                     ErrorKind::ObjectMappingError,
@@ -426,7 +426,7 @@ impl Convertible for BTreeMap<Value, Value> {
         match value {
             Value::Map(i) => Ok(i.clone()),
             _ => {
-                log::error!("Value {} is not a map", value);
+                log::debug!("Value {} is not a map", value);
                 Err(NitriteError::new(
                     "Value is not a map",
                     ErrorKind::ObjectMappingError,
@@ -502,7 +502,7 @@ where
                 if let Value::U8(item) = raw {
                     arr.push(item);
                 } else {
-                    log::error!("Value {} is not a u8", raw);
+                    log::debug!("Value {} is not a u8", raw);
                     return Err(NitriteError::new(
                         "Value is not a u8",
                         ErrorKind::ObjectMappingError,
@@ -536,7 +536,7 @@ where
                 Ok(vec)
             }
             _ => {
-                log::error!("Value {} is not an array", value);
+                log::debug!("Value {} is not an array", value);
                 Err(NitriteError::new(
                     "Value is not an array",
                     ErrorKind::ObjectMappingError,
@@ -571,7 +571,7 @@ where
                             result.insert(key, V::from_value(&v)?);
                         }
                         Err(_) => {
-                            log::error!("Failed to convert key {} to type", k);
+                            log::debug!("Failed to convert key {} to type", k);
                             return Err(NitriteError::new(
                                 &format!("Failed to convert key {} to type", k),
                                 ErrorKind::ObjectMappingError,
@@ -582,7 +582,7 @@ where
                 Ok(result)
             }
             _ => {
-                log::error!("Value is not a document");
+                log::debug!("Value is not a document");
                 Err(NitriteError::new(
                     "Value is not a document",
                     ErrorKind::ObjectMappingError,
@@ -618,7 +618,7 @@ where
                             map.insert(k, V::from_value(&v)?);
                         }
                         Err(_) => {
-                            log::error!("Key is not a valid string: {}", k);
+                            log::debug!("Key is not a valid string: {}", k);
                             return Err(NitriteError::new(
                                 "Key is not a valid string",
                                 ErrorKind::ObjectMappingError,
@@ -629,7 +629,7 @@ where
                 Ok(map)
             }
             _ => {
-                log::error!("Value {} is not a document", value);
+                log::debug!("Value {} is not a document", value);
                 Err(NitriteError::new(
                     "Value is not a document",
                     ErrorKind::ObjectMappingError,
@@ -664,7 +664,7 @@ where
                 Ok(set)
             }
             _ => {
-                log::error!("Value {} is not an array", value);
+                log::debug!("Value {} is not an array", value);
                 Err(NitriteError::new(
                     "Value is not an array",
                     ErrorKind::ObjectMappingError,
@@ -701,7 +701,7 @@ macro_rules! impl_convertible_for_tuples {
                     match value {
                         Value::Array(arr) => {
                             if arr.len() != count_idents!($($T),+) {
-                                log::error!("Value is not a tuple");
+                                log::debug!("Value is not a tuple");
                                 return Err(NitriteError::new(
                                     "Value is not a tuple",
                                     ErrorKind::ObjectMappingError,
@@ -714,7 +714,7 @@ macro_rules! impl_convertible_for_tuples {
                             ))?)?),+))
                         }
                         _ => { 
-                            log::error!("Value {} is not an array", value);
+                            log::debug!("Value {} is not an array", value);
                             Err(NitriteError::new(
                                 "Value is not an array",
                                 ErrorKind::ObjectMappingError,

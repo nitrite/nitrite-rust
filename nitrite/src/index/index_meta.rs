@@ -54,7 +54,7 @@ impl Convertible for IndexMeta {
                 let index_map = doc.get("index_map")?
                     .as_string()
                     .ok_or_else(|| {
-                        log::error!("index_map field must be a string, got: {:?}", doc.get("index_map"));
+                        log::debug!("index_map field must be a string, got: {:?}", doc.get("index_map"));
                         NitriteError::new(
                             "index_map field must be a string in index metadata",
                             ErrorKind::ObjectMappingError,
@@ -66,7 +66,7 @@ impl Convertible for IndexMeta {
                 let is_dirty = *doc.get("is_dirty")?
                     .as_bool()
                     .ok_or_else(|| {
-                        log::error!("is_dirty field must be a bool, got: {:?}", doc.get("is_dirty"));
+                        log::debug!("is_dirty field must be a bool, got: {:?}", doc.get("is_dirty"));
                         NitriteError::new(
                             "is_dirty field must be a bool in index metadata",
                             ErrorKind::ObjectMappingError,
@@ -80,7 +80,7 @@ impl Convertible for IndexMeta {
                 })
             }
             _ => {
-                log::error!("Failed to convert Value {:?} to IndexMeta", value);
+                log::debug!("Failed to convert Value {:?} to IndexMeta", value);
                 Err(NitriteError::new(
                     "Value is not a document",
                     ErrorKind::ObjectMappingError,

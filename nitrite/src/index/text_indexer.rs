@@ -29,7 +29,7 @@ impl TextIndexer {
         match result {
             Some(text_index) => Ok(text_index),
             None => {
-                log::error!("Full text index not found for {:?}", index_descriptor);
+                log::debug!("Full text index not found for {:?}", index_descriptor);
                 Err(NitriteError::new(
                     "Full text index not found",
                     ErrorKind::IndexingError,
@@ -141,7 +141,7 @@ impl TextIndexerInner {
 
     fn validate_index(&self, fields: &Fields) -> NitriteResult<()> {
         if fields.field_names().len() != 1 {
-            log::error!(
+            log::debug!(
                 "Text index can only be created on single field, but found {:?}",
                 fields.field_names()
             );
@@ -217,7 +217,7 @@ impl TextIndexerInner {
                 Ok(nitrite_ids)
             }
             None => {
-                log::error!("Index descriptor not found in find plan");
+                log::debug!("Index descriptor not found in find plan");
                 Err(NitriteError::new(
                     "Index descriptor not found",
                     ErrorKind::IndexingError,

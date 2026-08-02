@@ -50,7 +50,7 @@ pub trait FilterProvider: Any + Send + Sync + Display {
     ///
     /// A list of matching keys from the index, or an error if index scanning is not supported
     fn apply_on_index(&self, _index_map: &IndexMap) -> NitriteResult<Vec<Value>> {
-        log::error!("Filter {} does not support index scan", self);
+        log::debug!("Filter {} does not support index scan", self);
         Err(NitriteError::new(
             "Filter does not support index scan",
             ErrorKind::FilterError,
@@ -63,7 +63,7 @@ pub trait FilterProvider: Any + Send + Sync + Display {
     ///
     /// The collection name, or an error if not set
     fn get_collection_name(&self) -> NitriteResult<String> {
-        log::error!("Filter {} does not have collection name", self);
+        log::debug!("Filter {} does not have collection name", self);
         Err(NitriteError::new(
             "Filter does not have collection name",
             ErrorKind::FilterError,
@@ -91,7 +91,7 @@ pub trait FilterProvider: Any + Send + Sync + Display {
     ///
     /// The field name, or an error if the filter doesn't operate on a specific field
     fn get_field_name(&self) -> NitriteResult<String> {
-        log::error!("Filter {} does not have field name", self);
+        log::debug!("Filter {} does not have field name", self);
         Err(NitriteError::new(
             "Filter does not have field name",
             ErrorKind::FilterError,
@@ -119,7 +119,7 @@ pub trait FilterProvider: Any + Send + Sync + Display {
 
     /// Gets whether reverse scanning is enabled.
     fn get_reverse_scan(&self) -> NitriteResult<bool> {
-        log::error!("Filter {} does not have reverse scan", self);
+        log::debug!("Filter {} does not have reverse scan", self);
         Err(NitriteError::new(
             "Filter does not have reverse scan",
             ErrorKind::FilterError,
@@ -145,7 +145,7 @@ pub trait FilterProvider: Any + Send + Sync + Display {
 
     /// Gets the index type that this filter supports.
     fn supported_index_type(&self) -> NitriteResult<String> {
-        log::error!("Filter {} does not specify supported index type", self);
+        log::debug!("Filter {} does not specify supported index type", self);
         Err(NitriteError::new(
             "Filter does not specify supported index type",
             ErrorKind::FilterError,
@@ -184,7 +184,7 @@ pub trait FilterProvider: Any + Send + Sync + Display {
                     match v {
                         Value::Null => continue,
                         Value::Array(_) => {
-                            log::error!("Nested array field {} is not supported", field);
+                            log::debug!("Nested array field {} is not supported", field);
                             return Err(NitriteError::new(
                                 "Nested array is not supported",
                                 ErrorKind::FilterError,
@@ -192,7 +192,7 @@ pub trait FilterProvider: Any + Send + Sync + Display {
                         }
                         _ => {
                             if !v.is_comparable() {
-                                log::error!("Cannot filter using non comparable values {}", field);
+                                log::debug!("Cannot filter using non comparable values {}", field);
                                 return Err(NitriteError::new(
                                     &format!("Cannot filter using non comparable values {}", field),
                                     ErrorKind::FilterError,

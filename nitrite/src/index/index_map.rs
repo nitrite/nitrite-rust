@@ -401,7 +401,7 @@ impl IndexMapInner {
     /// The persisted map backing a [`IndexLayout::Composite`] index.
     fn composite_map(&self) -> NitriteResult<&NitriteMap> {
         self.nitrite_map.as_ref().ok_or_else(|| {
-            log::error!("Composite index is in corrupt state: missing backing map");
+            log::warn!("Composite index is in corrupt state: missing backing map");
             INDEX_CORRUPT_ERROR.clone()
         })
     }
@@ -470,7 +470,7 @@ impl IndexMapInner {
             Ok(value)
         } else {
             let sub_map = self.sub_map.as_ref().ok_or_else(|| {
-                log::error!("Index is in corrupt state. Could not get value for key: {:?}", key);
+                log::warn!("Index is in corrupt state. Could not get value for key: {:?}", key);
                 INDEX_CORRUPT_ERROR.clone()
             })?;
             
@@ -487,7 +487,7 @@ impl IndexMapInner {
             Ok(key)
         } else {
             let sub_map = self.sub_map.as_ref().ok_or_else(|| {
-                log::error!("Index is in corrupt state. Could not get first key");
+                log::warn!("Index is in corrupt state. Could not get first key");
                 INDEX_CORRUPT_ERROR.clone()
             })?;
             sub_map.first_key()
@@ -503,7 +503,7 @@ impl IndexMapInner {
             Ok(key)
         } else {
             let sub_map = self.sub_map.as_ref().ok_or_else(|| {
-                log::error!("Index is in corrupt state. Could not get last key");
+                log::warn!("Index is in corrupt state. Could not get last key");
                 INDEX_CORRUPT_ERROR.clone()
             })?;
             sub_map.last_key()
@@ -530,7 +530,7 @@ impl IndexMapInner {
             Ok(key)
         } else {
             let sub_map = self.sub_map.as_ref().ok_or_else(|| {
-                log::error!("Index is in corrupt state. Could not get higher key for key: {:?}", key);
+                log::warn!("Index is in corrupt state. Could not get higher key for key: {:?}", key);
                 INDEX_CORRUPT_ERROR.clone()
             })?;
             sub_map.higher_key(key)
@@ -550,7 +550,7 @@ impl IndexMapInner {
             Ok(key)
         } else {
             let sub_map = self.sub_map.as_ref().ok_or_else(|| {
-                log::error!("Index is in corrupt state. Could not get ceiling key for key: {:?}", key);
+                log::warn!("Index is in corrupt state. Could not get ceiling key for key: {:?}", key);
                 INDEX_CORRUPT_ERROR.clone()
             })?;
             sub_map.ceiling_key(key)
@@ -571,7 +571,7 @@ impl IndexMapInner {
             Ok(key)
         } else {
             let sub_map = self.sub_map.as_ref().ok_or_else(|| {
-                log::error!("Index is in corrupt state. Could not get lower key for key: {:?}", key);
+                log::warn!("Index is in corrupt state. Could not get lower key for key: {:?}", key);
                 INDEX_CORRUPT_ERROR.clone()
             })?;
             sub_map.lower_key(key)
@@ -609,7 +609,7 @@ impl IndexMapInner {
             Ok(key)
         } else {
             let sub_map = self.sub_map.as_ref().ok_or_else(|| {
-                log::error!("Index is in corrupt state. Could not get floor key for key: {:?}", key);
+                log::warn!("Index is in corrupt state. Could not get floor key for key: {:?}", key);
                 INDEX_CORRUPT_ERROR.clone()
             })?;
             sub_map.floor_key(key)
@@ -635,7 +635,7 @@ impl IndexMapInner {
             ))
         } else {
             let sub_map = self.sub_map.as_ref().ok_or_else(|| {
-                log::error!("Index is in corrupt state. Could not get entries");
+                log::warn!("Index is in corrupt state. Could not get entries");
                 INDEX_CORRUPT_ERROR.clone()
             })?;
             sub_map.iter()
@@ -860,7 +860,7 @@ impl IndexMapIterator {
                 (parts[0].clone(), parts[1..].to_vec())
             }
             _ => {
-                log::error!("Composite index is in corrupt state: malformed key {:?}", first.0);
+                log::warn!("Composite index is in corrupt state: malformed key {:?}", first.0);
                 return Some(Err(INDEX_CORRUPT_ERROR.clone()));
             }
         };
@@ -880,7 +880,7 @@ impl IndexMapIterator {
                         break;
                     }
                     _ => {
-                        log::error!("Composite index is in corrupt state: malformed key {:?}", kv.0);
+                        log::warn!("Composite index is in corrupt state: malformed key {:?}", kv.0);
                         return Some(Err(INDEX_CORRUPT_ERROR.clone()));
                     }
                 },

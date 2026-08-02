@@ -342,13 +342,13 @@ impl FjallStoreInner {
                             // Final attempt
                             ks.open_partition(name, config_clone)
                                 .map_err(|e| {
-                                    log::error!("Failed to recreate partition '{}' after retries: {}", name, e);
+                                    log::debug!("Failed to recreate partition '{}' after retries: {}", name, e);
                                     to_nitrite_error(e)
                                 })
                         }
                     }
                 } else {
-                    log::error!("Failed to open partition '{}': {}", name, err);
+                    log::debug!("Failed to open partition '{}': {}", name, err);
                     Err(to_nitrite_error(err))
                 }
             }
@@ -411,7 +411,7 @@ impl FjallStoreInner {
     fn drain(&self) -> NitriteResult<()> {
         if let Some(ks) = self.keyspace() {
             ks.persist(PersistMode::SyncAll).map_err(|err| {
-                log::error!("Failed to persist keyspace during drain: {}", err);
+                log::debug!("Failed to persist keyspace during drain: {}", err);
                 to_nitrite_error(err)
             })?;
 
@@ -442,7 +442,7 @@ impl FjallStoreInner {
                 Ok(())
             }
             Err(err) => {
-                log::error!("Failed to open or create keyspace: {}", err);
+                log::debug!("Failed to open or create keyspace: {}", err);
                 Err(to_nitrite_error(err))
             }
         }
@@ -475,7 +475,7 @@ impl FjallStoreInner {
             match ks.persist(PersistMode::SyncAll) {
                 Ok(_) => Ok(()),
                 Err(err) => {
-                    log::error!("Failed to commit keyspace: {}", err);
+                    log::debug!("Failed to commit keyspace: {}", err);
                     Err(to_nitrite_error(err))
                 }
             }
@@ -522,7 +522,7 @@ impl FjallStoreInner {
         let result = crate::tx_scope::run_with_active(&mut tx, op);
         match result {
             Ok(()) => tx.commit().map_err(|err| {
-                log::error!("Failed to commit write transaction: {}", err);
+                log::debug!("Failed to commit write transaction: {}", err);
                 to_nitrite_error(err)
             }),
             Err(e) => {
@@ -553,7 +553,7 @@ impl FjallStoreInner {
         match crate::tx_scope::run_with_active(&mut tx, f) {
             Ok(value) => {
                 tx.commit().map_err(|err| {
-                    log::error!("Failed to commit write transaction: {}", err);
+                    log::debug!("Failed to commit write transaction: {}", err);
                     to_nitrite_error(err)
                 })?;
                 Ok(value)
@@ -596,24 +596,24 @@ impl FjallStoreInner {
                             let partition = partition.inner();
                             let result = partition.gc_scan();
                             if let Err(err) = result {
-                                log::error!("Failed to compact partition: {}", err);
+                                log::warn!("Failed to compact partition: {}", err);
                                 return;
                             }
 
                             let result = partition.gc_with_space_amp_target(space_amp_factor);
                             if let Err(err) = result {
-                                log::error!("Failed to compact partition: {}", err);
+                                log::warn!("Failed to compact partition: {}", err);
                                 return;
                             }
 
                             let result = partition.gc_with_staleness_threshold(stale_threshold);
                             if let Err(err) = result {
-                                log::error!("Failed to compact partition: {}", err);
+                                log::warn!("Failed to compact partition: {}", err);
                                 return;
                             }
                         }
                         Err(err) => {
-                            log::error!("Failed to open partition: {}", err);
+                            log::warn!("Failed to open partition: {}", err);
                             return;
                         }
                     }
@@ -647,7 +647,7 @@ impl FjallStoreInner {
                 match ks.open_partition(map, options.clone()) {
                     Ok(partition) => {
                         if let Err(err) = partition.inner().rotate_memtable_and_wait() {
-                            log::error!(
+                            log::warn!(
                                 "Failed to flush partition '{}' during compaction: {}",
                                 map,
                                 err
@@ -655,7 +655,7 @@ impl FjallStoreInner {
                         }
                     }
                     Err(err) => {
-                        log::error!("Failed to open partition '{}' to flush: {}", map, err);
+                        log::warn!("Failed to open partition '{}' to flush: {}", map, err);
                     }
                 }
             }
@@ -745,7 +745,7 @@ impl FjallStoreInner {
                             Ok(())
                         }
                         Err(err) => {
-                            log::error!("Failed to remove partition: {}", err);
+                            log::debug!("Failed to remove partition: {}", err);
                             Err(to_nitrite_error(err))
                         }
                     }
@@ -759,7 +759,7 @@ impl FjallStoreInner {
                         log::debug!("Partition '{}' was already deleted", name);
                         Ok(())
                     } else {
-                        log::error!("Failed to open partition for removal: {}", err);
+                        log::debug!("Failed to open partition for removal: {}", err);
                         Err(to_nitrite_error(err))
                     }
                 }

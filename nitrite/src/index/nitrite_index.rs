@@ -119,7 +119,7 @@ pub trait NitriteIndexProvider: Send + Sync {
     ) -> NitriteResult<Vec<NitriteId>> {
         if self.is_unique() && nitrite_ids.len() == 1 {
             // if key is already exists for unique type, throw error
-            log::error!("Unique constraint violated for {:?}", field_values);
+            log::debug!("Unique constraint violated for {:?}", field_values);
             return Err(NitriteError::new(
                 &format!("Unique constraint violated for {:?}", field_values),
                 ErrorKind::IndexingError,

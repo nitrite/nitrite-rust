@@ -32,7 +32,7 @@ pub(crate) fn validate_index_field(value: Option<&Value>, field_name: &str) -> N
         None | Some(Value::Null) => Ok(()),
         Some(Value::Array(arr)) => validate_array_index_field(arr, field_name),
         Some(Value::Bytes(_)) => {
-            log::error!("Byte field {} cannot be indexed", field_name);
+            log::debug!("Byte field {} cannot be indexed", field_name);
             Err(NitriteError::new(
                 &format!("Byte field {} cannot be indexed", field_name),
                 ErrorKind::IndexingError,
@@ -40,7 +40,7 @@ pub(crate) fn validate_index_field(value: Option<&Value>, field_name: &str) -> N
         },
         Some(value) => {
             if !value.is_comparable() {
-                log::error!("Field {} does not have comparable value {}", field_name, value);
+                log::debug!("Field {} does not have comparable value {}", field_name, value);
                 Err(NitriteError::new(
                     &format!("Field {} does not have comparable value {}", field_name, value),
                     ErrorKind::IndexingError,
@@ -67,7 +67,7 @@ pub(crate) fn validate_string_array_index_field(
                 continue;
             }
             Value::Array(_) => {
-                log::error!("Nested array field {} is not supported", field_name);
+                log::debug!("Nested array field {} is not supported", field_name);
                 return Err(NitriteError::new(
                     "Nested array is not supported",
                     ErrorKind::IndexingError,
@@ -77,7 +77,7 @@ pub(crate) fn validate_string_array_index_field(
                 continue;
             }
             _ => {
-                log::error!(
+                log::debug!(
                     "Each value in the array field {} should be string",
                     field_name
                 );
@@ -106,7 +106,7 @@ fn validate_array_index_field(array: &Vec<Value>, field_name: &str) -> NitriteRe
                 continue;
             }
             &Value::Array(_) => {
-                log::error!("Nested array field {} is not supported", field_name);
+                log::debug!("Nested array field {} is not supported", field_name);
                 return Err(NitriteError::new(
                     "Nested array is not supported",
                     ErrorKind::IndexingError,
@@ -114,7 +114,7 @@ fn validate_array_index_field(array: &Vec<Value>, field_name: &str) -> NitriteRe
             }
             v => {
                 if !v.is_comparable() {
-                    log::error!(
+                    log::debug!(
                         "Each value in the array field {} should be comparable",
                         field_name
                     );

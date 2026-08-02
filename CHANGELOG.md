@@ -5,6 +5,45 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.0] - 2026-08-02
+
+### Changed
+
+- **Log levels reclassified so an embedding application is no longer flooded by default.**
+  Nitrite logged 253 statements at `error!`, and 204 of them sat immediately before the matching
+  `Err(...)` return — every rejected filter, every failed type conversion, every "collection name
+  cannot be empty" validation was reported twice: once through the returned `NitriteError`, which
+  the caller handles, and once screamed into the host application's log, which the caller cannot
+  suppress without silencing Nitrite entirely. On a normal workload the second copy is pure noise,
+  and it arrives at the one level every application leaves enabled.
+
+  Levels now follow a single rule — *log at a level proportional to what the caller cannot already
+  see*:
+
+  - `debug` — the error is returned to the caller as `Err`. The `NitriteError` carries the same
+    message and kind, so the caller decides the severity. 245 statements moved here.
+  - `warn` — an anomaly Nitrite absorbed and the caller never learns about: a skipped
+    corrupt catalog/index entry, a corrupt index (whose key detail exists only in the log line, as
+    the propagated error is a shared static), best-effort background compaction/GC/flush failures,
+    an invalid regex that silently degrades a filter to "matches nothing", a scheduled task
+    dropped because its duration could not be converted.
+  - `error` — a swallowed failure that may have left state inconsistent: the four rollback paths
+    in batch insert/update, and close/drop failures for the index manager, plugin manager, Fjall
+    map/store, and keyspace drain. Ten statements remain at this level, down from 253.
+
+  A default `info`-level application therefore sees only failures it can act on. Full detail is
+  still one target filter away and unchanged in content:
+  `RUST_LOG=warn,nitrite=debug,nitrite_fjall_adapter=debug`.
+
+  Two other level changes fall out of the same rule: `Snowflake` no longer announces its node id
+  at `info!` on every generator construction (now `debug!`), and `nitrite_vector`'s "index was
+  stale or damaged; rebuilt from collection" moved from `info!` to `warn!`, matching the
+  already-`warn!` sibling messages in the HNSW and DiskANN loaders that report the same class of
+  damage.
+
+  No message text, error type, `ErrorKind`, or control flow changed — this is purely which
+  statements reach a default logger.
+
 ## [0.4.4] - 2026-08-01
 
 ### Fixed

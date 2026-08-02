@@ -178,7 +178,7 @@ impl Convertible for IndexDescriptor {
                 Ok(IndexDescriptor::new(&index_type, index_fields, &collection_name))
             }
             _ => {
-                log::error!("Failed to create IndexDescriptor from Value {:?}", value);
+                log::debug!("Failed to create IndexDescriptor from Value {:?}", value);
                 Err(NitriteError::new(
                     "Index descriptor deserialization error: expected document value but found another type",
                     ErrorKind::ObjectMappingError,

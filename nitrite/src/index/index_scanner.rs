@@ -163,7 +163,7 @@ impl IndexScannerInner {
                 // Validate all results have consistent type (all NitriteId or all Maps)
                 for (idx, value) in scan_result.iter().enumerate() {
                     if is_nitrite_id_result != value.is_nitrite_id() {
-                        log::error!(
+                        log::debug!(
                             "Type mismatch in scan result at index {}: expected {:?}, got {:?}",
                             idx,
                             if is_nitrite_id_result { "NitriteId" } else { "Map" },

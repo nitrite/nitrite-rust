@@ -225,6 +225,26 @@ pub struct Book {
 }
 ```
 
+## Logging
+
+Nitrite logs through the [`log`](https://crates.io/crates/log) facade, so the host application
+picks the backend and the level. Levels are assigned so that a default `info`-level app sees only
+what it can act on:
+
+| Level | What Nitrite logs at it |
+|-------|-------------------------|
+| `error` | A failure the caller never sees: a rollback that could not complete, a close/drop that failed. Possible inconsistency. |
+| `warn` | An anomaly Nitrite recovered from on its own: a skipped corrupt entry, a corrupt index, best-effort background maintenance that failed. |
+| `debug` | Every error that is also returned to the caller as `Err`. The `NitriteError` carries the same information — the caller decides whether it matters. |
+
+Because failed operations are reported through the returned `Result`, a busy application running
+at `info` stays quiet. To get the full detail — including every rejected filter, validation and
+conversion — opt in for the Nitrite targets only:
+
+```bash
+RUST_LOG=warn,nitrite=debug,nitrite_fjall_adapter=debug cargo run
+```
+
 ## Building from Source
 
 ```bash

@@ -101,7 +101,7 @@ impl AuthServiceInner {
             }
             (None, None) => {
                 if existing_user {
-                    log::error!("Username or password is invalid");
+                    log::debug!("Username or password is invalid");
                     Err(NitriteError::new(
                         "Username or password is invalid",
                         ErrorKind::SecurityError,
@@ -111,7 +111,7 @@ impl AuthServiceInner {
                 }
             }
             _ => {
-                log::error!("Username or password is invalid");
+                log::debug!("Username or password is invalid");
                 Err(NitriteError::new(
                     "Username or password is invalid",
                     ErrorKind::SecurityError,
@@ -152,7 +152,7 @@ impl AuthServiceInner {
                 Ok(())
             }
             Err(e) => {
-                log::error!("Failed to create user: {:?}", e);
+                log::debug!("Failed to create user: {:?}", e);
                 Err(NitriteError::new(
                     "Username or password is invalid",
                     ErrorKind::SecurityError,
@@ -167,7 +167,7 @@ impl AuthServiceInner {
         let credential_doc = user_map.get(&Value::from(username))?;
 
         if credential_doc.is_none() {
-            log::error!("Username or password is invalid");
+            log::debug!("Username or password is invalid");
             return Err(NitriteError::new(
                 "Username or password is invalid",
                 ErrorKind::SecurityError,
@@ -178,7 +178,7 @@ impl AuthServiceInner {
         let credential_doc = match credential_doc.unwrap().as_document() {
             Some(doc) => doc.clone(),
             None => {
-                log::error!("User credential is not a valid document: {}", username);
+                log::debug!("User credential is not a valid document: {}", username);
                 return Err(NitriteError::new(
                     "Invalid user credential format",
                     ErrorKind::SecurityError,
@@ -198,7 +198,7 @@ impl AuthServiceInner {
                 match result {
                     Ok(_) => Ok(()),
                     Err(e) => {
-                        log::error!("Username or password is invalid: {:?}", e);
+                        log::debug!("Username or password is invalid: {:?}", e);
                         Err(NitriteError::new(
                             "Username or password is invalid",
                             ErrorKind::SecurityError,
@@ -207,7 +207,7 @@ impl AuthServiceInner {
                 }
             }
             Err(e) => {
-                log::error!("Username or password is invalid: {:?}", e);
+                log::debug!("Username or password is invalid: {:?}", e);
                 Err(NitriteError::new(
                     "Username or password is invalid",
                     ErrorKind::SecurityError,
@@ -227,7 +227,7 @@ impl AuthServiceInner {
         let credential_doc = user_map.get(&Value::from(username))?;
 
         if credential_doc.is_none() {
-            log::error!("Username or password is invalid");
+            log::debug!("Username or password is invalid");
             return Err(NitriteError::new(
                 "Username or password is invalid",
                 ErrorKind::SecurityError,
@@ -238,7 +238,7 @@ impl AuthServiceInner {
         let credential_doc = match credential_doc.unwrap().as_document() {
             Some(doc) => doc.clone(),
             None => {
-                log::error!("User credential is not a valid document: {}", username);
+                log::debug!("User credential is not a valid document: {}", username);
                 return Err(NitriteError::new(
                     "Invalid user credential format",
                     ErrorKind::SecurityError,
@@ -272,7 +272,7 @@ impl AuthServiceInner {
                                 Ok(())
                             }
                             Err(e) => {
-                                log::error!("Failed to update password: {:?}", e);
+                                log::debug!("Failed to update password: {:?}", e);
                                 Err(NitriteError::new(
                                     "Username or password is invalid",
                                     ErrorKind::SecurityError,
@@ -281,7 +281,7 @@ impl AuthServiceInner {
                         }
                     }
                     Err(e) => {
-                        log::error!("Failed to update password: {:?}", e);
+                        log::debug!("Failed to update password: {:?}", e);
                         Err(NitriteError::new(
                             "Username or password is invalid",
                             ErrorKind::SecurityError,
@@ -290,7 +290,7 @@ impl AuthServiceInner {
                 }
             }
             Err(e) => {
-                log::error!("Failed to update password: {:?}", e);
+                log::debug!("Failed to update password: {:?}", e);
                 Err(NitriteError::new(
                     "Username or password is invalid",
                     ErrorKind::SecurityError,

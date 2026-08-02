@@ -103,7 +103,7 @@ impl StoreCatalogInner {
     /// * `Err(NitriteError)` if the name is empty or the operation fails
     pub fn write_collection_entry(&self, name: &str) -> NitriteResult<()> {
         if name.is_empty() {
-            log::error!("Collection name cannot be empty");
+            log::debug!("Collection name cannot be empty");
             return Err(NitriteError::new(
                 "Collection name cannot be empty",
                 ErrorKind::ValidationError,
@@ -145,7 +145,7 @@ impl StoreCatalogInner {
     /// * `Err(NitriteError)` if the name is empty or the operation fails
     pub fn write_repository_entry(&self, name: &str) -> NitriteResult<()> {
         if name.is_empty() {
-            log::error!("Repository name cannot be empty");
+            log::debug!("Repository name cannot be empty");
             return Err(NitriteError::new(
                 "Repository name cannot be empty",
                 ErrorKind::ValidationError,
@@ -189,7 +189,7 @@ impl StoreCatalogInner {
     /// * `Err(NitriteError)` if the name is empty or the operation fails
     pub fn write_keyed_repository_entry(&self, name: &str) -> NitriteResult<()> {
         if name.is_empty() {
-            log::error!("Keyed repository name cannot be empty");
+            log::debug!("Keyed repository name cannot be empty");
             return Err(NitriteError::new(
                 "Keyed repository name cannot be empty",
                 ErrorKind::ValidationError,

@@ -126,7 +126,7 @@ impl NitriteMapProvider for FjallMap {
                     }
                 }
                 Err(e) => {
-                    log::error!("Failed to get store for cleanup after clear: {}", e);
+                    log::debug!("Failed to get store for cleanup after clear: {}", e);
                     // Do not panic - store may have been dropped or closed
                     return;
                 }
@@ -138,7 +138,7 @@ impl NitriteMapProvider for FjallMap {
                     log::debug!("Successfully collected garbage after clear");
                 }
                 Err(e) => {
-                    log::error!("Failed to collect garbage after clear: {}", e);
+                    log::warn!("Failed to collect garbage after clear: {}", e);
                     // Non-fatal - garbage collection is best-effort
                 }
             }
@@ -430,7 +430,7 @@ impl FjallMapInner {
 
     fn check_opened(&self) -> NitriteResult<()> {
         if self.closed.load(Ordering::Relaxed) {
-            log::error!("Map {} is closed", self.name);
+            log::debug!("Map {} is closed", self.name);
             return Err(NitriteError::new(
                 &format!("Map {} is closed", self.name),
                 ErrorKind::StoreAlreadyClosed,
@@ -438,7 +438,7 @@ impl FjallMapInner {
         }
 
         if self.dropped.load(Ordering::Relaxed) {
-            log::error!("Map {} is dropped", self.name);
+            log::debug!("Map {} is dropped", self.name);
             return Err(NitriteError::new(
                 &format!("Map {} is dropped", self.name),
                 ErrorKind::StoreNotInitialized,
@@ -450,7 +450,7 @@ impl FjallMapInner {
 
     /// Builds a `BackendError` for a failed Fjall operation, logging it as well.
     fn backend_err(op: &str, err: impl std::fmt::Display) -> NitriteError {
-        log::error!("Failed to {} FjallMap: {}", op, err);
+        log::debug!("Failed to {} FjallMap: {}", op, err);
         NitriteError::new(
             &format!("Failed to {} FjallMap: {}", op, err),
             ErrorKind::BackendError,
@@ -1000,7 +1000,7 @@ impl FjallMapInner {
 
     // Helper function to avoid repeated error handling pattern
     fn handle_gc_error<E: std::fmt::Display>(err: E, operation: &str) -> NitriteResult<()> {
-        log::error!("Failed to {} from FjallMap: {}", operation, err);
+        log::debug!("Failed to {} from FjallMap: {}", operation, err);
         Err(NitriteError::new(
             &format!("Failed to {} from FjallMap: {}", operation, err),
             ErrorKind::BackendError,

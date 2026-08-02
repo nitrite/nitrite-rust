@@ -206,7 +206,7 @@ impl CompoundIndexInner {
         for (_, value) in values.iter().skip(1) {
             match value {
                 Value::Array(_) => {
-                    log::error!(
+                    log::debug!(
                         "Compound multikey index is supported on the first field of the index only"
                     );
                     return Err(COMPOUND_INDEX_ERROR.clone());
@@ -214,7 +214,7 @@ impl CompoundIndexInner {
                 Value::Null => parts.push(Value::Null),
                 v if v.is_comparable() => parts.push(normalize_index_value(v)),
                 v => {
-                    log::error!(
+                    log::debug!(
                         "Found non comparable value {} in compound index {:?}",
                         v,
                         self.index_descriptor
@@ -265,7 +265,7 @@ impl CompoundIndexInner {
         let probe = Value::Array(tuple.to_vec());
         if let Some(Value::Array(existing)) = index_map.ceiling_key(&probe)? {
             if existing.len() == k + 1 && existing[..k] == *tuple && existing[k] != *id {
-                log::error!("Unique constraint violated for {:?}", tuple);
+                log::debug!("Unique constraint violated for {:?}", tuple);
                 return Err(UNIQUE_CONSTRAINT_ERROR.clone());
             }
         }

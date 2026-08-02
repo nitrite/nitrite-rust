@@ -100,7 +100,7 @@ impl RepositoryFactoryInner {
                 let repository = DefaultObjectRepository::new(collection, operations);
                 Ok(ObjectRepository::new(repository))
             } else {
-                log::error!("No repository operation found for name {}. Reinitialize the database", name);
+                log::debug!("No repository operation found for name {}. Reinitialize the database", name);
                 Err(NitriteError::new(
                     "Database is in invalid state. Reinitialize the database",
                     ErrorKind::InvalidOperation,

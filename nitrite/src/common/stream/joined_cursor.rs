@@ -77,7 +77,7 @@ impl<'a> Iterator for JoinedDocumentCursor<'a> {
             }
             Err(e) => {
                 // Propagate error directly without unnecessary checks
-                log::error!("Error in joined cursor iteration: {:?}", e);
+                log::debug!("Error in joined cursor iteration: {:?}", e);
                 Some(Err(e))
             }
         }

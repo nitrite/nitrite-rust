@@ -216,7 +216,7 @@ impl PluginManagerInner {
             
             Ok(())
         } else {
-            log::error!("NitriteConfig is not set");
+            log::debug!("NitriteConfig is not set");
             Err(NitriteError::new(
                 "NitriteConfig is not set",
                 ErrorKind::PluginError,

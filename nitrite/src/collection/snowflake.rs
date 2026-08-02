@@ -1,5 +1,5 @@
 use crate::common::get_current_time_or_zero;
-use log::{info, warn};
+use log::{debug, warn};
 use rand::rngs::OsRng;
 use rand::Rng;
 use std::sync::atomic::AtomicU64;
@@ -41,7 +41,7 @@ impl SnowflakeIdGenerator {
             warn!("Node id can't be greater than {}", max_node_id);
             generator.node_id = OsRng.gen_range(1..=max_node_id);
         }
-        info!("Initialized with node id: {}", generator.node_id);
+        debug!("Initialized with node id: {}", generator.node_id);
 
         generator
     }

@@ -188,7 +188,7 @@ impl NitriteConfigInner {
     pub(crate) fn set_field_separator(&self, separator: &str) -> NitriteResult<()> {
         let is_configured = self.configured.load(Ordering::Relaxed);
         if is_configured {
-            log::error!("Field separator cannot be changed after initialization");
+            log::debug!("Field separator cannot be changed after initialization");
             return Err(NitriteError::new(
                 "Field separator cannot be changed after initialization",
                 ErrorKind::InvalidOperation,
@@ -196,7 +196,7 @@ impl NitriteConfigInner {
         }
 
         if separator.is_empty() {
-            log::error!("Field separator cannot be empty");
+            log::debug!("Field separator cannot be empty");
             return Err(NitriteError::new(
                 "Field separator cannot be empty",
                 ErrorKind::InvalidOperation,
@@ -212,7 +212,7 @@ impl NitriteConfigInner {
         match self.plugin_manager.get_store() {
             Some(store) => Ok(store),
             None => {
-                log::error!("No store plugin is configured");
+                log::debug!("No store plugin is configured");
                 Err(NitriteError::new(
                     "No store plugin is configured",
                     ErrorKind::PluginError,
@@ -226,7 +226,7 @@ impl NitriteConfigInner {
         match self.plugin_manager.get_indexer(index_type) {
             Some(indexer) => Ok(indexer),
             None => {
-                log::error!("No indexer plugin found for type: {}", index_type);
+                log::debug!("No indexer plugin found for type: {}", index_type);
                 Err(NitriteError::new(
                     &format!("No indexer plugin found for type: {}", index_type),
                     ErrorKind::PluginError,
@@ -238,7 +238,7 @@ impl NitriteConfigInner {
     /// Loads a Nitrite module into the configuration.
     pub(crate) fn load_module<T: NitriteModule + 'static>(&self, module: T) -> NitriteResult<()> {
         if self.configured.load(Ordering::Relaxed) {
-            log::error!("Cannot load module after initialization");
+            log::debug!("Cannot load module after initialization");
             return Err(NitriteError::new(
                 "Cannot load module after initialization",
                 ErrorKind::InvalidOperation,
@@ -250,7 +250,7 @@ impl NitriteConfigInner {
     /// Automatically discovers and loads available plugins.
     pub(crate) fn auto_configure(&self) -> NitriteResult<()> {
         if self.configured.load(Ordering::Relaxed) {
-            log::error!("Cannot auto-configure after initialization");
+            log::debug!("Cannot auto-configure after initialization");
             return Err(NitriteError::new(
                 "Cannot auto-configure after initialization",
                 ErrorKind::InvalidOperation,
@@ -276,7 +276,7 @@ impl NitriteConfigInner {
     /// Sets the database schema version.
     pub(crate) fn set_schema_version(&self, version: u32) -> NitriteResult<()> {
         if self.configured.load(Ordering::Relaxed) {
-            log::error!("Schema version cannot be changed after initialization");
+            log::debug!("Schema version cannot be changed after initialization");
             return Err(NitriteError::new(
                 "Schema version cannot be changed after initialization",
                 ErrorKind::InvalidOperation,
@@ -289,7 +289,7 @@ impl NitriteConfigInner {
     /// Adds a migration to be executed during initialization.
     pub(crate) fn add_migration(&self, migration: Migration) -> NitriteResult<()> {
         if self.configured.load(Ordering::Relaxed) {
-            log::error!("Cannot add migration after initialization");
+            log::debug!("Cannot add migration after initialization");
             return Err(NitriteError::new(
                 "Cannot add migration after initialization",
                 ErrorKind::InvalidOperation,

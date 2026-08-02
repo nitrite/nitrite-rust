@@ -191,7 +191,7 @@ impl InMemoryMapInner {
 
     pub(crate) fn check_opened(&self) -> NitriteResult<()> {
         if self.closed.load(Ordering::Relaxed) {
-            log::error!("Map {} is closed", self.name);
+            log::debug!("Map {} is closed", self.name);
             return Err(NitriteError::new(
                 &format!("Map {} is closed", self.name),
                 ErrorKind::InvalidOperation,
@@ -199,7 +199,7 @@ impl InMemoryMapInner {
         }
 
         if self.dropped.load(Ordering::Relaxed) {
-            log::error!("Map {} is dropped", self.name);
+            log::debug!("Map {} is dropped", self.name);
             return Err(NitriteError::new(
                 &format!("Map {} is dropped", self.name),
                 ErrorKind::InvalidOperation,

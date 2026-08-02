@@ -322,7 +322,7 @@ impl FindOptimizerInner {
                     // Filter already wraps Arc<dyn TFilter>, so we're just incrementing the ref count
                     io_filters.push(filter.clone());
                 } else {
-                    log::error!("Cannot group index only filters");
+                    log::debug!("Cannot group index only filters");
                     return Err(NitriteError::new(
                         "Cannot group index only filters",
                         ErrorKind::FilterError,
@@ -347,7 +347,7 @@ impl FindOptimizerInner {
             }
 
             if find_plan.index_descriptor().is_none() {
-                log::error!("No index found for index only filter");
+                log::debug!("No index found for index only filter");
                 return Err(NitriteError::new(
                     "No index found for index only filter",
                     ErrorKind::FilterError,
@@ -467,13 +467,13 @@ impl FindOptimizerInner {
         if index_scan_filters.is_empty() {
             for filter in full_scan_filters.iter() {
                 if filter.is_index_only_filter() {
-                    log::error!("Index only filter {} cannot be used in full scan", filter);
+                    log::debug!("Index only filter {} cannot be used in full scan", filter);
                     return Err(NitriteError::new(
                         "Index only filter cannot be used in full scan",
                         ErrorKind::FilterError,
                     ));
                 } else if is_text_filter(filter) {
-                    log::error!("{} is not full text indexed", filter.get_field_name()?);
+                    log::debug!("{} is not full text indexed", filter.get_field_name()?);
                     return Err(NitriteError::new(
                         &format!("{} is not full text indexed", filter.get_field_name()?),
                         ErrorKind::FilterError,

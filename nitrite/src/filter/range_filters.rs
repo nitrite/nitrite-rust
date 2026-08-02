@@ -395,7 +395,7 @@ impl FilterProvider for SortingAwareFilter {
 
     fn get_collection_name(&self) -> NitriteResult<String> {
         if self.collection_name.get().is_none() {
-            log::error!("Collection name is not set for filter {}", self);
+            log::debug!("Collection name is not set for filter {}", self);
             Err(NitriteError::new(
                 "Collection name is not set",
                 ErrorKind::CollectionNotFound,
@@ -655,7 +655,7 @@ impl FilterProvider for InFilter {
 
     fn get_collection_name(&self) -> NitriteResult<String> {
         if self.collection_name.get().is_none() {
-            log::error!("Collection name is not set for filter {}", self);
+            log::debug!("Collection name is not set for filter {}", self);
             Err(NitriteError::new(
                 "Collection name is not set",
                 ErrorKind::CollectionNotFound,
@@ -692,7 +692,7 @@ impl FilterProvider for InFilter {
             self.field_values.get_or_init(|| array);
             Ok(())
         } else {
-            log::error!("Field value is not an array for filter {}", self);
+            log::debug!("Field value is not an array for filter {}", self);
             Err(NitriteError::new(
                 "Field value is not an array",
                 ErrorKind::InvalidDataType,
@@ -796,7 +796,7 @@ impl FilterProvider for NotInFilter {
 
     fn get_collection_name(&self) -> NitriteResult<String> {
         if self.collection_name.get().is_none() {
-            log::error!("Collection name is not set for filter {}", self);
+            log::debug!("Collection name is not set for filter {}", self);
             Err(NitriteError::new(
                 "Collection name is not set",
                 ErrorKind::CollectionNotFound,
@@ -833,7 +833,7 @@ impl FilterProvider for NotInFilter {
             self.field_values.get_or_init(|| array);
             Ok(())
         } else {
-            log::error!("Field value is not an array for filter {}", self);
+            log::debug!("Field value is not an array for filter {}", self);
             Err(NitriteError::new(
                 "Field value is not an array",
                 ErrorKind::InvalidDataType,

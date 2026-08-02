@@ -188,7 +188,7 @@ where
         let mut document = match value {
             Value::Document(doc) => doc,
             other => {
-                log::error!("Expected Document from entity Convertible, got {:?}", other);
+                log::debug!("Expected Document from entity Convertible, got {:?}", other);
                 return Err(NitriteError::new(
                     "Cannot update: Expected Document from Convertible",
                     ErrorKind::ObjectMappingError,
@@ -213,7 +213,7 @@ where
 
     fn get_by_id(&self, id: &T::Id) -> NitriteResult<Option<T>> {
         if TypeId::of::<T::Id>() == TypeId::of::<()>() {
-            log::error!("Entity {} does not have an id field", T::default().entity_name());
+            log::debug!("Entity {} does not have an id field", T::default().entity_name());
             return Err(NitriteError::new(
                 "Entity does not have an id field",
                 ErrorKind::InvalidOperation,
@@ -289,7 +289,7 @@ mod tests {
             let document = match value {
                 Value::Document(doc) => doc,
                 _ => {
-                    log::error!("Expected Document for TestEntity deserialization, got {:?}", value);
+                    log::debug!("Expected Document for TestEntity deserialization, got {:?}", value);
                     return Err(NitriteError::new(
                         "Expected Document value for entity deserialization",
                         ErrorKind::ObjectMappingError,
@@ -301,7 +301,7 @@ mod tests {
             let field = match field.as_string() {
                 Some(s) => s.to_string(),
                 None => {
-                    log::error!("TestEntity field 'field' should be string, got: {:?}", field);
+                    log::debug!("TestEntity field 'field' should be string, got: {:?}", field);
                     return Err(NitriteError::new(
                         "Entity field 'field' must be a string",
                         ErrorKind::ObjectMappingError,
@@ -313,7 +313,7 @@ mod tests {
             let id = match id.as_document() {
                 Some(doc) => doc,
                 None => {
-                    log::error!("TestEntity field 'id' should be document, got: {:?}", id);
+                    log::debug!("TestEntity field 'id' should be document, got: {:?}", id);
                     return Err(NitriteError::new(
                         "Entity field 'id' must be a document",
                         ErrorKind::ObjectMappingError,
@@ -324,7 +324,7 @@ mod tests {
             let name = id.get("name")?
                 .as_string()
                 .ok_or_else(|| {
-                    log::error!("TestEntity id.name must be a string");
+                    log::debug!("TestEntity id.name must be a string");
                     NitriteError::new(
                         "Entity id.name field must be a string",
                         ErrorKind::ObjectMappingError,
@@ -367,7 +367,7 @@ mod tests {
             let document = match value {
                 Value::Document(doc) => doc,
                 _ => {
-                    log::error!("Expected Document for TestId deserialization, got {:?}", value);
+                    log::debug!("Expected Document for TestId deserialization, got {:?}", value);
                     return Err(NitriteError::new(
                         "Expected Document value for TestId deserialization",
                         ErrorKind::ObjectMappingError,
@@ -379,7 +379,7 @@ mod tests {
             let name = match name.as_string() {
                 Some(s) => s.to_string(),
                 None => {
-                    log::error!("TestId field 'name' should be string, got: {:?}", name);
+                    log::debug!("TestId field 'name' should be string, got: {:?}", name);
                     return Err(NitriteError::new(
                         "TestId field 'name' must be a string",
                         ErrorKind::ObjectMappingError,

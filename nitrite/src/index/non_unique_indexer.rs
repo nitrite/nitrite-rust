@@ -35,7 +35,7 @@ impl NonUniqueIndexer {
         match result {
             Some(nitrite_index) => Ok(nitrite_index),
             None => {
-                log::error!("Index not found for the descriptor {:?}", index_descriptor);
+                log::debug!("Index not found for the descriptor {:?}", index_descriptor);
                 Err(NitriteError::new(
                     "Index descriptor not found",
                     ErrorKind::IndexingError,
@@ -212,7 +212,7 @@ impl NonUniqueIndexerInner {
                 Ok(nitrite_ids)
             }
             None => {
-                log::error!("Index descriptor not found in the find plan");
+                log::debug!("Index descriptor not found in the find plan");
                 Err(NitriteError::new(
                     "Index descriptor not found",
                     ErrorKind::IndexingError,

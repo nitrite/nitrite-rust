@@ -77,7 +77,7 @@ impl CollectionFactoryInner {
     ) -> NitriteResult<NitriteCollection> {
         // Early exit if collection already exists
         if self.collection_map.read().contains_key(name) {
-            log::error!("A collection with name {} already exists", name);
+            log::debug!("A collection with name {} already exists", name);
             return Err(NitriteError::new(
                 "A collection with same name already exists",
                 ErrorKind::ValidationError,
@@ -89,7 +89,7 @@ impl CollectionFactoryInner {
         if write_catalog {
             let repository_registry = store.get_repository_registry()?;
             if repository_registry.contains(name) {
-                log::error!("A repository with name {} already exists", name);
+                log::debug!("A repository with name {} already exists", name);
                 return Err(NitriteError::new(
                     "A repository with same name already exists",
                     ErrorKind::ValidationError,
@@ -99,7 +99,7 @@ impl CollectionFactoryInner {
             let keyed_repository_registry = store.get_keyed_repository_registry()?;
             for set in keyed_repository_registry.values() {
                 if set.contains(name) {
-                    log::error!("A keyed repository with name {} already exists", name);
+                    log::debug!("A keyed repository with name {} already exists", name);
                     return Err(NitriteError::new(
                         "A keyed repository with same name already exists",
                         ErrorKind::ValidationError,

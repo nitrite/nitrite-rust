@@ -137,10 +137,10 @@ impl NitriteId {
 
     pub(crate) fn valid_id(id_value: u64) -> NitriteResult<bool> {
         if id_value >= *MAX_VALUE {
-            log::error!("Id value is too large");
+            log::debug!("Id value is too large");
             return Err(ID_TOO_LARGE_ERROR.clone());
         } else if id_value < *MIN_VALUE {
-            log::error!("Id value is too small");
+            log::debug!("Id value is too small");
             return Err(ID_TOO_SMALL_ERROR.clone());
         }
         

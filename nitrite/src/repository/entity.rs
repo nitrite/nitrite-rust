@@ -320,7 +320,7 @@ impl EntityId {
             Ok(filter)
         } else {
             if !value.is_document() {
-                log::error!("Embedded field value should be a document");
+                log::debug!("Embedded field value should be a document");
                 return Err(NitriteError::new(
                     "Embedded field value should be a document",
                     ErrorKind::InvalidOperation,
@@ -331,7 +331,7 @@ impl EntityId {
             let document = match value.as_document() {
                 Some(doc) => doc.clone(),
                 None => {
-                    log::error!("Failed to convert value to document for embedded field filter");
+                    log::debug!("Failed to convert value to document for embedded field filter");
                     return Err(NitriteError::new(
                         "Embedded field value should be a document",
                         ErrorKind::InvalidOperation,

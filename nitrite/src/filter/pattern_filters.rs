@@ -61,7 +61,7 @@ impl RegexFilter {
                 let _ = pattern.set(regex);
             }
             Err(e) => {
-                log::error!("Invalid regex pattern '{}': {}", field_value, e);
+                log::warn!("Invalid regex pattern '{}': {}", field_value, e);
                 // Don't initialize pattern - get() will return None for invalid regex
             }
         }
@@ -106,7 +106,7 @@ impl FilterProvider for RegexFilter {
                 Ok(p.is_match(val))
             }
             None => {
-                log::error!("Invalid regex pattern for filter {}", self);
+                log::debug!("Invalid regex pattern for filter {}", self);
                 Err(NitriteError::new(
                     "Invalid regex pattern",
                     ErrorKind::InvalidOperation,
@@ -119,7 +119,7 @@ impl FilterProvider for RegexFilter {
         self.collection_name.get()
             .cloned()
             .ok_or_else(|| {
-                log::error!("Collection name is not set for filter");
+                log::debug!("Collection name is not set for filter");
                 NitriteError::new(
                     "Collection name is not set",
                     ErrorKind::InvalidOperation,
@@ -161,7 +161,7 @@ impl FilterProvider for RegexFilter {
                     self.pattern.get_or_init(|| regex);
                 }
                 Err(e) => {
-                    log::error!("Invalid regex pattern '{}': {}", string_value, e);
+                    log::debug!("Invalid regex pattern '{}': {}", string_value, e);
                     return Err(NitriteError::new(
                         &format!("Invalid regex pattern: {}", e),
                         ErrorKind::InvalidOperation,
@@ -170,7 +170,7 @@ impl FilterProvider for RegexFilter {
             }
             Ok(())
         } else {
-            log::error!("Field value is not a string for filter {}", self);
+            log::debug!("Field value is not a string for filter {}", self);
             Err(NitriteError::new(
                 "Field value is not a string",
                 ErrorKind::InvalidOperation,
@@ -247,7 +247,7 @@ impl TextFilter {
         // Get tokenizer with proper error handling
         let tokenizer = self.tokenizer.get()
             .ok_or_else(|| {
-                log::error!("Tokenizer not initialized for text filter");
+                log::debug!("Tokenizer not initialized for text filter");
                 NitriteError::new("Tokenizer not initialized", ErrorKind::InvalidOperation)
             })?;
         
@@ -268,7 +268,7 @@ impl TextFilter {
             // Handle case-insensitive search with proper error handling
             let case_sensitive = self.case_sensitive.get()
                 .ok_or_else(|| {
-                    log::error!("Case sensitive flag not initialized for text filter");
+                    log::debug!("Case sensitive flag not initialized for text filter");
                     NitriteError::new("Case sensitive flag not initialized", ErrorKind::InvalidOperation)
                 })?;
             
@@ -309,7 +309,7 @@ impl TextFilter {
     ) -> NitriteResult<Vec<Value>> {
         if search_string.eq("*") {
             let field_name = self.field_name.get().map(|s| s.as_str()).unwrap_or("unknown");
-            log::error!("'*' alone is not a valid search string for wildcard filter on field '{}'", field_name);
+            log::debug!("'*' alone is not a valid search string for wildcard filter on field '{}'", field_name);
             return Err(NitriteError::new(
                 &format!("Invalid wildcard search pattern '*' on field '{}'. Use '*text' (ends with), 'text*' (starts with), or '*text*' (contains)", field_name),
                 ErrorKind::FilterError,
@@ -320,7 +320,7 @@ impl TextFilter {
         let tokens = string_tokenizer.collect::<Vec<_>>();
         if tokens.len() > 1 {
             let field_name = self.field_name.get().map(|s| s.as_str()).unwrap_or("unknown");
-            log::error!("Wildcard search with multiple words '{}' cannot be applied on field '{}' - use phrase search instead", search_string, field_name);
+            log::debug!("Wildcard search with multiple words '{}' cannot be applied on field '{}' - use phrase search instead", search_string, field_name);
             return Err(NitriteError::new(
                 &format!("Wildcard search on field '{}' failed: '{}' contains multiple words. Use phrase search or split into multiple filters", field_name, search_string),
                 ErrorKind::FilterError,
@@ -470,7 +470,7 @@ impl FilterProvider for TextFilter {
         self.collection_name.get()
             .cloned()
             .ok_or_else(|| {
-                log::error!("Collection name is not set for filter");
+                log::debug!("Collection name is not set for filter");
                 NitriteError::new(
                     "Collection name is not set",
                     ErrorKind::InvalidOperation,
@@ -508,7 +508,7 @@ impl FilterProvider for TextFilter {
             self.field_value.get_or_init(|| string_value);
             Ok(())
         } else {
-            log::error!("Field value is not a string for filter {}", self);
+            log::debug!("Field value is not a string for filter {}", self);
             Err(NitriteError::new(
                 "Field value is not a string",
                 ErrorKind::InvalidOperation,
@@ -613,7 +613,7 @@ impl FilterProvider for ElementMatchFilter {
     #[inline]
     fn apply(&self, entry: &Document) -> NitriteResult<bool> {
         if self.has_element_match_filter() {
-            log::error!("ElementMatchFilter {} cannot have another ElementMatchFilter {}", self, self.filter);
+            log::debug!("ElementMatchFilter {} cannot have another ElementMatchFilter {}", self, self.filter);
             return Err(NitriteError::new(
                 "ElementMatchFilter cannot have another ElementMatchFilter",
                 ErrorKind::FilterError,
@@ -621,7 +621,7 @@ impl FilterProvider for ElementMatchFilter {
         }
 
         if self.has_text_filter() {
-            log::error!("ElementMatchFilter {} cannot have TextFilter {}", self, self.filter);
+            log::debug!("ElementMatchFilter {} cannot have TextFilter {}", self, self.filter);
             return Err(NitriteError::new(
                 "ElementMatchFilter cannot have TextFilter",
                 ErrorKind::FilterError,
@@ -639,7 +639,7 @@ impl FilterProvider for ElementMatchFilter {
             return self.matches(array);
         }
 
-        log::error!(
+        log::debug!(
             "ElementMatchFilter can only be applied on array field, found {}",
             value
         );
@@ -653,7 +653,7 @@ impl FilterProvider for ElementMatchFilter {
         self.collection_name.get()
             .cloned()
             .ok_or_else(|| {
-                log::error!("Collection name is not set for filter {}", self);
+                log::debug!("Collection name is not set for filter {}", self);
                 NitriteError::new(
                     "Collection name is not set",
                     ErrorKind::InvalidOperation,

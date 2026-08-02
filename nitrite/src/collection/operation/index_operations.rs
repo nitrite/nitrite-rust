@@ -252,7 +252,7 @@ impl IndexOperationInner {
         if let Some(index_descriptor) = index_descriptor {
             // if index already there check if it is of same type, if not return error
             if index_descriptor.index_type() != index_type {
-                log::error!(
+                log::debug!(
                     "Index already exists on fields {:?} with different type: {}",
                     fields.field_names(),
                     index_descriptor.index_type()
@@ -293,7 +293,7 @@ impl IndexOperationInner {
             self.build_index_internal(index_descriptor, rebuild)?;
             Ok(())
         } else {
-            log::error!(
+            log::debug!(
                 "Index is already building for fields: {:?}",
                 fields.field_names()
             );
@@ -310,7 +310,7 @@ impl IndexOperationInner {
     pub fn drop_index(&self, fields: &Fields) -> NitriteResult<()> {
         let build_flag = self.get_build_flag(fields);
         if build_flag {
-            log::error!("Index is building for fields: {:?}", fields.field_names());
+            log::debug!("Index is building for fields: {:?}", fields.field_names());
             return Err(NitriteError::new(
                 &format!("Index is building for fields: {:?}", fields.field_names()),
                 ErrorKind::IndexingError,
@@ -338,7 +338,7 @@ impl IndexOperationInner {
     pub fn drop_all_indexes(&self) -> NitriteResult<()> {
         for val in self.index_build_tracker.iter() {
             if *val.value() {
-                log::error!("Index is building, cannot drop all indexes");
+                log::debug!("Index is building, cannot drop all indexes");
                 return Err(NitriteError::new(
                     "Index is building, cannot drop all indexes",
                     ErrorKind::IndexingError,
@@ -369,7 +369,7 @@ impl IndexOperationInner {
     pub fn dispose_all_indexes(&self) -> NitriteResult<()> {
         for val in self.index_build_tracker.iter() {
             if *val.value() {
-                log::error!("Index is building, cannot dispose all indexes");
+                log::debug!("Index is building, cannot dispose all indexes");
                 return Err(NitriteError::new(
                     "Index is building, cannot dispose all indexes",
                     ErrorKind::IndexingError,
@@ -397,7 +397,7 @@ impl IndexOperationInner {
     pub fn clear(&self) -> NitriteResult<()> {
         for val in self.index_build_tracker.iter() {
             if *val.value() {
-                log::error!("Index is building, cannot clear indexes");
+                log::debug!("Index is building, cannot clear indexes");
                 return Err(NitriteError::new(
                     "Index is building, cannot clear indexes",
                     ErrorKind::IndexingError,

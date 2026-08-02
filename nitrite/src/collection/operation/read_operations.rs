@@ -114,7 +114,7 @@ impl ReadOperationsInner {
                     Ok(Some(document))
                 }
                 None => {
-                    log::error!(
+                    log::debug!(
                         "Expected Document value in collection store for ID {:?}, found non-Document type: {:?}",
                         id,
                         document
@@ -260,7 +260,7 @@ impl ReadOperationsInner {
                                         raw_stream = Box::new(SingleStream::new(Some(d.clone())));
                                     }
                                     None => {
-                                        log::error!(
+                                        log::debug!(
                                             "Expected Document value in collection store for ID {:?}, found non-Document type",
                                             nitrite_id
                                         );
@@ -275,7 +275,7 @@ impl ReadOperationsInner {
                             }
                         }
                         _ => {
-                            log::error!("Invalid NitriteId {:?}", nitrite_id);
+                            log::debug!("Invalid NitriteId {:?}", nitrite_id);
                             return Err(NitriteError::new(
                                 "Invalid NitriteId",
                                 ErrorKind::FilterError,
@@ -318,7 +318,7 @@ impl ReadOperationsInner {
                                     raw_stream = Box::new(SingleStream::new(Some(d.clone())));
                                 }
                                 None => {
-                                    log::error!(
+                                    log::debug!(
                                         "Expected Document value in collection store for ID {:?}, found non-Document type",
                                         nitrite_id
                                     );
@@ -333,7 +333,7 @@ impl ReadOperationsInner {
                         }
                     }
                     _ => {
-                        log::error!("Invalid NitriteId {:?}", nitrite_id);
+                        log::debug!("Invalid NitriteId {:?}", nitrite_id);
                         return Err(NitriteError::new(
                             "Invalid NitriteId",
                             ErrorKind::FilterError,

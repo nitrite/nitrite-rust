@@ -148,7 +148,7 @@ impl SimpleIndexInner {
                 }
             }
             None => {
-                log::error!("Index entry is not an array, expected array type");
+                log::debug!("Index entry is not an array, expected array type");
                 return Err(NitriteError::new(
                     "Index entry is not an array - index data corrupted",
                     ErrorKind::IndexingError,
@@ -166,7 +166,7 @@ impl SimpleIndexInner {
     ) -> NitriteResult<Vec<Value>> {
         if self.is_unique() && nitrite_ids.len() == 1 {
             // if key is already exists for unique type, throw error
-            log::error!("Unique constraint violated for {:?}", field_values);
+            log::debug!("Unique constraint violated for {:?}", field_values);
             return Err(UNIQUE_CONSTRAINT_ERROR.clone());
         }
 

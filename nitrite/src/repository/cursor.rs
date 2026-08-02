@@ -213,7 +213,7 @@ where
     pub fn new(cursor: &'a mut DocumentCursor) -> NitriteResult<Self> {
         let projection = P::default().to_value()?;
         let projection = projection.as_document().cloned().ok_or_else(|| {
-            log::error!("Projection type is not convertible to document");
+            log::debug!("Projection type is not convertible to document");
             NitriteError::new(
                 "Projection type is not convertible to document",
                 ErrorKind::ObjectMappingError,
@@ -289,7 +289,7 @@ mod tests {
                     let first = match first.as_string() {
                         Some(s) => s.to_string(),
                         None => {
-                            log::error!("TestEntity field 'first' should be string, got: {:?}", first);
+                            log::debug!("TestEntity field 'first' should be string, got: {:?}", first);
                             return Err(NitriteError::new(
                                 "TestEntity field 'first' must be a string",
                                 ErrorKind::ObjectMappingError,
@@ -301,7 +301,7 @@ mod tests {
                     let last = match last.as_string() {
                         Some(s) => s.to_string(),
                         None => {
-                            log::error!("TestEntity field 'last' should be string, got: {:?}", last);
+                            log::debug!("TestEntity field 'last' should be string, got: {:?}", last);
                             return Err(NitriteError::new(
                                 "TestEntity field 'last' must be a string",
                                 ErrorKind::ObjectMappingError,
@@ -312,7 +312,7 @@ mod tests {
                     Ok(TestEntity { first, last })
                 }
                 _ => {
-                    log::error!("Expected Document for TestEntity, got: {:?}", value);
+                    log::debug!("Expected Document for TestEntity, got: {:?}", value);
                     Err(NitriteError::new(
                         "Object cursor deserialization error: expected document but found another value type for TestEntity",
                         ErrorKind::ObjectMappingError

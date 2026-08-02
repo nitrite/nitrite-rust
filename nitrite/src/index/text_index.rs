@@ -246,7 +246,7 @@ impl TextIndexInner {
     ) -> NitriteResult<Vec<Value>> {
         if self.is_unique() && nitrite_ids.len() == 1 {
             // if key is already exists for unique type, throw error
-            log::error!("Unique constraint violated for {:?}", field_values);
+            log::debug!("Unique constraint violated for {:?}", field_values);
             return Err(UNIQUE_CONSTRAINT_ERROR.clone());
         }
 
@@ -315,7 +315,7 @@ impl TextIndexInner {
                 }
             }
             _ => {
-                log::error!("Invalid value type for text index {:?}", first_value);
+                log::debug!("Invalid value type for text index {:?}", first_value);
                 return Err(INVALID_TYPE_ERROR.clone());
             }
         }
@@ -350,7 +350,7 @@ impl TextIndexInner {
                 }
             }
             _ => {
-                log::error!("Invalid value type for text index {:?}", first_value);
+                log::debug!("Invalid value type for text index {:?}", first_value);
                 return Err(INVALID_TYPE_ERROR.clone());
             }
         }
@@ -373,13 +373,13 @@ impl TextIndexInner {
 
         let filters = index_scan_filter.unwrap().filters();
         if filters.len() != 1 {
-            log::error!("Invalid filter count {} for text index", filters.len());
+            log::debug!("Invalid filter count {} for text index", filters.len());
             return Err(INVALID_FILTER_COUNT_ERROR.clone());
         }
 
         let filter = &filters[0];
         if !is_text_filter(filter) {
-            log::error!("Invalid filter type for text index {}", filter);
+            log::debug!("Invalid filter type for text index {}", filter);
             return Err(INVALID_FILTER_TYPE_ERROR.clone());
         }
 
