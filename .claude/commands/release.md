@@ -132,8 +132,12 @@ version number — it would require bumping to the next patch and re-running thi
 3. Once it succeeds, verify each of the 6 published crates on crates.io (allow a minute for index
    propagation):
    `for c in nitrite_derive nitrite nitrite_fjall_adapter nitrite_spatial nitrite_tantivy_fts
-   nitrite_vector; do curl -s "https://crates.io/api/v1/crates/$c" | jq -r '.crate.max_version';
-   done` — every line should read `NEW`.
+   nitrite_vector; do curl -sH 'User-Agent: nitrite-release-check'
+   "https://crates.io/api/v1/crates/$c" | jq -r '.crate.max_version'; done` — every line should
+   read `NEW`. **The `User-Agent` header is required**: crates.io rejects requests without one,
+   and the rejection body has no `.crate` key, so `jq` prints `null` for every crate — which
+   looks exactly like a failed publish. If you see all-`null`, check the header before concluding
+   anything about the release.
 
 ## Step 8 — Create the GitHub Release
 
