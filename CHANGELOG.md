@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.0] - 2026-08-07
+
+### Removed
+
+- **BREAKING**: Removed the `distinct` find option - the `distinct()` free function, `FindOptions::distinct()`, and `FindPlan::distinct()`. It had no effect on the result set. A find never returns the same document twice, and the only place the flag was ever read was the `or` sub-plan union, which now deduplicates unconditionally (see below) because an `or` is a set union by definition. The flag's sole remaining effect was to paper over the duplicate defect fixed in this release. Callers passing `distinct()` can drop it without any change in results.
+
+### Fixed
+
+- `find` no longer returns a document more than once from an `or` filter when the document satisfies more than one branch. Two separate defects both produced duplicates:
+  - When any branch of the `or` was not index-backed, the planner intended to discard the per-branch sub-plans and run the whole `or` as a single full scan, but only dropped a borrowed handle to them - the sub-plans stayed on the `FindPlan` and were executed *in addition to* the full scan. A document matching two branches came out twice, so `field("x").eq(1).or(field("y").eq(2))` over a two-document collection reported three rows. Sub-plans are now attached only once every branch is known to be index-backed (or resolvable by `_id`); otherwise the `or` runs purely as a full scan.
+  - When every branch *was* index-backed, the union of the per-branch scans was only deduplicated if the caller passed the `distinct()` find option, which defaulted to off. An `or` is a set union by definition, so the union is now always deduplicated by `NitriteId`.
+
 ## [0.6.0] - 2026-08-07
 
 ### Added

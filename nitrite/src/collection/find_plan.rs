@@ -39,7 +39,6 @@ impl FindPlan {
     /// ```ignore
     /// let plan = FindPlan::new();
     /// assert!(plan.by_id_filter().is_none());
-    /// assert!(!plan.distinct());
     /// ```
     pub(crate) fn new() -> Self {
         FindPlan {
@@ -204,24 +203,6 @@ impl FindPlan {
         self.inner.limit
     }
 
-    /// Returns whether the query should return distinct/unique results only.
-    ///
-    /// When true, duplicate documents are removed from results.
-    ///
-    /// # Returns
-    ///
-    /// `true` if distinct results are required, `false` otherwise.
-    ///
-    /// # Examples
-    ///
-    /// ```ignore
-    /// let plan = FindPlan::new();
-    /// assert!(!plan.distinct());
-    /// ```
-    pub fn distinct(&self) -> bool {
-        self.inner.distinct
-    }
-
     /// Returns the collator options for text comparison if specified.
     ///
     /// ICU Collator options control how strings are compared during sorting,
@@ -353,12 +334,6 @@ impl FindPlan {
         }
     }
 
-    pub(crate) fn set_distinct(&mut self, distinct: bool) {
-        if let Some(inner) = Arc::get_mut(&mut self.inner) {
-            inner.distinct = distinct;
-        }
-    }
-
     pub(crate) fn set_collator_options(&mut self, options: CollatorOptions) {
         if let Some(inner) = Arc::get_mut(&mut self.inner) {
             inner.collator_options = Some(options);
@@ -383,7 +358,6 @@ pub(crate) struct FindPlanInner {
     pub(crate) blocking_sort_order: Option<Vec<(String, SortOrder)>>,
     pub(crate) skip: Option<u64>,
     pub(crate) limit: Option<u64>,
-    pub(crate) distinct: bool,
     pub(crate) collator_options: Option<CollatorOptions>,
     pub(crate) collator_preferences: Option<CollatorPreferences>,
     pub(crate) sub_plans: Option<Vec<FindPlan>>,
@@ -400,7 +374,6 @@ impl FindPlanInner {
             blocking_sort_order: None,
             skip: None,
             limit: None,
-            distinct: false,
             collator_options: None,
             collator_preferences: None,
             sub_plans: None,
@@ -466,7 +439,7 @@ mod tests {
         parent_plan.set_limit(20);
 
         let mut sub_plan = FindPlan::new();
-        sub_plan.set_distinct(true);
+        sub_plan.set_limit(5);
 
         parent_plan.add_sub_plan(sub_plan);
 
@@ -477,7 +450,7 @@ mod tests {
         // Verify sub-plan is added
         let plans = parent_plan.sub_plans().unwrap();
         assert_eq!(plans.len(), 1);
-        assert!(plans[0].distinct());
+        assert_eq!(plans[0].limit(), Some(5));
     }
 
     #[test]

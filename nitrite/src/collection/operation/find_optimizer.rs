@@ -105,7 +105,6 @@ impl FindOptimizerInner {
         if let Some(options) = find_options.collator_options {
             find_plan.set_collator_options(options);
         }
-        find_plan.set_distinct(find_options.distinct);
         
         // Extract all indexes used by this plan
         let mut used_indexes = Vec::new();
@@ -170,7 +169,6 @@ impl FindOptimizerInner {
         
         find_options.skip.hash(&mut hasher);
         find_options.limit.hash(&mut hasher);
-        find_options.distinct.hash(&mut hasher);
         
         hasher.finish()
     }
@@ -525,26 +523,24 @@ impl FindOptimizerInner {
             }
         }
 
+        let mut sub_plans = Vec::with_capacity(flattened_filters.len());
         for filter in flattened_filters {
-            let sub_plan = self.create_find_plan_internal(index_descriptors, &filter)?;
-            find_plan.add_sub_plan(sub_plan);
+            sub_plans.push(self.create_find_plan_internal(index_descriptors, &filter)?);
         }
 
-        let mut clear = false;
-        for plan in find_plan.sub_plans().unwrap() {
-            if plan.index_descriptor().is_none() {
-                clear = true;
-                break;
-            }
-        }
-
-        if clear {
-            if let Some(_sub_plans) = find_plan.sub_plans() {
-                // We cannot easily clear sub_plans through Arc, so we use set_full_scan_filter
-                // to establish the fallback search strategy
-                drop(_sub_plans);
-            }
+        // Splitting an OR into one sub-plan per branch only pays off when every branch is
+        // index-backed. If any branch would need a collection scan anyway, the whole OR runs
+        // as a single full scan instead - the sub-plans must not be attached as well, or a
+        // document would be emitted once per branch it matches on top of the full scan.
+        if sub_plans
+            .iter()
+            .any(|p| p.index_descriptor().is_none() && p.by_id_filter().is_none())
+        {
             find_plan.set_full_scan_filter(Filter::new(OrFilter::new(filters.to_vec())));
+        } else {
+            for sub_plan in sub_plans {
+                find_plan.add_sub_plan(sub_plan);
+            }
         }
 
         Ok(find_plan)

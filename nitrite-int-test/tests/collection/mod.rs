@@ -5,6 +5,7 @@ mod field_index_test;
 mod find_by_compound_index_test;
 mod find_by_single_field_index_test;
 mod exists_filter_test;
+mod or_duplicate_test;
 mod find_test;
 mod index_test;
 mod insert_test;

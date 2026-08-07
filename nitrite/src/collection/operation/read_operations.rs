@@ -242,11 +242,13 @@ impl ReadOperationsInner {
                     sub_iters.push(iter);
                 }
 
-                raw_stream = Box::new(UnionStream::new(sub_iters.into_vec()));
-
-                if find_plan.distinct() {
-                    raw_stream = Box::new(UniqueStream::new(raw_stream));
-                }
+                // Sub-plans are the branches of an OR, so their union is a set union - a
+                // document matching several branches comes out of several sub-iterators and
+                // must still be reported once.
+                raw_stream = Box::new(UniqueStream::new(Box::new(UnionStream::new(
+                    sub_iters.into_vec(),
+                ))
+                    as Box<dyn Iterator<Item = NitriteResult<Document>>>));
             } else {
                 if find_plan.by_id_filter().is_some() {
                     let nitrite_id = find_plan.by_id_filter().unwrap();

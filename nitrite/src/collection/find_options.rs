@@ -4,8 +4,8 @@ use icu_collator::CollatorPreferences;
 
 /// Options for controlling find operations on documents.
 ///
-/// `FindOptions` allows you to specify sorting, pagination, and distinctness
-/// for query results. It supports method chaining for convenient configuration.
+/// `FindOptions` allows you to specify sorting and pagination for query
+/// results. It supports method chaining for convenient configuration.
 ///
 /// # Examples
 ///
@@ -23,13 +23,11 @@ use icu_collator::CollatorPreferences;
 /// let options = order_by("name", SortOrder::Ascending);
 /// let options = skip_by(5);
 /// let options = limit_to(100);
-/// let options = distinct();
 /// ```
 pub struct FindOptions {
     pub(crate) sort_by: Option<SortableFields>,
     pub(crate) skip: Option<u64>,
     pub(crate) limit: Option<u64>,
-    pub(crate) distinct: bool,
     pub(crate) collator_options: Option<CollatorOptions>,
     pub(crate) collator_preferences: Option<CollatorPreferences>,
 }
@@ -52,7 +50,6 @@ pub fn order_by(field_name: &str, sort_order: SortOrder) -> FindOptions {
         sort_by: Some(fields),
         skip: None,
         limit: None,
-        distinct: false,
         collator_options: None,
         collator_preferences: None,
     }
@@ -74,7 +71,6 @@ pub fn skip_by(skip: u64) -> FindOptions {
         sort_by: None,
         skip: Some(skip),
         limit: None,
-        distinct: false,
         collator_options: None,
         collator_preferences: None,
     }
@@ -96,21 +92,6 @@ pub fn limit_to(limit: u64) -> FindOptions {
         sort_by: None,
         skip: None,
         limit: Some(limit),
-        distinct: false,
-        collator_options: None,
-        collator_preferences: None,
-    }
-}
-
-/// Creates `FindOptions` that returns only distinct documents.
-///
-/// This removes duplicate documents from the result set based on their content.
-pub fn distinct() -> FindOptions {
-    FindOptions {
-        sort_by: None,
-        skip: None,
-        limit: None,
-        distinct: true,
         collator_options: None,
         collator_preferences: None,
     }
@@ -123,7 +104,6 @@ impl FindOptions {
             sort_by: None,
             skip: None,
             limit: None,
-            distinct: false,
             collator_options: Some(CollatorOptions::default()),
             collator_preferences: Some(CollatorPreferences::default()),
         }
@@ -154,11 +134,6 @@ impl FindOptions {
 
         let fields = fields.add_sorted_field(field_name, sort_order);
         self.sort_by = Some(fields);
-        self
-    }
-
-    pub fn distinct(mut self) -> FindOptions {
-        self.distinct = true;
         self
     }
 
@@ -205,7 +180,6 @@ mod tests {
         assert_eq!(options.skip, Some(skip));
         assert!(options.sort_by.is_none());
         assert!(options.limit.is_none());
-        assert!(!options.distinct);
         assert!(options.collator_options.is_none());
     }
 
@@ -217,18 +191,6 @@ mod tests {
         assert_eq!(options.limit, Some(limit));
         assert!(options.sort_by.is_none());
         assert!(options.skip.is_none());
-        assert!(!options.distinct);
-        assert!(options.collator_options.is_none());
-    }
-
-    #[test]
-    fn test_distinct() {
-        let options = distinct();
-
-        assert!(options.distinct);
-        assert!(options.sort_by.is_none());
-        assert!(options.skip.is_none());
-        assert!(options.limit.is_none());
         assert!(options.collator_options.is_none());
     }
 
@@ -239,7 +201,6 @@ mod tests {
         assert!(options.sort_by.is_none());
         assert!(options.skip.is_none());
         assert!(options.limit.is_none());
-        assert!(!options.distinct);
         assert!(options.collator_options.is_some());
     }
 
@@ -273,13 +234,6 @@ mod tests {
     }
 
     #[test]
-    fn test_find_options_distinct() {
-        let options = FindOptions::new().distinct();
-
-        assert!(options.distinct);
-    }
-
-    #[test]
     fn test_find_options_collator_options() {
         let collator = CollatorOptions::default();
         let options = FindOptions::new().collator_options(collator);
@@ -302,7 +256,6 @@ mod tests {
         assert!(options.sort_by.is_none());
         assert!(options.skip.is_none());
         assert!(options.limit.is_none());
-        assert!(!options.distinct);
         assert!(options.collator_options.is_some());
         assert!(options.collator_preferences.is_some());
     }
