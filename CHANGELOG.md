@@ -5,6 +5,26 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.0] - 2026-08-07
+
+### Added
+
+- **An `exists` filter.** `field("name").exists()` matches the documents which have the field,
+  irrespective of its value; `field("name").exists().not()` matches those which do not.
+
+  A field explicitly set to `Value::Null` is present and matches. This is the case no existing
+  filter could express: `eq(Value::Null)` and `ne(Value::Null)` cannot tell a missing field apart
+  from one holding null, so "has this document been given a value for this field at all" was not
+  answerable.
+
+  The filter reports `has_field() == false` and so is never elected for an index scan. A missing
+  field and a field holding null are stored under the same null key in an index, so an index scan
+  could not tell them apart and would disagree with a full scan. `get_field_name()` still returns
+  the name.
+
+  Embedded fields are addressed by their dotted path (`field("address.city").exists()`), the same
+  way `Document::contains_field` resolves them.
+
 ## [0.5.0] - 2026-08-02
 
 ### Changed
