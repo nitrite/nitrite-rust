@@ -41,6 +41,7 @@
 //! - **Comparison**: `gt`, `gte`, `lt`, `lte`
 //! - **Pattern**: `regex`, `text`
 //! - **Array**: `in`, `nin`, `elemMatch`
+//! - **Presence**: `exists`
 //! - **Logical**: `and`, `or`, `not`
 //! - **Special**: `all` (match all), `by_id` (match by ID)
 

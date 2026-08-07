@@ -3,8 +3,8 @@ use crate::Value;
 use super::{
     Filter,
     {
-        BetweenFilter, Bound, ComparisonMode, ElementMatchFilter, EqualsFilter, InFilter,
-        NotEqualsFilter, NotInFilter, RegexFilter, SortingAwareFilter, TextFilter,
+        BetweenFilter, Bound, ComparisonMode, ElementMatchFilter, EqualsFilter, ExistsFilter,
+        InFilter, NotEqualsFilter, NotInFilter, RegexFilter, SortingAwareFilter, TextFilter,
     },
 };
 
@@ -72,6 +72,21 @@ impl FluentFilter {
     #[inline]
     pub fn ne<T: Into<Value>>(self, value: T) -> Filter {
         Filter::new(NotEqualsFilter::new(self.field_name, value.into()))
+    }
+
+    /// Creates a filter that matches documents where the field is present, irrespective
+    /// of its value.
+    ///
+    /// A field explicitly set to `Value::Null` is present and matches. Use
+    /// `field("a").exists().not()` for the opposite - the documents which do not have
+    /// the field.
+    ///
+    /// # Returns
+    ///
+    /// A `Filter` matching documents which have the field
+    #[inline]
+    pub fn exists(self) -> Filter {
+        Filter::new(ExistsFilter::new(self.field_name))
     }
 
     /// Creates a filter that matches documents where the field is greater than the specified value.
