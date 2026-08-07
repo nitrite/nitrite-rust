@@ -1,0 +1,56 @@
+[package]
+name = "nitrite-bridge"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.75"
+license = "Apache-2.0"
+description = """
+Inspect a running Nitrite database from a desktop client. The Nitrite adapter
+for the dbinspect wire protocol; the engine-neutral core it plugs into lives in
+the `dbinspect-bridge` crate.
+"""
+repository = "https://github.com/nitrite/nitrite-rust"
+keywords = ["database", "nitrite", "debugging", "inspector"]
+categories = ["development-tools::debugging"]
+readme = "README.md"
+
+[features]
+# **Off by default, and that is the release guard** (threat model F5,
+# criterion 2). A `cargo build` that does not name this feature compiles no
+# server, no protocol strings and no adapter into the binary — a stronger
+# property than a runtime flag, because there is nothing there to switch on.
+# Depend on this crate with `features = ["bridge"]` from a dev profile only.
+default = []
+bridge = ["dep:dbinspect-bridge", "dep:serde_json", "dep:log"]
+
+[dependencies]
+nitrite = { version = "0.5.0", path = "../nitrite" }
+
+# A JSON tree, not a binder: a filter arrives from a paired but untrusted client
+# and is read as `Value` rather than into a type. Same crate the core parses
+# frames with, so a filter is not re-encoded on the way through.
+serde_json = { version = "1", optional = true }
+
+# The seam every Rust library uses. The engine's own message goes to the host
+# application's logger; the wire gets a kind and a sentence that names no path.
+log = { version = "0.4", optional = true }
+
+# Not on crates.io until the dbinspect release, so this resolves through the
+# sibling checkout until then — which is why this package is deliberately absent
+# from the workspace `members`. `cargo publish` uses the version and drops the
+# path.
+dbinspect-bridge = { version = "0.1", path = "../../../fanlight/dbinspect/rust/dbinspect-bridge", optional = true }
+
+[dev-dependencies]
+nitrite_derive = { version = "0.5.0", path = "../nitrite-derive" }
+nitrite_fjall_adapter = { version = "0.5.0", path = "../nitrite-fjall-adapter" }
+base64 = "0.22"
+serde_json = "1"
+tempfile = "3"
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "time"] }
+tokio-tungstenite = "0.28"
+futures-util = "0.3"
+
+[[example]]
+name = "reference_bridge"
+required-features = ["bridge"]

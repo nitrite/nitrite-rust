@@ -1,0 +1,19 @@
+[package]
+name = "nitrite-bridge-example"
+version = "0.1.0"
+edition = "2021"
+publish = false
+description = "A Nitrite application you can browse from Fanlight, and the artifact criterion 2 is checked against."
+
+[features]
+# The whole guard, in one line. A release build that does not name this feature
+# never compiles `nitrite-bridge` — or the core, or the protocol strings — into
+# the binary. `tool/verify_release_binary.sh` builds it both ways and greps.
+default = []
+inspect = ["dep:nitrite-bridge", "dep:dbinspect-bridge", "dep:tokio"]
+
+[dependencies]
+nitrite = { version = "0.5.0", path = "../../nitrite" }
+nitrite-bridge = { version = "0.1.0", path = "..", features = ["bridge"], optional = true }
+dbinspect-bridge = { version = "0.1", path = "../../../../fanlight/dbinspect/rust/dbinspect-bridge", optional = true }
+tokio = { version = "1", features = ["rt", "macros", "signal"], optional = true }

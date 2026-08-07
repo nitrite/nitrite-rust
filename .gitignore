@@ -14,3 +14,10 @@ test-data
 lcov.
 my-coverage-report/
 medium/
+target/
+
+# `nitrite-bridge` is outside the workspace, so it builds into its own target dir.
+nitrite-bridge/target/
+nitrite-bridge/example/target/
+nitrite-bridge/Cargo.lock
+nitrite-bridge/example/Cargo.lock

@@ -2,6 +2,16 @@
 resolver = "2"
 members = ["nitrite", "nitrite-derive", "nitrite-spatial", "nitrite-tantivy-fts", "nitrite-int-test", "nitrite-fjall-adapter", "nitrite-bench", "nitrite-vector"]
 
+# `nitrite-bridge` is deliberately not a member. It depends on
+# `dbinspect-bridge`, which is not on crates.io until the dbinspect release, so
+# a reactor build of a clean checkout would fail on it. Build it on its own:
+#
+#   cargo test --manifest-path nitrite-bridge/Cargo.toml --features bridge
+#
+# The same sequencing fact the Dart and JVM adapters are in — see the dbinspect
+# plan's §2.
+exclude = ["nitrite-bridge"]
+
 [profile.release]
 debug = true
 

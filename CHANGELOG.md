@@ -5,6 +5,38 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- **`nitrite-bridge` — inspect a running Nitrite database from a desktop client.**
+  The Nitrite adapter for the `dbinspect` wire protocol: collections and repositories as browsable
+  stores, schema inferred by sampling 50 documents and flagged as a sample, the filter DSL, and
+  watch over `subscribe`. The engine-neutral core it plugs into is the `dbinspect-bridge` crate and
+  has no database in its dependency tree at all.
+
+  **Everything is behind a non-default `bridge` feature, and that is the release guard.** A build
+  that does not name the feature compiles no server, no protocol strings and no adapter into the
+  binary. Depend on it from `[dev-dependencies]` and it cannot reach a release build.
+
+  The protocol conformance suite passes against it unmodified over **both stores** — 124 checks,
+  122 passed, 0 failed, 2 skipped, in memory and again over fjall — and the adapter's own tests run
+  over both as well.
+
+  The package is deliberately **excluded from the workspace `members`**: `dbinspect-bridge` is not
+  on crates.io yet, so a workspace build of a clean checkout would fail on it. Build it with
+  `cargo test --manifest-path nitrite-bridge/Cargo.toml --features bridge`.
+
+  Two things found while writing it, neither of which is a bug:
+
+  - **No Nitrite implementation has an `exists` filter.** Not this one, not `nitrite-java`, not
+    `nitrite-flutter` — three independent fluent APIs and none that tests whether a field is
+    present. The adapter leaves the operator out of its advertised set rather than approximating it.
+  - **A repository cannot be opened by name**, so the developer hands in the ones they want
+    inspected. `list_repositories()` answers with entity names, but there is no runtime registry to
+    turn one back into a type, and `CollectionFactory::create_collection` refuses a name the
+    repository registry owns. Keyed repositories are handed in the same way and browse correctly.
+
 ## [0.5.0] - 2026-08-02
 
 ### Changed
