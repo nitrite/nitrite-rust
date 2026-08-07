@@ -80,7 +80,7 @@ pub trait NitriteCollectionProvider: PersistentCollection {
 
     /// Finds documents matching a filter with additional options.
     ///
-    /// Options include sorting, pagination (skip/limit), and distinctness.
+    /// Options include sorting and pagination (skip/limit).
     fn find_with_options(
         &self,
         filter: Filter,

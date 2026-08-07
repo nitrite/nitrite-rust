@@ -328,6 +328,106 @@ impl FilterProvider for NotEqualsFilter {
     }
 }
 
+/// A filter that matches documents where a field is present, irrespective of its value.
+///
+/// A field explicitly set to `Value::Null` is present and matches; only a field absent
+/// from the document does not. Embedded fields are addressed by their dotted path, the
+/// same way `Document::contains_field` resolves them.
+///
+/// # Responsibilities
+///
+/// * **Presence Matching**: Evaluates whether a field is present in the document
+/// * **Collection Context**: Tracks collection name for query planning
+pub(crate) struct ExistsFilter {
+    field_name: OnceLock<String>,
+    collection_name: OnceLock<String>,
+}
+
+impl ExistsFilter {
+    /// Creates a new presence filter for the specified field.
+    ///
+    /// # Arguments
+    ///
+    /// * `field_name` - The name of the field whose presence is tested
+    ///
+    /// # Returns
+    ///
+    /// A new `ExistsFilter` instance with an initialized field name
+    #[inline]
+    pub(crate) fn new(field_name: String) -> Self {
+        let name = OnceLock::new();
+        let _ = name.set(field_name);
+
+        ExistsFilter {
+            field_name: name,
+            collection_name: OnceLock::new(),
+        }
+    }
+}
+
+impl Display for ExistsFilter {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self.field_name.get() {
+            Some(name) => write!(f, "({} exists)", name),
+            None => write!(f, "(unknown exists)"),
+        }
+    }
+}
+
+impl FilterProvider for ExistsFilter {
+    #[inline]
+    fn apply(&self, entry: &Document) -> NitriteResult<bool> {
+        let field_name = self.field_name.get()
+            .ok_or_else(|| NitriteError::new(
+                "Exists filter error: field name not set - filter must be properly initialized before applying",
+                ErrorKind::InvalidOperation
+            ))?;
+        Ok(entry.contains_field(field_name))
+    }
+
+    fn get_collection_name(&self) -> NitriteResult<String> {
+        self.collection_name.get().cloned().ok_or_else(|| {
+            log::debug!("Collection name is not set for filter");
+            NitriteError::new("Collection name is not set", ErrorKind::InvalidOperation)
+        })
+    }
+
+    fn set_collection_name(&self, collection_name: String) -> NitriteResult<()> {
+        self.collection_name.get_or_init(|| collection_name);
+        Ok(())
+    }
+
+    /// Deliberately `false`, even though the filter does name a field.
+    ///
+    /// `has_field` is what makes the planner elect a filter for an index scan, and an
+    /// index cannot answer this question: a missing field and a field holding `Null`
+    /// are stored under the same null key, so an index scan would disagree with a full
+    /// scan. Reporting no field keeps it a full-scan filter, which is the only place it
+    /// can be answered correctly. `get_field_name` still returns the name for callers
+    /// that want it.
+    fn has_field(&self) -> bool {
+        false
+    }
+
+    fn get_field_name(&self) -> NitriteResult<String> {
+        self.field_name.get()
+            .cloned()
+            .ok_or_else(|| NitriteError::new(
+                "Exists filter error: field name not set - filter must be properly initialized before accessing",
+                ErrorKind::InvalidOperation
+            ))
+    }
+
+    fn set_field_name(&self, field_name: String) -> NitriteResult<()> {
+        self.field_name.get_or_init(|| field_name);
+        Ok(())
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -511,5 +611,79 @@ mod tests {
 
         // Should have 2 entries (excluding value 42)
         assert_eq!(result.len(), 2);
+    }
+
+    #[test]
+    fn test_exists_filter_apply() {
+        let filter = ExistsFilter::new("field".to_string());
+        let mut doc = Document::new();
+        doc.put("field", Value::I32(42)).unwrap();
+        assert!(filter.apply(&doc).unwrap());
+    }
+
+    #[test]
+    fn test_exists_filter_apply_negative() {
+        let filter = ExistsFilter::new("field".to_string());
+        let mut doc = Document::new();
+        doc.put("other", Value::I32(42)).unwrap();
+        assert!(!filter.apply(&doc).unwrap());
+    }
+
+    #[test]
+    fn test_exists_filter_apply_empty_document() {
+        let filter = ExistsFilter::new("field".to_string());
+        assert!(!filter.apply(&Document::new()).unwrap());
+    }
+
+    #[test]
+    fn test_exists_filter_matches_explicit_null() {
+        let filter = ExistsFilter::new("field".to_string());
+        let mut doc = Document::new();
+        doc.put("field", Value::Null).unwrap();
+        assert!(filter.apply(&doc).unwrap());
+    }
+
+    #[test]
+    fn test_exists_filter_embedded_field() {
+        let filter = ExistsFilter::new("address.city".to_string());
+        let mut inner = Document::new();
+        inner.put("city", Value::String("kolkata".to_string())).unwrap();
+
+        let mut doc = Document::new();
+        doc.put("address", Value::Document(inner)).unwrap();
+
+        assert!(filter.apply(&doc).unwrap());
+        assert!(ExistsFilter::new("address".to_string()).apply(&doc).unwrap());
+        assert!(!ExistsFilter::new("address.pin".to_string()).apply(&doc).unwrap());
+    }
+
+    #[test]
+    fn test_exists_filter_display() {
+        let filter = ExistsFilter::new("field".to_string());
+        assert_eq!(format!("{}", filter), "(field exists)");
+    }
+
+    #[test]
+    fn test_exists_filter_field_name() {
+        let filter = ExistsFilter::new("field".to_string());
+        // reports no field so the planner never elects it for an index scan,
+        // but still exposes the name
+        assert!(!filter.has_field());
+        assert_eq!(filter.get_field_name().unwrap(), "field");
+    }
+
+    #[test]
+    fn test_exists_filter_collection_name() {
+        let filter = ExistsFilter::new("field".to_string());
+        assert!(filter.get_collection_name().is_err());
+        filter.set_collection_name("test".to_string()).unwrap();
+        assert_eq!(filter.get_collection_name().unwrap(), "test");
+    }
+
+    #[test]
+    fn test_exists_filter_does_not_support_index_scan() {
+        let filter = ExistsFilter::new("field".to_string());
+        let index_map = IndexMap::new(None, Some(std::collections::BTreeMap::new()));
+        assert!(filter.apply_on_index(&index_map).is_err());
     }
 }

@@ -411,9 +411,9 @@ checksum = "9330f8b2ff13f34540b44e946ef35111825727b38d33286ef986142615121801"
 
 [[package]]
 name = "chrono"
-version = "0.4.42"
+version = "0.4.45"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "145052bdd345b87320e369255277e3fb5152762ad123a901ef5c262dd38fe8d2"
+checksum = "1aa79e62e7697b8e29b513a68abacf485adcd1fe8284a4316c5ae868e6633327"
 dependencies = [
  "iana-time-zone",
  "js-sys",
@@ -600,9 +600,9 @@ dependencies = [
 
 [[package]]
 name = "crossbeam-channel"
-version = "0.5.15"
+version = "0.5.16"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "82b8f8f868b36967f9606790d1903570de9ceaf870a7bf9fbbd3016d636a2cb2"
+checksum = "d85363c37faeca707aef026efa9f3b34d077bce547e48f770770625c6013679e"
 dependencies = [
  "crossbeam-utils",
 ]
@@ -670,29 +670,13 @@ dependencies = [
 
 [[package]]
 name = "ctor"
-version = "0.4.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ec09e802f5081de6157da9a75701d6c713d8dc3ba52571fd4bd25f412644e8a6"
-dependencies = [
- "ctor-proc-macro 0.0.6",
- "dtor 0.0.6",
-]
-
-[[package]]
-name = "ctor"
 version = "0.6.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "424e0138278faeb2b401f174ad17e715c829512d74f3d1e81eb43365c2e0590e"
 dependencies = [
- "ctor-proc-macro 0.0.7",
- "dtor 0.1.1",
+ "ctor-proc-macro",
+ "dtor",
 ]
-
-[[package]]
-name = "ctor-proc-macro"
-version = "0.0.6"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e2931af7e13dc045d8e9d26afccc6fa115d64e115c9c84b1166288b46f6782c2"
 
 [[package]]
 name = "ctor-proc-macro"
@@ -811,27 +795,12 @@ checksum = "117240f60069e65410b3ae1bb213295bd828f707b5bec6596a1afc8793ce0cbc"
 
 [[package]]
 name = "dtor"
-version = "0.0.6"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "97cbdf2ad6846025e8e25df05171abfb30e3ababa12ee0a0e44b9bbe570633a8"
-dependencies = [
- "dtor-proc-macro 0.0.5",
-]
-
-[[package]]
-name = "dtor"
 version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "404d02eeb088a82cfd873006cb713fe411306c7d182c344905e101fb1167d301"
 dependencies = [
- "dtor-proc-macro 0.0.6",
+ "dtor-proc-macro",
 ]
-
-[[package]]
-name = "dtor-proc-macro"
-version = "0.0.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7454e41ff9012c00d53cf7f475c5e3afa3b91b7c90568495495e8d9bf47a1055"
 
 [[package]]
 name = "dtor-proc-macro"
@@ -1902,9 +1871,9 @@ checksum = "f52b00d39961fc5b2736ea853c9cc86238e165017a493d1d5c8eac6bdc4cc273"
 
 [[package]]
 name = "memmap2"
-version = "0.9.9"
+version = "0.9.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "744133e4a0e0a658e1374cf3bf8e415c4052a15a111acd372764c55b4177d490"
+checksum = "d1219ed1b7f229ee7104d281dd01d6802fe28bb6e95d292942c4daacdeb798c0"
 dependencies = [
  "libc",
 ]
@@ -1932,7 +1901,7 @@ checksum = "2195bf6aa996a481483b29d62a7663eed3fe39600c460e323f8ff41e90bdd89b"
 
 [[package]]
 name = "nitrite"
-version = "0.5.0"
+version = "0.7.0"
 dependencies = [
  "aes-gcm",
  "anyhow",
@@ -1943,7 +1912,7 @@ dependencies = [
  "chrono",
  "colog",
  "crossbeam-skiplist",
- "ctor 0.6.3",
+ "ctor",
  "dashmap",
  "icu_collator",
  "im",
@@ -1965,7 +1934,7 @@ dependencies = [
 
 [[package]]
 name = "nitrite_bench"
-version = "0.5.0"
+version = "0.7.0"
 dependencies = [
  "chrono",
  "criterion",
@@ -1989,7 +1958,7 @@ dependencies = [
 
 [[package]]
 name = "nitrite_derive"
-version = "0.5.0"
+version = "0.7.0"
 dependencies = [
  "log",
  "proc-macro2",
@@ -1999,13 +1968,13 @@ dependencies = [
 
 [[package]]
 name = "nitrite_fjall_adapter"
-version = "0.5.0"
+version = "0.7.0"
 dependencies = [
  "bincode",
  "cargo_toml",
  "colog",
  "crossbeam",
- "ctor 0.4.3",
+ "ctor",
  "dashmap",
  "fjall",
  "log",
@@ -2018,12 +1987,12 @@ dependencies = [
 
 [[package]]
 name = "nitrite_int_test"
-version = "0.5.0"
+version = "0.7.0"
 dependencies = [
  "awaitility",
  "chrono",
  "colog",
- "ctor 0.6.3",
+ "ctor",
  "fake",
  "icu",
  "icu_collator",
@@ -2038,7 +2007,7 @@ dependencies = [
 
 [[package]]
 name = "nitrite_spatial"
-version = "0.5.0"
+version = "0.7.0"
 dependencies = [
  "bincode",
  "criterion",
@@ -2059,7 +2028,7 @@ dependencies = [
 
 [[package]]
 name = "nitrite_tantivy_fts"
-version = "0.5.0"
+version = "0.7.0"
 dependencies = [
  "env_logger",
  "log",
@@ -2074,7 +2043,7 @@ dependencies = [
 
 [[package]]
 name = "nitrite_vector"
-version = "0.5.0"
+version = "0.7.0"
 dependencies = [
  "bincode",
  "criterion",
@@ -2424,9 +2393,9 @@ dependencies = [
 
 [[package]]
 name = "quote"
-version = "1.0.42"
+version = "1.0.47"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a338cc41d27e6cc6dce6cefc13a0729dfbb81c262b1f519331575dd80ef3067f"
+checksum = "1fbf4db142a473a8d80c26bbf18454ed458bf8d26c8219c331daecfdbd079001"
 dependencies = [
  "proc-macro2",
 ]

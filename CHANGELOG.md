@@ -27,15 +27,49 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   on crates.io yet, so a workspace build of a clean checkout would fail on it. Build it with
   `cargo test --manifest-path nitrite-bridge/Cargo.toml --features bridge`.
 
-  Two things found while writing it, neither of which is a bug:
+  It requires nitrite 0.7.0, for `exists`: the adapter advertised every v1 operator except that
+  one for as long as no Nitrite implementation had a filter that tested whether a field was
+  present — not this one, not `nitrite-java`, not `nitrite-flutter`. 0.6.0 added it here and the
+  other two added theirs, so `filter_ops` now carries the whole v1 set.
 
-  - **No Nitrite implementation has an `exists` filter.** Not this one, not `nitrite-java`, not
-    `nitrite-flutter` — three independent fluent APIs and none that tests whether a field is
-    present. The adapter leaves the operator out of its advertised set rather than approximating it.
+  One thing found while writing it, which is not a bug:
+
   - **A repository cannot be opened by name**, so the developer hands in the ones they want
     inspected. `list_repositories()` answers with entity names, but there is no runtime registry to
     turn one back into a type, and `CollectionFactory::create_collection` refuses a name the
     repository registry owns. Keyed repositories are handed in the same way and browse correctly.
+
+## [0.7.0] - 2026-08-07
+
+### Removed
+
+- **BREAKING**: Removed the `distinct` find option - the `distinct()` free function, `FindOptions::distinct()`, and `FindPlan::distinct()`. It had no effect on the result set. A find never returns the same document twice, and the only place the flag was ever read was the `or` sub-plan union, which now deduplicates unconditionally (see below) because an `or` is a set union by definition. The flag's sole remaining effect was to paper over the duplicate defect fixed in this release. Callers passing `distinct()` can drop it without any change in results.
+
+### Fixed
+
+- `find` no longer returns a document more than once from an `or` filter when the document satisfies more than one branch. Two separate defects both produced duplicates:
+  - When any branch of the `or` was not index-backed, the planner intended to discard the per-branch sub-plans and run the whole `or` as a single full scan, but only dropped a borrowed handle to them - the sub-plans stayed on the `FindPlan` and were executed *in addition to* the full scan. A document matching two branches came out twice, so `field("x").eq(1).or(field("y").eq(2))` over a two-document collection reported three rows. Sub-plans are now attached only once every branch is known to be index-backed (or resolvable by `_id`); otherwise the `or` runs purely as a full scan.
+  - When every branch *was* index-backed, the union of the per-branch scans was only deduplicated if the caller passed the `distinct()` find option, which defaulted to off. An `or` is a set union by definition, so the union is now always deduplicated by `NitriteId`.
+
+## [0.6.0] - 2026-08-07
+
+### Added
+
+- **An `exists` filter.** `field("name").exists()` matches the documents which have the field,
+  irrespective of its value; `field("name").exists().not()` matches those which do not.
+
+  A field explicitly set to `Value::Null` is present and matches. This is the case no existing
+  filter could express: `eq(Value::Null)` and `ne(Value::Null)` cannot tell a missing field apart
+  from one holding null, so "has this document been given a value for this field at all" was not
+  answerable.
+
+  The filter reports `has_field() == false` and so is never elected for an index scan. A missing
+  field and a field holding null are stored under the same null key in an index, so an index scan
+  could not tell them apart and would disagree with a full scan. `get_field_name()` still returns
+  the name.
+
+  Embedded fields are addressed by their dotted path (`field("address.city").exists()`), the same
+  way `Document::contains_field` resolves them.
 
 ## [0.5.0] - 2026-08-02
 

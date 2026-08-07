@@ -560,7 +560,7 @@ col.is_open()?;
 ### FindOptions
 
 ```rust
-use nitrite::collection::{FindOptions, order_by, skip_by, limit_to, distinct};
+use nitrite::collection::{FindOptions, order_by, skip_by, limit_to};
 use nitrite::common::SortOrder;
 
 // Builder pattern
@@ -574,7 +574,6 @@ let opts = FindOptions::new()
 let opts = order_by("name", SortOrder::Ascending);
 let opts = skip_by(5);
 let opts = limit_to(100);
-let opts = distinct();
 
 // With collation
 let opts = FindOptions::new()
