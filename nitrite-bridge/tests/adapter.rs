@@ -316,6 +316,24 @@ fn every_advertised_operator_round_trips_against_a_real_store() {
             247,
             "{store}"
         );
+        // Half the fixture rows carry `age`, which is what makes presence a
+        // different question from any comparison. `value` is ignored on
+        // purpose: `exists: false` is not "does not exist" — that is `not`.
+        assert_eq!(
+            matching(json!({"field": "age", "op": "exists"})),
+            125,
+            "{store}"
+        );
+        assert_eq!(
+            matching(json!({"field": "age", "op": "exists", "value": false})),
+            125,
+            "{store}"
+        );
+        assert_eq!(
+            matching(json!({"not": {"field": "age", "op": "exists"}})),
+            125,
+            "{store}"
+        );
 
         // and / or / not, which is what a client's console actually sends.
         assert_eq!(
@@ -348,7 +366,7 @@ fn an_operator_this_adapter_does_not_advertise_is_refused_rather_than_approximat
     // criterion; this is the other side of it — an operator that got past the
     // client anyway is a `badRequest`, never an unfiltered page.
     let (adapter, _fixture) = adapter_over("memory");
-    for op in ["exists", "between", "elemMatch", "regex"] {
+    for op in ["between", "elemMatch", "regex"] {
         assert!(!adapter.capabilities().filter_ops.contains(&op.to_string()));
         let refused = adapter.query_page(
             &PageRequest::from_params(&params(json!({

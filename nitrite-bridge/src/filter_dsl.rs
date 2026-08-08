@@ -10,19 +10,19 @@ use serde_json::{Map, Value as Json};
 
 /// The v1 filter operators this implementation actually supports.
 ///
-/// **`exists` is deliberately absent**, exactly as in the Dart adapter, and for
-/// the same reason: `docs/PROTOCOL.md` §4.1 lists it among the v1 operators and
-/// `capabilities.filterOps` is authoritative precisely because the three Nitrite
-/// implementations were never assumed to have identical filter support.
-/// `nitrite` 0.5.0's fluent API offers eq, ne, gt, gte, lt, lte, between,
-/// text, text_regex, in_array, not_in_array and elem_match, and nothing that
-/// tests for a field's presence. The client greys the operator out rather than
-/// the bridge mistranslating it.
+/// **`exists` was absent until `nitrite` 0.6.0 and is now here**, exactly as in
+/// the Dart and JVM adapters: `docs/PROTOCOL.md` §4.1 has always listed it among
+/// the v1 operators, and it was reported unsupported for as long as the fluent
+/// API had nothing that tested for a field's presence. `capabilities.filterOps`
+/// stays authoritative either way — that is the mechanism that let the gap be
+/// honest rather than mistranslated, and it is what makes closing it a one-line
+/// change.
 ///
 /// `between` and `elem_match` are the other direction — Rust has them and v1
 /// does not, so they stay out until the protocol gains them.
-pub const NITRITE_FILTER_OPS: [&str; 9] =
-    ["eq", "ne", "gt", "gte", "lt", "lte", "in", "notIn", "text"];
+pub const NITRITE_FILTER_OPS: [&str; 10] = [
+    "eq", "ne", "gt", "gte", "lt", "lte", "in", "notIn", "exists", "text",
+];
 
 /// Reported in `filterOps` only when the developer set `allow_regex` (threat
 /// model F10, criterion 9).
@@ -113,6 +113,11 @@ fn leaf(node: &Map<String, Json>, allow_regex: bool) -> BridgeResult<Filter> {
         "lte" => Ok(on().lte(ordered(value, op)?)),
         "in" => Ok(on().in_array(ordered_list(value, op)?)),
         "notIn" => Ok(on().not_in_array(ordered_list(value, op)?)),
+        // Presence only, and `value` is deliberately ignored: `exists: false` is
+        // not "does not exist" in the protocol — that is `not`. Reading the
+        // value would select the opposite rows for a client that sent one out of
+        // habit.
+        "exists" => Ok(on().exists()),
         "text" => Ok(on().text(text(value)?)),
         NITRITE_REGEX_OP => {
             if !allow_regex {
@@ -272,6 +277,7 @@ mod tests {
             ("lte", json!(1)),
             ("in", json!([1, 2])),
             ("notIn", json!(["a"])),
+            ("exists", json!(null)),
             ("text", json!("hello")),
         ] {
             assert!(NITRITE_FILTER_OPS.contains(&op));
@@ -282,9 +288,9 @@ mod tests {
 
     #[test]
     fn an_operator_this_adapter_does_not_have_is_refused_rather_than_approximated() {
-        // `exists` is in the protocol and not in this implementation, and that
-        // is what `filterOps` is for.
-        for op in ["exists", "between", "elemMatch", "nearby", ""] {
+        // `between` and `elemMatch` are the other direction — Nitrite has them
+        // and the protocol does not — and that is what `filterOps` is for.
+        for op in ["between", "elemMatch", "nearby", ""] {
             assert!(parsed(json!({"field": "age", "op": op, "value": 1})).is_err());
         }
     }

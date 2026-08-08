@@ -21,8 +21,12 @@
 mod adapter;
 #[cfg(feature = "bridge")]
 pub mod filter_dsl;
+/// Nitrite's `Value` on its way to the wire.
+///
+/// Public because Fanlight's Rust sidecar encodes the same documents from the
+/// same engine, and a second implementation of this is the thing that drifts.
 #[cfg(feature = "bridge")]
-mod values;
+pub mod values;
 
 #[cfg(feature = "bridge")]
 pub use adapter::{NitriteAdapter, DEFAULT_SAMPLE_SIZE};

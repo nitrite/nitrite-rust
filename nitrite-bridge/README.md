@@ -72,14 +72,15 @@ failure budget that is per bridge session rather than per connection.
 
 ## Filter operators
 
-`eq`, `ne`, `gt`, `gte`, `lt`, `lte`, `in`, `notIn`, `text`, plus `and`, `or`,
-`not` — and `regex` behind `allow_regex`. `capabilities.filterOps` is
-authoritative and the client greys out what is missing.
+`eq`, `ne`, `gt`, `gte`, `lt`, `lte`, `in`, `notIn`, `exists`, `text`, plus
+`and`, `or`, `not` — and `regex` behind `allow_regex`. `capabilities.filterOps`
+is authoritative and the client greys out what is missing.
 
-`exists` is **not** in the list: `nitrite` 0.5.0 has no filter that tests
-whether a field is present, and neither do `nitrite-java` or `nitrite-flutter`.
-`between` and `elem_match` are the other direction — Rust has them and the v1
-protocol does not.
+`exists` needs `nitrite` 0.7.0, which is the floor this crate sets. It tests
+presence only: a field explicitly set to `Value::Null` is present and matches,
+and "does not have the field" is `not` around it, never `exists` with
+`value: false`. `between` and `elem_match` are the other direction — Rust has
+them and the v1 protocol does not.
 
 `text` needs a full-text index on the field; without one the engine refuses and
 the adapter surfaces that as an `adapter` error rather than an opaque failure.
