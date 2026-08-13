@@ -3,13 +3,15 @@
 use std::time::Instant;
 
 use dbinspect_bridge::{
-    encode_row, AdapterCapabilities, BridgeAdapter, BridgeError, BridgeResult, ColumnInfo,
-    PageRequest, QueryConsole, QueryPage, StoreInfo, StoreSchema, Unsubscribe, WatchScope,
+    encode_row, AdapterCapabilities, BlobChunk, BlobRequest, BridgeAdapter, BridgeError,
+    BridgeResult, ColumnInfo, PageRequest, QueryConsole, QueryPage, StoreInfo, StoreSchema,
+    Unsubscribe, WatchScope, WriteOp, WriteRequest, WriteResult,
 };
 use nitrite::collection::{
-    CollectionEventListener, CollectionEvents, FindOptions, NitriteCollection,
+    CollectionEventListener, CollectionEvents, Document, FindOptions, NitriteCollection, NitriteId,
 };
-use nitrite::common::{SortOrder, DOC_ID, KEY_OBJ_SEPARATOR};
+use nitrite::common::{SortOrder, Value, DOC_ID, KEY_OBJ_SEPARATOR};
+use serde_json::{json, Map, Value as JsonValue};
 
 use nitrite::filter::all;
 use nitrite::nitrite::Nitrite;
@@ -71,6 +73,8 @@ pub struct NitriteAdapter {
     repositories: Vec<NitriteCollection>,
     sample_size: u64,
     allow_regex: bool,
+    allow_write: bool,
+    allow_snapshot: bool,
     capabilities: AdapterCapabilities,
 }
 
@@ -85,7 +89,9 @@ impl NitriteAdapter {
             repositories: Vec::new(),
             sample_size: DEFAULT_SAMPLE_SIZE,
             allow_regex: false,
-            capabilities: capabilities(false),
+            allow_write: false,
+            allow_snapshot: false,
+            capabilities: capabilities(false, false, false),
         }
     }
 
@@ -103,7 +109,23 @@ impl NitriteAdapter {
     /// it on for this adapter, and absent from `filterOps` when off.
     pub fn allow_regex(mut self, allow_regex: bool) -> Self {
         self.allow_regex = allow_regex;
-        self.capabilities = capabilities(allow_regex);
+        self.capabilities = capabilities(allow_regex, self.allow_write, self.allow_snapshot);
+        self
+    }
+
+    /// Threat model rule 5: the three write methods are refused by the core
+    /// until this, and `edit` is absent from `capabilities` while it is off.
+    pub fn allow_write(mut self, allow_write: bool) -> Self {
+        self.allow_write = allow_write;
+        self.capabilities = capabilities(self.allow_regex, allow_write, self.allow_snapshot);
+        self
+    }
+
+    /// Whole-store `snapshot`, off by default: it is the one method that returns
+    /// everything in a single call.
+    pub fn allow_snapshot(mut self, allow_snapshot: bool) -> Self {
+        self.allow_snapshot = allow_snapshot;
+        self.capabilities = capabilities(self.allow_regex, self.allow_write, allow_snapshot);
         self
     }
 
@@ -192,19 +214,26 @@ impl NitriteAdapter {
     }
 }
 
-fn capabilities(allow_regex: bool) -> AdapterCapabilities {
+fn capabilities(allow_regex: bool, allow_write: bool, allow_snapshot: bool) -> AdapterCapabilities {
     let mut ops: Vec<String> = NITRITE_FILTER_OPS.iter().map(|op| op.to_string()).collect();
     if allow_regex {
         ops.push(NITRITE_REGEX_OP.to_string());
     }
-    // Everything dangerous stays off: `edit` and `snapshot` arrive with the
-    // milestones that implement them, and `sql` never applies to a document
+    // Everything dangerous stays off unless the embedding developer turned it on
+    // for this adapter (threat model rule 5); `sql` never applies to a document
     // store.
-    AdapterCapabilities::read_only(QueryConsole::Filter)
+    let mut capabilities = AdapterCapabilities::read_only(QueryConsole::Filter)
         // Nitrite's own collection-level subscription, so a write from anywhere
         // in this process is seen — not only this bridge's own.
         .watching(WatchScope::Engine)
-        .with_filter_ops(ops)
+        .with_filter_ops(ops);
+    capabilities.edit = allow_write;
+    capabilities.snapshot = allow_snapshot;
+    // Not an opt-in: `query_page` already showed the first 64 KB of this very
+    // cell, and `docs/PROTOCOL.md` §2 has always promised the rest on request.
+    // A document is addressed by `_id`, which every row has.
+    capabilities.blob = true;
+    capabilities
 }
 
 /// `memory`, `fjall`, or whatever the store calls itself — taken from
@@ -376,6 +405,94 @@ impl BridgeAdapter for NitriteAdapter {
         })
     }
 
+    /// One row, addressed by `_id` — the identity `docs/PROTOCOL.md` §3 gives
+    /// every Nitrite implementation.
+    fn write(&self, request: &WriteRequest) -> BridgeResult<WriteResult> {
+        let collection = self.resolve(&request.store)?;
+
+        match request.op {
+            WriteOp::Insert => {
+                let document = document_of(&request.values)?;
+                let written = collection
+                    .insert(document)
+                    .map_err(|error| adapter_error("the store refused the insert", error))?;
+                let ids = written.affected_nitrite_ids();
+                Ok(WriteResult {
+                    changes: ids.len() as u64,
+                    // The value the client addresses the row by afterwards, in
+                    // the rendering `_id` already has in a page.
+                    id: ids.first().map(|id| json!(id.to_string())),
+                })
+            }
+            WriteOp::Update => {
+                if request.values.contains_key(DOC_ID) {
+                    // Nitrite merges the update document, so an `_id` in it
+                    // would rewrite the identity of the row it just matched.
+                    // The identity is `rowId`, and it is not editable.
+                    return Err(BridgeError::bad_request("_id is not an editable field")
+                        .with_detail("a row is addressed by rowId; the engine owns its identity"));
+                }
+                let id = row_id_of(request)?;
+                let update = document_of(&request.values)?;
+                let written = collection
+                    .update_by_id(&id, &update, false)
+                    .map_err(|error| adapter_error("the store refused the update", error))?;
+                Ok(WriteResult::new(
+                    written.affected_nitrite_ids().len() as u64
+                ))
+            }
+            WriteOp::Delete => {
+                let id = row_id_of(request)?;
+                let existing = collection
+                    .get_by_id(&id)
+                    .map_err(|error| adapter_error("the store could not read the row", error))?;
+                // `changes: 0` is an answer, not an error: the row the client
+                // addressed was not there.
+                let Some(existing) = existing else {
+                    return Ok(WriteResult::new(0));
+                };
+                let written = collection
+                    .remove_one(&existing)
+                    .map_err(|error| adapter_error("the store refused the delete", error))?;
+                Ok(WriteResult::new(
+                    written.affected_nitrite_ids().len() as u64
+                ))
+            }
+        }
+    }
+
+    /// One binary cell, whole, rather than the 64 KB `query_page` showed.
+    ///
+    /// Read by id rather than by filter: this is the O(1) lookup the engine
+    /// already has, and the row the client is looking at is one it has an `_id`
+    /// for by definition.
+    fn fetch_blob(&self, request: &BlobRequest) -> BridgeResult<Option<BlobChunk>> {
+        let collection = self.resolve(&request.store)?;
+        let id = parse_id(&request.row_id)?;
+        let document = collection
+            .get_by_id(&id)
+            .map_err(|error| adapter_error("the store could not read the row", error))?;
+        let Some(document) = document else {
+            return Ok(None);
+        };
+
+        let value = document
+            .get(&request.column)
+            .map_err(|error| adapter_error("the store could not read the field", error))?;
+        match value {
+            Value::Null | Value::Unknown => Ok(None),
+            Value::Bytes(bytes) => Ok(Some(BlobChunk::slice(&bytes, request))),
+            // A client asking for the bytes of a field that is not bytes has a
+            // stale schema, and a rendering handed back as a file is a
+            // fabricated download rather than a helpful one.
+            other => Err(BridgeError::bad_request(format!(
+                "\"{}\" is not a binary field",
+                request.column
+            ))
+            .with_detail(format!("it is {}", values::type_of(&other).unwrap_or("null")))),
+        }
+    }
+
     fn watch(
         &self,
         store: &str,
@@ -408,6 +525,64 @@ impl BridgeAdapter for NitriteAdapter {
             }
         }))
     }
+}
+
+/// The document a write carries, with `_id` turned back into an identity.
+///
+/// The core already refused everything that is not a JSON scalar, so what is
+/// left is the four shapes below and the one field Nitrite types itself.
+fn document_of(values: &Map<String, JsonValue>) -> BridgeResult<Document> {
+    let mut document = Document::new();
+    for (field, value) in values {
+        let value = if field == DOC_ID {
+            Value::NitriteId(parse_id(value)?)
+        } else {
+            match value {
+                JsonValue::Null => Value::Null,
+                JsonValue::Bool(flag) => Value::Bool(*flag),
+                JsonValue::Number(number) => match number.as_i64() {
+                    Some(int) => Value::I64(int),
+                    None => Value::F64(number.as_f64().unwrap_or_default()),
+                },
+                JsonValue::String(text) => Value::String(text.clone()),
+                // Unreachable: `WriteRequest` refuses an array or an object.
+                other => Value::String(other.to_string()),
+            }
+        };
+        document
+            .put(field.clone(), value)
+            .map_err(|error| adapter_error("the store refused a field", error))?;
+    }
+    Ok(document)
+}
+
+/// `WriteRequest` guarantees an identity on update and delete; this turns it
+/// into the one Nitrite addresses a row by.
+fn row_id_of(request: &WriteRequest) -> BridgeResult<NitriteId> {
+    parse_id(request.row_id.as_ref().expect("validated by the core"))
+}
+
+/// Accepts an id in the rendering a page carried — `[1755…]NO₂`, which is what
+/// `NitriteId`'s `Display` produces and therefore what a client echoes back —
+/// and the bare number underneath it, which is what a person types.
+fn parse_id(value: &JsonValue) -> BridgeResult<NitriteId> {
+    let text = match value {
+        JsonValue::String(text) => text.clone(),
+        JsonValue::Number(number) => number.to_string(),
+        _ => return Err(BridgeError::bad_request("rowId is not a Nitrite _id")),
+    };
+    let digits = match (text.find('['), text.find(']')) {
+        (Some(open), Some(close)) if open < close => &text[open + 1..close],
+        _ => text.as_str(),
+    };
+    digits
+        .parse::<u64>()
+        .ok()
+        .and_then(|id| NitriteId::create_id(id).ok())
+        .ok_or_else(|| {
+            BridgeError::bad_request("rowId is not a Nitrite _id")
+                .with_detail("an _id is the value the store reported in that column")
+        })
 }
 
 fn wire_event(event: CollectionEvents) -> &'static str {

@@ -14,7 +14,7 @@
 
 mod fixture;
 
-use dbinspect_bridge::{BridgeAdapter, PageRequest};
+use dbinspect_bridge::{BridgeAdapter, PageRequest, WriteOp, WriteRequest};
 use nitrite_bridge::filter_dsl::{NITRITE_FILTER_OPS, NITRITE_REGEX_OP};
 use nitrite_bridge::NitriteAdapter;
 use serde_json::{json, Map, Value};
@@ -419,6 +419,173 @@ fn text_round_trips_on_an_indexed_field_and_is_refused_legibly_on_an_unindexed_o
             "{store}: a condition the developer can fix must not be an internal error"
         );
     }
+}
+
+// ---------------------------------------------------------------------- write
+
+fn writable_adapter_over(store: &str) -> (NitriteAdapter, fixture::Fixture) {
+    let (adapter, fixture) = adapter_over(store);
+    (adapter.allow_write(true), fixture)
+}
+
+fn write(
+    adapter: &NitriteAdapter,
+    method: &str,
+    request: Value,
+) -> dbinspect_bridge::BridgeResult<dbinspect_bridge::WriteResult> {
+    let op = WriteOp::from_wire_name(method).expect("not a write method");
+    // Through the core's validator, because that is where an adapter is reached
+    // from: a test that built a `WriteRequest` by hand would be testing a path
+    // no client can take.
+    let request = WriteRequest::from_params(&params(request), &adapter.capabilities(), op)?;
+    adapter.write(&request)
+}
+
+#[test]
+fn the_three_writes_round_trip_on_every_engine() {
+    for store in STORES {
+        let (adapter, _fixture) = writable_adapter_over(store);
+
+        let inserted = write(
+            &adapter,
+            "insertRow",
+            json!({"store": "users", "values": {"name": "ada", "age": 36}}),
+        )
+        .unwrap_or_else(|error| panic!("{store}: insert refused: {}", error.message));
+        assert_eq!(inserted.changes, 1, "{store}");
+        let id = inserted.id.clone().expect("an insert reports its identity");
+
+        // The identity the insert reported is the one an update addresses, which
+        // is the whole claim `docs/PROTOCOL.md` §3 makes about `_id`.
+        let updated = write(
+            &adapter,
+            "updateRow",
+            json!({"store": "users", "rowId": id, "values": {"age": 37}}),
+        )
+        .unwrap_or_else(|error| panic!("{store}: update refused: {}", error.message));
+        assert_eq!(updated.changes, 1, "{store}");
+
+        // A partial update leaves the fields it did not name alone. Selected by
+        // `age`, which the fixture only ever gives even values, rather than by
+        // `name`, which carries a full-text index and takes `text` instead.
+        let row = page(
+            &adapter,
+            json!({"store": "users", "filter": {"field": "age", "op": "eq", "value": 37}}),
+        );
+        assert_eq!(row.rows.len(), 1, "{store}");
+        assert_eq!(row.rows[0]["age"], json!(37), "{store}");
+        assert_eq!(row.rows[0]["name"], json!("ada"), "{store}");
+
+        let deleted = write(
+            &adapter,
+            "deleteRow",
+            json!({"store": "users", "rowId": id}),
+        )
+        .unwrap_or_else(|error| panic!("{store}: delete refused: {}", error.message));
+        assert_eq!(deleted.changes, 1, "{store}");
+
+        // `changes: 0` is an answer, not an error: the row is gone, and a client
+        // must be able to tell that from a write that failed.
+        let again = write(
+            &adapter,
+            "deleteRow",
+            json!({"store": "users", "rowId": id}),
+        )
+        .unwrap_or_else(|error| panic!("{store}: delete refused: {}", error.message));
+        assert_eq!(again.changes, 0, "{store}");
+    }
+}
+
+#[test]
+fn an_id_is_addressable_in_the_rendering_a_page_carried_and_as_its_bare_number() {
+    let (adapter, _fixture) = writable_adapter_over("memory");
+    let rendered = page(&adapter, json!({"store": "users", "pageSize": 1})).rows[0]["_id"].clone();
+    let bare = rendered
+        .as_str()
+        .unwrap()
+        .trim_start_matches('[')
+        .split(']')
+        .next()
+        .unwrap()
+        .to_string();
+
+    for row_id in [rendered, json!(bare)] {
+        let updated = write(
+            &adapter,
+            "updateRow",
+            json!({"store": "users", "rowId": row_id, "values": {"seen": true}}),
+        )
+        .unwrap_or_else(|error| panic!("{row_id} refused: {}", error.message));
+        assert_eq!(updated.changes, 1, "{row_id}");
+    }
+}
+
+#[test]
+fn the_writes_an_adapter_must_refuse() {
+    let (adapter, _fixture) = writable_adapter_over("memory");
+
+    // The identity is `rowId` and the engine owns it: Nitrite merges the update
+    // document, so an `_id` in it would silently rewrite the row's identity.
+    let identity = write(
+        &adapter,
+        "updateRow",
+        json!({"store": "users", "rowId": 1, "values": {"_id": "2"}}),
+    )
+    .expect_err("_id was accepted as an editable field");
+    assert_eq!(identity.kind, dbinspect_bridge::BridgeErrorKind::BadRequest);
+
+    // Not an `_id` at all. A store that took this for one would update whatever
+    // it happened to match.
+    let nonsense = write(
+        &adapter,
+        "deleteRow",
+        json!({"store": "users", "rowId": "not-an-id"}),
+    )
+    .expect_err("a non-id was accepted as a row identity");
+    assert_eq!(nonsense.kind, dbinspect_bridge::BridgeErrorKind::BadRequest);
+
+    // The store allow-list is the same one every read goes through: an unchecked
+    // name would let a paired client create a collection by writing to it.
+    let unknown = write(
+        &adapter,
+        "insertRow",
+        json!({"store": "__no_store__", "values": {"name": "ada"}}),
+    )
+    .expect_err("an unknown store was written to");
+    assert_eq!(unknown.kind, dbinspect_bridge::BridgeErrorKind::BadRequest);
+}
+
+#[test]
+fn writing_is_refused_until_the_developer_opts_in() {
+    // Criterion 10, at the adapter: the gate is the core's, and this is the
+    // proof that a default-constructed adapter never opens it.
+    let (adapter, _fixture) = adapter_over("memory");
+    assert!(!adapter.capabilities().edit);
+    let refused = write(
+        &adapter,
+        "insertRow",
+        json!({"store": "users", "values": {"name": "ada"}}),
+    )
+    .expect_err("a read-only adapter wrote");
+    assert_eq!(refused.kind, dbinspect_bridge::BridgeErrorKind::Forbidden);
+}
+
+#[test]
+fn a_snapshot_pages_the_whole_store_once_the_developer_opts_in() {
+    let (adapter, _fixture) = adapter_over("memory");
+    assert!(!adapter.capabilities().snapshot);
+
+    let adapter = NitriteAdapter::new(_fixture.db.clone(), "nitrite-main", "app data")
+        .allow_snapshot(true);
+    let request =
+        dbinspect_bridge::SnapshotRequest::from_params(&params(json!({"store": "users"})), &adapter.capabilities())
+            .expect("the request was refused");
+
+    let mut rows = 0;
+    adapter
+        .snapshot(&request, &mut |chunk| rows += chunk.len())
+        .expect("the snapshot failed");
+    assert_eq!(rows, 250);
 }
 
 // ---------------------------------------------------------------------- watch

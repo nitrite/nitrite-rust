@@ -62,10 +62,22 @@ build at all.
 with a certificate generated for the session, whose SHA-256 fingerprint goes in
 the pairing banner for the client to pin.
 
-**Read-only, and everything else is off.** `edit` and `snapshot` are `false`,
-`regex` is absent from `filterOps` unless you call `.allow_regex(true)`. A
-store name from a client is resolved against the set the adapter reported, so a
-paired client cannot make `Nitrite::collection` create anything.
+**Read-only, and everything else is off.** `edit` and `snapshot` are `false`
+unless you call `.allow_write(true)` or `.allow_snapshot(true)`, and `regex` is
+absent from `filterOps` unless you call `.allow_regex(true)`. What is off is
+*absent from the reported capabilities*, not merely refused at call time, so the
+client greys it out rather than offering something that will fail. A store name
+from a client is resolved against the set the adapter reported, so a paired
+client cannot make `Nitrite::collection` create anything — and that same
+allow-list is what a write goes through.
+
+**A row is addressed by `_id`.** `updateRow` and `deleteRow` take the value the
+grid showed in that column; the bare number and the bracketed
+`[1755…]NO₂` rendering are both accepted. `_id` inside an update's `values` is
+refused: Nitrite merges an update document, so it would rewrite the identity of
+the row it just matched. An update is partial — the fields it does not name are
+left alone — and `changes: 0` means the row was not there, which is an answer
+rather than an error.
 
 **Pairing is 40 bits**, regenerated per run, compared in constant time, with a
 failure budget that is per bridge session rather than per connection.

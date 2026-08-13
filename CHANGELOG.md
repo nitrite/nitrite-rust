@@ -15,6 +15,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   watch over `subscribe`. The engine-neutral core it plugs into is the `dbinspect-bridge` crate and
   has no database in its dependency tree at all.
 
+  **Row editing is behind `allow_write`, and whole-store `snapshot` behind `allow_snapshot`** —
+  both `false` unless the embedding application asks, and absent from the reported capabilities
+  while they are. A row is addressed by `_id`, in the rendering a page carried or as the bare
+  number; an update is partial; `changes: 0` means the row was not there. `_id` inside an update's
+  `values` is refused, because Nitrite merges an update document and it would rewrite the identity
+  of the row it just matched.
+
   **Everything is behind a non-default `bridge` feature, and that is the release guard.** A build
   that does not name the feature compiles no server, no protocol strings and no adapter into the
   binary. Depend on it from `[dev-dependencies]` and it cannot reach a release build.
