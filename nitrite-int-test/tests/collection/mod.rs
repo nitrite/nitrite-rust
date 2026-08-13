@@ -19,3 +19,4 @@ mod collection_insert_negative_test;
 mod collection_delete_negative_test;
 mod non_unique_index_scale_test;
 
+mod sorted_find_index_test;

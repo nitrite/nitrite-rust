@@ -5,6 +5,44 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.0] - 2026-08-14
+
+### Changed
+
+- **A sorted, limited `find` no longer fetches the whole collection when the sort field is indexed.**
+  `find_with_options(all(), order_by("created_at", Descending).limit(20))` asked for 20 rows and
+  cost what draining every stored document costs. `SortedStream` collects and fully deserializes
+  the entire result set in its constructor, before `Skip`/`Take` get to drop 99% of it - and the
+  cost is the decode, not the comparison, so it scales with document *size* as well as count. An
+  index on the sort field bought nothing (~3%): the index was only ever used to *filter*, never to
+  order, and page 50 cost exactly what page 1 cost because the work finished before `skip` applied.
+
+  When the query has no filter, one sort field, a limit, and a simple unique or non-unique index on
+  exactly that field, the sort keys are now read from that index - which already stores them - and
+  only the documents actually returned are fetched. Measured over 1000 rows each carrying a
+  150-element array, a `limit(20)` page went from 384 ms to 15 ms, and stopped growing with the
+  collection.
+
+  The index is used only when it holds exactly one entry per stored document. A multi-valued field
+  is indexed once per element and a non-comparable value is not indexed at all, so both are detected
+  (by a duplicate-id check and an entry-count check) and fall back to the blocking sort. Ordering,
+  including where nulls sort and how ties break, is identical either way: the same comparator runs
+  over keys taken from the index instead of from the documents.
+
+  New on `FindPlan`: `sort_index_descriptor()`, the planner's hint that a sort may be answerable
+  from an index. Additive; no existing API changed.
+
+- **`size()` on a fjall-backed map no longer decodes every stored value.** Counting is a full scan
+  either way, but it went through `PartitionHandle::len`, which walks key *and* value - so counting
+  a collection of fat documents read and decoded every document in it. It now walks keys only.
+  This is what made the index-ordered sort above worth having on the fjall adapter: with the old
+  count, checking that the index covers the collection cost more than the blocking sort it replaced.
+
+- `SortedStream::new` no longer holds the result set twice. It cloned the collected buffer into a
+  second `Vec` purely to strip errors, keeping both alive until the constructor returned, so peak
+  footprint was 2n documents - the cause of the instability above ~2000 fat rows. It now truncates
+  the buffer it already owns.
+
 ## [0.7.0] - 2026-08-07
 
 ### Removed

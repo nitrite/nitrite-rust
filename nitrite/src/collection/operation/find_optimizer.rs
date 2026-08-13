@@ -11,7 +11,7 @@ use crate::{
         is_text_filter, Filter, FilterProvider, IndexScanFilter,
     },
     index::IndexDescriptor,
-    SortOrder, DOC_ID,
+    SortOrder, DOC_ID, NON_UNIQUE_INDEX, UNIQUE_INDEX,
 };
 use std::collections::{BTreeMap, HashMap};
 use std::hash::{DefaultHasher, Hash, Hasher};
@@ -99,7 +99,7 @@ impl FindOptimizerInner {
         
         // Create new plan
         let mut find_plan = self.create_find_plan_internal(index_descriptors, filter)?;
-        self.read_sort_options(find_options, &mut find_plan)?;
+        self.read_sort_options(find_options, &mut find_plan, index_descriptors)?;
         self.read_limit_options(find_options, &mut find_plan)?;
 
         if let Some(options) = find_options.collator_options {
@@ -550,20 +550,68 @@ impl FindOptimizerInner {
         &self,
         find_options: &FindOptions,
         find_plan: &mut FindPlan,
+        index_descriptors: &[IndexDescriptor],
     ) -> NitriteResult<()> {
         if let Some(sort_by) = &find_options.sort_by {
-            // Always apply an explicit (blocking) sort to the result set. The index is still
-            // used to *filter* (select the matching ids); ordering is applied to that result.
+            let sort_order = sort_by.sorting_order();
+
+            // The blocking sort stays as the plan of record: it is correct regardless of index
+            // coverage, and the reader falls back to it whenever the hint below turns out not
+            // to hold. What it costs is a full fetch - every matching document is deserialised
+            // so its sort key can be read, even for `limit(20)`.
             //
-            // We deliberately do not try to satisfy the sort directly from the index scan: the
-            // index scanner deduplicates matching ids by `NitriteId`, which discards the field
-            // order it walked, so "the index already returns rows sorted by the field" does not
-            // actually hold. Sorting here keeps results correct regardless of index coverage or
-            // scan direction (ascending or descending).
-            find_plan.set_blocking_sort_order(sort_by.sorting_order());
+            // A simple index on the sort field already stores that key, so when the query is an
+            // unfiltered, limited, single-field sort the keys can be read from the index and
+            // only the returned documents fetched. Record the index as a hint; `ReadOperations`
+            // validates it against the collection before using it.
+            if let Some(descriptor) =
+                Self::sort_index_for(&sort_order, find_options, find_plan, index_descriptors)
+            {
+                find_plan.set_sort_index_descriptor(descriptor);
+            }
+
+            find_plan.set_blocking_sort_order(sort_order);
         }
 
         Ok(())
+    }
+
+    /// Picks the index that could answer `sort_order` from its keys alone, if any.
+    ///
+    /// Deliberately narrow - it only fires for the shape that pays: no filter (so every
+    /// stored document is a candidate and the index covers the whole result set), a limit
+    /// (so there are rows to avoid fetching), and one sort field carried by a simple
+    /// unique or non-unique index on exactly that field.
+    fn sort_index_for(
+        sort_order: &[(String, SortOrder)],
+        find_options: &FindOptions,
+        find_plan: &FindPlan,
+        index_descriptors: &[IndexDescriptor],
+    ) -> Option<IndexDescriptor> {
+        let [(field, _)] = sort_order else {
+            return None;
+        };
+
+        // Without a limit every document is fetched anyway, so walking the index on top of
+        // that is pure overhead.
+        find_options.limit?;
+
+        if find_plan.by_id_filter().is_some()
+            || find_plan.index_scan_filter().is_some()
+            || find_plan.full_scan_filter().is_some()
+            || find_plan.index_descriptor().is_some()
+            || find_plan.sub_plans().is_some()
+        {
+            return None;
+        }
+
+        index_descriptors
+            .iter()
+            .find(|descriptor| {
+                matches!(descriptor.index_type().as_str(), UNIQUE_INDEX | NON_UNIQUE_INDEX)
+                    && descriptor.index_fields().field_names() == [field.clone()]
+            })
+            .cloned()
     }
 
     fn read_limit_options(
@@ -807,7 +855,9 @@ mod tests {
         let find_options = FindOptions::default();
         let mut find_plan = FindPlan::new();
 
-        let result = optimizer.inner.read_sort_options(&find_options, &mut find_plan);
+        let result = optimizer
+            .inner
+            .read_sort_options(&find_options, &mut find_plan, &[]);
         assert!(result.is_ok());
     }
 

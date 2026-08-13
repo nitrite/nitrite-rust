@@ -167,6 +167,23 @@ impl FindPlan {
         self.inner.blocking_sort_order.clone()
     }
 
+    /// Returns the index whose keys can supply [`Self::blocking_sort_order`] without
+    /// reading any document.
+    ///
+    /// This is a *hint*, not a decision: the reader still has to confirm that the index
+    /// holds exactly one entry per stored document (a multi-valued or non-comparable
+    /// field breaks that), and falls back to the blocking sort when it does not. When
+    /// the hint holds, only the documents actually returned are fetched, instead of
+    /// every document in the collection.
+    ///
+    /// # Returns
+    ///
+    /// `Some(IndexDescriptor)` if the sort may be answered from an index,
+    /// `None` if the sort has to buffer and sort documents.
+    pub fn sort_index_descriptor(&self) -> Option<IndexDescriptor> {
+        self.inner.sort_index_descriptor.clone()
+    }
+
     /// Returns the number of results to skip.
     ///
     /// Used for pagination. Results are skipped before the limit is applied.
@@ -322,6 +339,12 @@ impl FindPlan {
         }
     }
 
+    pub(crate) fn set_sort_index_descriptor(&mut self, descriptor: IndexDescriptor) {
+        if let Some(inner) = Arc::get_mut(&mut self.inner) {
+            inner.sort_index_descriptor = Some(descriptor);
+        }
+    }
+
     pub(crate) fn set_skip(&mut self, skip: u64) {
         if let Some(inner) = Arc::get_mut(&mut self.inner) {
             inner.skip = Some(skip);
@@ -356,6 +379,7 @@ pub(crate) struct FindPlanInner {
     pub(crate) index_descriptor: Option<IndexDescriptor>,
     pub(crate) index_scan_order: Option<HashMap<String, bool>>,
     pub(crate) blocking_sort_order: Option<Vec<(String, SortOrder)>>,
+    pub(crate) sort_index_descriptor: Option<IndexDescriptor>,
     pub(crate) skip: Option<u64>,
     pub(crate) limit: Option<u64>,
     pub(crate) collator_options: Option<CollatorOptions>,
@@ -372,6 +396,7 @@ impl FindPlanInner {
             index_descriptor: None,
             index_scan_order: None,
             blocking_sort_order: None,
+            sort_index_descriptor: None,
             skip: None,
             limit: None,
             collator_options: None,

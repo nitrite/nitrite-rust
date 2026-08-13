@@ -1,10 +1,42 @@
 use crate::{
     collection::Document,
+    common::Value,
     errors::{NitriteError, NitriteResult},
     SortOrder,
 };
 use icu_collator::options::CollatorOptions;
 use icu_collator::{Collator, CollatorBorrowed, CollatorPreferences};
+
+/// Orders two values of a sort field the way a `find` with an `order_by` does.
+///
+/// Null (or missing) sorts before everything else, strings go through the collator when
+/// one was supplied, and anything else falls back to [`Value::cmp`]. Shared with the
+/// index-ordered sort path in `ReadOperations`, which derives the same keys from an
+/// index instead of from the documents - the two must not drift apart.
+pub(crate) fn compare_sort_values(
+    a: &Value,
+    b: &Value,
+    collator: Option<&CollatorBorrowed>,
+) -> std::cmp::Ordering {
+    match (a.is_null(), b.is_null()) {
+        (true, true) => return std::cmp::Ordering::Equal,
+        (true, false) => return std::cmp::Ordering::Less,
+        (false, true) => return std::cmp::Ordering::Greater,
+        (false, false) => {}
+    }
+
+    if a.is_string() && b.is_string() {
+        // `is_string()` just held, so neither unwrap can fire.
+        let a = a.as_string().unwrap();
+        let b = b.as_string().unwrap();
+        return match collator {
+            Some(cb) => cb.compare(a, b),
+            None => a.cmp(b),
+        };
+    }
+
+    a.cmp(b)
+}
 
 // Make SortedStream generic over the input iterator type
 pub(crate) struct SortedStream {
@@ -19,20 +51,19 @@ impl SortedStream {
         sort_order: Vec<(String, SortOrder)>,
         collator: Option<CollatorBorrowed>,
     ) -> Self {
-        let unsorted = raw_stream.collect::<Vec<NitriteResult<Document>>>();
-        let mut error = None;
+        // Take the buffer by value and truncate it at the first error instead of cloning it
+        // into a second Vec: both used to stay alive until the constructor returned, so a
+        // blocking sort held the whole result set twice.
+        let mut cleaned = raw_stream.collect::<Vec<NitriteResult<Document>>>();
+        let error = cleaned
+            .iter()
+            .position(|doc| doc.is_err())
+            .and_then(|pos| {
+                let err = cleaned[pos].as_ref().err().cloned();
+                cleaned.truncate(pos);
+                err
+            });
 
-        let mut cleaned = Vec::with_capacity(unsorted.len());
-        for doc in unsorted.iter() {
-            if doc.is_err() {
-                error = doc.as_ref().err().cloned();
-                break;
-            }
-            cleaned.push(doc.clone());
-        }
-
-        let has_collator = collator.is_some();
-        
         cleaned.sort_by(|a, b| {
             for (field, order) in sort_order.iter() {
                 // Safe extraction with proper error handling - avoid double unwrap
@@ -58,24 +89,7 @@ impl SortedStream {
                     Err(_) => return std::cmp::Ordering::Greater,
                 };
 
-                // Handle null values
-                let cmp = if a_value.is_null() && !b_value.is_null() {
-                    std::cmp::Ordering::Less
-                } else if !a_value.is_null() && b_value.is_null() {
-                    std::cmp::Ordering::Greater
-                } else if a_value.is_null() && b_value.is_null() {
-                    std::cmp::Ordering::Equal
-                } else if a_value.is_string() && b_value.is_string() && has_collator {
-                    let a = a_value.as_string().unwrap();
-                    let b = b_value.as_string().unwrap();
-                    collator.as_ref().map(|cb| cb.compare(a, b)).unwrap_or_else(|| a.cmp(b))
-                } else if a_value.is_string() && b_value.is_string() {
-                    let a = a_value.as_string().unwrap();
-                    let b = b_value.as_string().unwrap();
-                    a.cmp(b)
-                } else {
-                    a_value.cmp(&b_value)
-                };
+                let cmp = compare_sort_values(&a_value, &b_value, collator.as_ref());
 
                 if cmp != std::cmp::Ordering::Equal {
                     return match order {

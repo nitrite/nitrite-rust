@@ -648,11 +648,15 @@ impl FjallMapInner {
     }
 
     fn committed_size(&self, op: &str) -> NitriteResult<u64> {
-        self.partition
-            .inner()
-            .len()
-            .map(|len| len as u64)
-            .map_err(|err| Self::backend_err(op, err))
+        // Counting is a full scan either way, but `PartitionHandle::len` walks key *and*
+        // value, so counting a collection of fat documents used to read (and decode) every
+        // stored document. `keys` never touches the values.
+        let mut count = 0u64;
+        for key in self.partition.inner().keys() {
+            key.map_err(|err| Self::backend_err(op, err))?;
+            count += 1;
+        }
+        Ok(count)
     }
 
     fn overlay_size_delta(&self, op: &str) -> NitriteResult<i64> {

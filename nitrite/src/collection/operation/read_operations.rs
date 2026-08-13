@@ -5,20 +5,21 @@ use crate::{
     errors::{ErrorKind, NitriteError, NitriteResult},
     filter::{Filter, FilterProvider},
     filtered_stream::FilteredStream,
-    index::NitriteIndexerProvider,
+    index::{IndexDescriptor, NitriteIndexerProvider},
     indexed_stream::IndexedStream,
     map_values::MapValues,
     nitrite_config::NitriteConfig,
     single_stream::SingleStream,
-    sorted_stream::SortedStream,
-    store::{NitriteMap, NitriteMapProvider},
+    sorted_stream::{compare_sort_values, SortedStream},
+    store::{NitriteMap, NitriteMapProvider, NitriteStoreProvider},
     union_stream::UnionStream,
     unique_stream::UniqueStream,
-    DocumentCursor, ProcessorChain, ProcessorProvider, Value,
+    derive_index_map_name, DocumentCursor, ProcessorChain, ProcessorProvider, SortOrder, Value,
+    UNIQUE_INDEX,
 };
-use icu_collator::options::CollatorOptions;
-use icu_collator::{Collator, CollatorPreferences};
+use icu_collator::{Collator, CollatorBorrowed};
 use smallvec::SmallVec;
+use std::collections::HashSet;
 use std::ops::Deref;
 use std::sync::Arc;
 
@@ -222,12 +223,125 @@ impl ReadOperationsInner {
         Ok((iter, covered_count))
     }
 
+    /// Builds the collator a blocking sort would use, if the plan asks for one.
+    fn sort_collator(&self, find_plan: &FindPlan) -> NitriteResult<CollatorBorrowed<'static>> {
+        let collator_preference = find_plan.collator_preferences().unwrap_or_default();
+        let collator_options = find_plan.collator_options().unwrap_or_default();
+        Collator::try_new(collator_preference, collator_options).map_err(|_| {
+            NitriteError::new(
+                "Failed to create collator for sorting - check collator preferences and options",
+                ErrorKind::BackendError,
+            )
+        })
+    }
+
+    /// Reads the sort keys out of an index and returns the document ids in sorted order.
+    ///
+    /// This is what makes `order_by(field).limit(n)` cost `n` document fetches instead of
+    /// one per stored document: an index on the sort field already holds every document's
+    /// key, so the ordering can be decided without deserialising anything.
+    ///
+    /// Returns `None` when the index is not a faithful stand-in for the collection, in which
+    /// case the caller must fall back to the blocking sort. That happens when a document
+    /// contributes more than one index entry (a multi-valued field is indexed once per
+    /// element) or no entry at all (a non-comparable value is not indexed) - the two are
+    /// caught by the duplicate-id check and the entry-count check respectively.
+    //
+    // ponytail: reads the whole index (one small entry per document) rather than only the
+    // skip+limit entries the page needs, because the faithfulness check needs the total.
+    // Walking the index lazily in key order would make it O(limit), but needs a way to know
+    // the index covers the collection without reading all of it.
+    fn index_sorted_ids(
+        &self,
+        descriptor: &IndexDescriptor,
+        order: SortOrder,
+        collator: &CollatorBorrowed,
+    ) -> NitriteResult<Option<Vec<NitriteId>>> {
+        let store = self.nitrite_config.nitrite_store()?;
+        let index_map = store.open_map(&derive_index_map_name(descriptor))?;
+
+        let mut keyed_ids: Vec<(Value, NitriteId)> = Vec::new();
+        let mut seen: HashSet<NitriteId> = HashSet::new();
+
+        if descriptor.index_type() == UNIQUE_INDEX {
+            // Array layout: the key is the indexed value, the value an array of ids.
+            for entry in index_map.entries()? {
+                let (key, value) = entry?;
+                let Some(ids) = value.as_array() else {
+                    return Ok(None);
+                };
+                for id in ids {
+                    let Some(id) = id.as_nitrite_id() else {
+                        return Ok(None);
+                    };
+                    if !seen.insert(*id) {
+                        return Ok(None);
+                    }
+                    keyed_ids.push((key.clone(), *id));
+                }
+            }
+        } else {
+            // Composite layout: the key is `[indexed value, id]` and carries everything
+            // needed, so the values are never read.
+            for key in index_map.keys()? {
+                let Value::Array(parts) = key? else {
+                    return Ok(None);
+                };
+                let [value, id] = parts.as_slice() else {
+                    return Ok(None);
+                };
+                let Some(id) = id.as_nitrite_id() else {
+                    return Ok(None);
+                };
+                if !seen.insert(*id) {
+                    return Ok(None);
+                }
+                keyed_ids.push((value.clone(), *id));
+            }
+        }
+
+        if keyed_ids.len() as u64 != self.nitrite_map.size()? {
+            return Ok(None);
+        }
+
+        // Same comparator and same stability as the blocking sort, so an indexed and an
+        // unindexed collection return the same rows in the same order - including ties,
+        // which both resolve in document-id order.
+        keyed_ids.sort_by(|(a, _), (b, _)| {
+            let cmp = compare_sort_values(a, b, Some(collator));
+            match order {
+                SortOrder::Ascending => cmp,
+                SortOrder::Descending => cmp.reverse(),
+            }
+        });
+
+        Ok(Some(keyed_ids.into_iter().map(|(_, id)| id).collect()))
+    }
+
     fn find_suitable_iter(
         &self,
         find_plan: &FindPlan,
         indexed_id_count: &mut Option<usize>,
     ) -> NitriteResult<Box<dyn Iterator<Item = NitriteResult<Document>>>> {
         let mut raw_stream: Box<dyn Iterator<Item = NitriteResult<Document>>>;
+
+        // The sort may be answerable from an index. Decide before building the stream: when
+        // it is, the ordered ids replace the full scan and no blocking sort runs at all.
+        let mut collator = None;
+        let mut sorted_ids = None;
+        let mut index_sorted = false;
+        if find_plan
+            .blocking_sort_order()
+            .is_some_and(|order| !order.is_empty())
+        {
+            collator = Some(self.sort_collator(find_plan)?);
+            if let Some(descriptor) = find_plan.sort_index_descriptor() {
+                // The hint is only ever set for a single-field sort, so this is that field.
+                let order = find_plan.blocking_sort_order().unwrap()[0].1;
+                sorted_ids =
+                    self.index_sorted_ids(&descriptor, order, collator.as_ref().unwrap())?;
+            }
+        }
 
         if let Some(sub_plans) = find_plan.sub_plans() {
             if !sub_plans.is_empty() {
@@ -355,6 +469,10 @@ impl ReadOperationsInner {
                     *indexed_id_count = Some(nitrite_ids.len());
                     raw_stream =
                         Box::new(IndexedStream::new(self.nitrite_map.clone(), nitrite_ids));
+                } else if let Some(nitrite_ids) = sorted_ids.take() {
+                    index_sorted = true;
+                    raw_stream =
+                        Box::new(IndexedStream::new(self.nitrite_map.clone(), nitrite_ids));
                 } else {
                     raw_stream = Box::new(MapValues::new(self.nitrite_map.clone()));
                 }
@@ -368,24 +486,12 @@ impl ReadOperationsInner {
             }
         }
 
-        if find_plan.blocking_sort_order().is_some()
-            && !find_plan.blocking_sort_order().unwrap().is_empty()
-        {
+        // The blocking sort still runs whenever the ordered ids were not used - either no
+        // index could answer the sort, or the one that could turned out not to cover the
+        // collection faithfully.
+        if !index_sorted && collator.is_some() {
             let sort_order = find_plan.blocking_sort_order().unwrap();
-            let collator_preference = find_plan
-                .collator_preferences()
-                .unwrap_or_default();
-            let collator_options = find_plan
-                .collator_options()
-                .unwrap_or(CollatorOptions::default());
-            let collator =
-                Collator::try_new(collator_preference, collator_options).map_err(|_| {
-                    NitriteError::new(
-                        "Failed to create collator for sorting - check collator preferences and options",
-                        ErrorKind::BackendError
-                    )
-                })?;
-            raw_stream = Box::new(SortedStream::new(raw_stream, sort_order, Some(collator)));
+            raw_stream = Box::new(SortedStream::new(raw_stream, sort_order, collator));
         }
 
         if find_plan.skip().is_some() || find_plan.limit().is_some() {
