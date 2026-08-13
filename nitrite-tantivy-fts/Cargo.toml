@@ -14,7 +14,7 @@ categories = ["database", "text-processing"]
 nitrite = { version = "0.8.0", path = "../nitrite" }
 
 # Full-text search engine
-tantivy = "0.25.0"
+tantivy = "0.26.1"
 
 # Serialization
 serde = { version = "1.0", features = ["derive"] }
