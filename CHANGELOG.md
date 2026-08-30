@@ -5,6 +5,79 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.9.0] - 2026-08-30
+
+### Added
+
+- **`nitrite-bridge` — inspect a running Nitrite database from a desktop client.**
+  The Nitrite adapter for the `dbinspect` wire protocol: collections and repositories as browsable
+  stores, schema inferred by sampling 50 documents and flagged as a sample, the filter DSL, and
+  watch over `subscribe`. The engine-neutral core it plugs into is the `dbinspect-bridge` crate and
+  has no database in its dependency tree at all.
+
+  **Row editing is behind `allow_write`, and whole-store `snapshot` behind `allow_snapshot`** —
+  both `false` unless the embedding application asks, and absent from the reported capabilities
+  while they are. A row is addressed by `_id`, in the rendering a page carried or as the bare
+  number; an update is partial; `changes: 0` means the row was not there. `_id` inside an update's
+  `values` is refused, because Nitrite merges an update document and it would rewrite the identity
+  of the row it just matched.
+
+  **Everything is behind a non-default `bridge` feature, and that is the release guard.** A build
+  that does not name the feature compiles no server, no protocol strings and no adapter into the
+  binary. Depend on it from `[dev-dependencies]` and it cannot reach a release build.
+
+  The protocol conformance suite passes against it unmodified over **both stores** — 124 checks,
+  122 passed, 0 failed, 2 skipped, in memory and again over fjall — and the adapter's own tests run
+  over both as well.
+
+  The package is deliberately **excluded from the workspace `members`**: `dbinspect-bridge` is not
+  on crates.io yet, so a workspace build of a clean checkout would fail on it. Build it with
+  `cargo test --manifest-path nitrite-bridge/Cargo.toml --features bridge`.
+
+  It requires nitrite 0.9.0. Originally 0.7.0, for `exists`: the adapter advertised every v1 operator except that
+  one for as long as no Nitrite implementation had a filter that tested whether a field was
+  present — not this one, not `nitrite-java`, not `nitrite-flutter`. 0.6.0 added it here and the
+  other two added theirs, so `filter_ops` now carries the whole v1 set.
+
+  One thing found while writing it, which is not a bug:
+
+  - **A repository cannot be opened by name**, so the developer hands in the ones they want
+    inspected. `list_repositories()` answers with entity names, but there is no runtime registry to
+    turn one back into a type, and `CollectionFactory::create_collection` refuses a name the
+    repository registry owns. Keyed repositories are handed in the same way and browse correctly.
+
+- **The bridge can open a transaction** (`docs/PROTOCOL.md` §3.1). A transaction is a second
+  adapter over the same database rather than a mode on the first, so one connection's uncommitted
+  documents can never reach another connection's reads. Nitrite's transaction lives above the
+  storage engine, so this works identically in memory and over fjall — nothing in the adapter
+  re-implements either half.
+
+  `capabilities.transactions` follows `allow_write`: that flag is the permission, this reports what
+  the engine can undo. The transactional twin reports it `false`, because Nitrite does not nest one.
+  `list_stores` counts through the transaction, since a total that left out the rows the person just
+  staged is not read-your-own-writes.
+
+- **`Nitrite::create_session`** — a session whose lifetime the caller owns. `with_session` closes
+  the session for you and so cannot serve a caller that begins a transaction on one request and
+  commits it on another, which is what a server does. The same call `createSession` has always been
+  in the Java and Dart APIs. The caller must `Session::close` it; everything still open is rolled
+  back when they do.
+
+- **`NitriteTransaction::view_of`** — a transactional view over a collection the caller already
+  holds. `collection(name)` opens the primary by name and `Nitrite::collection` refuses a name a
+  repository owns, so a caller holding an `ObjectRepository`'s document collection — and no type to
+  reach `repository()` with — had no way in. Keyed by the collection's own name, so asking twice
+  returns what `collection(name)` would.
+
+### Fixed
+
+- **A `NitriteId` goes over the wire as the number underneath it**, not `Display`'s `[1755…]NO₂`.
+  That is a debug rendering, and sending it made the same sample database read one way through the
+  Rust bridge and another through the Java and Dart ones, for the same document — the drift a frozen
+  protocol exists to prevent. Ids too wide for an `i64` degrade to their decimal string, exactly as
+  a `u64` cell does. Parsing still accepts either rendering, so a client that echoes back what it
+  was given can still address the row.
+
 ## [0.8.0] - 2026-08-22
 
 ### Changed

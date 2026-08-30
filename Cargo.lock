@@ -1953,7 +1953,7 @@ checksum = "2195bf6aa996a481483b29d62a7663eed3fe39600c460e323f8ff41e90bdd89b"
 
 [[package]]
 name = "nitrite"
-version = "0.8.0"
+version = "0.9.0"
 dependencies = [
  "aes-gcm",
  "anyhow",
@@ -1986,7 +1986,7 @@ dependencies = [
 
 [[package]]
 name = "nitrite_bench"
-version = "0.8.0"
+version = "0.9.0"
 dependencies = [
  "chrono",
  "criterion",
@@ -2010,7 +2010,7 @@ dependencies = [
 
 [[package]]
 name = "nitrite_derive"
-version = "0.8.0"
+version = "0.9.0"
 dependencies = [
  "log",
  "proc-macro2",
@@ -2020,7 +2020,7 @@ dependencies = [
 
 [[package]]
 name = "nitrite_fjall_adapter"
-version = "0.8.0"
+version = "0.9.0"
 dependencies = [
  "bincode",
  "cargo_toml",
@@ -2039,7 +2039,7 @@ dependencies = [
 
 [[package]]
 name = "nitrite_int_test"
-version = "0.8.0"
+version = "0.9.0"
 dependencies = [
  "awaitility",
  "chrono",
@@ -2059,7 +2059,7 @@ dependencies = [
 
 [[package]]
 name = "nitrite_spatial"
-version = "0.8.0"
+version = "0.9.0"
 dependencies = [
  "bincode",
  "criterion",
@@ -2080,7 +2080,7 @@ dependencies = [
 
 [[package]]
 name = "nitrite_tantivy_fts"
-version = "0.8.0"
+version = "0.9.0"
 dependencies = [
  "env_logger",
  "log",
@@ -2095,7 +2095,7 @@ dependencies = [
 
 [[package]]
 name = "nitrite_vector"
-version = "0.8.0"
+version = "0.9.0"
 dependencies = [
  "bincode",
  "criterion",
