@@ -15,7 +15,7 @@ database at all. This crate is the Nitrite adapter, and nothing else.
 
 ```toml
 [dev-dependencies]
-nitrite-bridge = { version = "0.1", features = ["bridge"] }
+nitrite-bridge = { version = "0.9", features = ["bridge"] }
 ```
 
 ```rust,ignore
