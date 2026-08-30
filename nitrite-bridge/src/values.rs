@@ -43,7 +43,14 @@ pub fn encode(value: &Value) -> CellValue {
         // with the real length beside it.
         Value::Bytes(bytes) => CellValue::Blob(bytes.clone()),
 
-        Value::NitriteId(id) => CellValue::Text(id.to_string()),
+        // The id underneath, not `Display`'s `[1755…]NO₂` — that is a debug
+        // rendering, and sending it would put one Nitrite's ids on the wire in a
+        // shape the Java and Dart bridges do not use, for the same document.
+        // `parse_id` still accepts both, so a client that echoes either can
+        // address the row. Wide values narrow exactly as `U64` above.
+        Value::NitriteId(id) => {
+            int_or_text(i64::try_from(id.id_value()), || id.id_value().to_string())
+        }
 
         Value::Array(values) => CellValue::List(values.iter().map(encode).collect()),
 
@@ -113,4 +120,38 @@ pub fn type_of(value: &Value) -> Option<&'static str> {
         Value::Array(_) => "list",
         Value::Document(_) | Value::Map(_) => "document",
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use nitrite::collection::NitriteId;
+
+    /// The Java and Dart bridges put a document id on the wire as a number, and
+    /// `NitriteId`'s `Display` is `[<id>]NO₂` — a debug rendering. Sending that
+    /// made the same sample database read one way through `sidecar-rust` and
+    /// another through `sidecar-jvm`, which is the drift one frozen protocol
+    /// exists to prevent.
+    #[test]
+    fn an_id_goes_over_as_the_number_underneath_it() {
+        let id = NitriteId::create_id(2093662045538430976).unwrap();
+        assert_eq!(
+            encode(&Value::NitriteId(id)).to_json(),
+            serde_json::json!(2093662045538430976_i64)
+        );
+    }
+
+    /// An id that does not fit an `i64` degrades to its decimal string exactly
+    /// as `U64` does — never to `Display`, which no client can parse back.
+    #[test]
+    fn an_id_too_wide_for_an_i64_is_its_digits_and_nothing_else() {
+        // The widest an id can be: `create_id` refuses 10^19 and above, which
+        // still leaves the range above `i64::MAX`.
+        let wide = i64::MAX as u64 + 1;
+        let id = NitriteId::create_id(wide).unwrap();
+        assert_eq!(
+            encode(&Value::NitriteId(id)).to_json(),
+            serde_json::json!(wide.to_string())
+        );
+    }
 }

@@ -1,11 +1,12 @@
 //! Inspects a running Nitrite database.
 
+use std::sync::Arc;
 use std::time::Instant;
 
 use dbinspect_bridge::{
-    encode_row, AdapterCapabilities, BlobChunk, BlobRequest, BridgeAdapter, BridgeError,
-    BridgeResult, ColumnInfo, PageRequest, QueryConsole, QueryPage, StoreInfo, StoreSchema,
-    Unsubscribe, WatchScope, WriteOp, WriteRequest, WriteResult,
+    encode_row, AdapterCapabilities, AdapterTransaction, BlobChunk, BlobRequest, BridgeAdapter,
+    BridgeError, BridgeResult, ColumnInfo, PageRequest, QueryConsole, QueryPage, StoreInfo,
+    StoreSchema, Unsubscribe, WatchScope, WriteOp, WriteRequest, WriteResult,
 };
 use nitrite::collection::{
     CollectionEventListener, CollectionEvents, Document, FindOptions, NitriteCollection, NitriteId,
@@ -15,6 +16,7 @@ use serde_json::{json, Map, Value as JsonValue};
 
 use nitrite::filter::all;
 use nitrite::nitrite::Nitrite;
+use nitrite::transaction::{NitriteTransaction, Session};
 
 use crate::filter_dsl::{parse_filter, NITRITE_FILTER_OPS, NITRITE_REGEX_OP};
 use crate::values;
@@ -76,6 +78,14 @@ pub struct NitriteAdapter {
     allow_write: bool,
     allow_snapshot: bool,
     capabilities: AdapterCapabilities,
+    /// The open transaction this adapter is scoped to, or `None` on the one that
+    /// is not.
+    ///
+    /// See [`NitriteAdapter::begin_transaction`]: a transaction is a second
+    /// adapter over the same database rather than a mode on this one, so that
+    /// one connection's uncommitted documents can never reach another
+    /// connection's reads.
+    transaction: Option<NitriteTransaction>,
 }
 
 impl NitriteAdapter {
@@ -92,6 +102,7 @@ impl NitriteAdapter {
             allow_write: false,
             allow_snapshot: false,
             capabilities: capabilities(false, false, false),
+            transaction: None,
         }
     }
 
@@ -136,22 +147,44 @@ impl NitriteAdapter {
     /// Passing an unchecked name through would let a paired client litter the
     /// developer's database with empty collections.
     fn resolve(&self, store: &str) -> BridgeResult<NitriteCollection> {
-        for repository in &self.repositories {
-            if repository.name() == store {
-                return Ok(repository.clone());
-            }
-        }
-        let names = self
-            .db
-            .list_collection_names()
-            .map_err(|error| adapter_error("could not list collections", error))?;
-        if names.contains(store) {
-            return self
+        let known = self.repositories.iter().any(|r| r.name() == store)
+            || self
                 .db
-                .collection(store)
-                .map_err(|error| adapter_error("could not open the store", error));
+                .list_collection_names()
+                .map_err(|error| adapter_error("could not list collections", error))?
+                .contains(store);
+        if !known {
+            return Err(BridgeError::bad_request("unknown store"));
         }
-        Err(BridgeError::bad_request("unknown store"))
+
+        let repository = self
+            .repositories
+            .iter()
+            .find(|candidate| candidate.name() == store);
+
+        // Inside a transaction, always the transaction's view — a repository's
+        // handle included. A read through the primary would miss the documents
+        // staged beside it, and a write through it would land outside the
+        // transaction entirely.
+        if let Some(transaction) = &self.transaction {
+            return match repository {
+                // `Nitrite::collection` refuses a name a repository owns, so a
+                // repository cannot go through `NitriteTransaction::collection`
+                // — and this adapter holds document collections rather than
+                // typed repositories, so it has no `T` for the other door.
+                // `view_of` is that door.
+                Some(repository) => transaction.view_of(repository.clone()),
+                None => transaction.collection(store),
+            }
+            .map_err(|error| adapter_error("could not open the store", error));
+        }
+
+        if let Some(repository) = repository {
+            return Ok(repository.clone());
+        }
+        self.db
+            .collection(store)
+            .map_err(|error| adapter_error("could not open the store", error))
     }
 
     /// The column names a sample showed, in the order they were first seen.
@@ -229,6 +262,11 @@ fn capabilities(allow_regex: bool, allow_write: bool, allow_snapshot: bool) -> A
         .with_filter_ops(ops);
     capabilities.edit = allow_write;
     capabilities.snapshot = allow_snapshot;
+    // Not an opt-in (`docs/PROTOCOL.md` §3.1): Nitrite's transaction is
+    // implemented above the store, so it is available on every engine this
+    // adapter can be pointed at — Fjall and in-memory alike. `allow_write` is
+    // the permission; this reports what the engine can undo.
+    capabilities.transactions = allow_write;
     // Not an opt-in: `query_page` already showed the first 64 KB of this very
     // cell, and `docs/PROTOCOL.md` §2 has always promised the rest on request.
     // A document is addressed by `_id`, which every row has.
@@ -283,6 +321,53 @@ impl BridgeAdapter for NitriteAdapter {
         self.capabilities.clone()
     }
 
+    /// Opens one Nitrite transaction (`docs/PROTOCOL.md` §3.1).
+    ///
+    /// Nitrite's transaction lives above the storage engine — a transactional
+    /// map buffers the writes and a journal replays them on commit — so this
+    /// works identically on Fjall and in memory. Nothing here re-implements
+    /// either half; the session and the transaction are the engine's own.
+    ///
+    /// The session is held alongside the transaction and closed by whichever of
+    /// commit or rollback runs, because closing a session rolls back anything
+    /// still open in it — which is what makes the ending safe on both paths.
+    fn begin_transaction(&self) -> BridgeResult<Box<dyn AdapterTransaction>> {
+        let session = self
+            .db
+            .create_session()
+            .map_err(|error| adapter_error("could not open a session", error))?;
+        let transaction = session.begin_transaction().map_err(|error| {
+            let _ = session.close();
+            adapter_error("the database would not begin a transaction", error)
+        })?;
+
+        let scoped = Arc::new(NitriteAdapter {
+            db: self.db.clone(),
+            id: self.id.clone(),
+            display_name: self.display_name.clone(),
+            engine: self.engine.clone(),
+            repositories: self.repositories.clone(),
+            sample_size: self.sample_size,
+            allow_regex: self.allow_regex,
+            allow_write: self.allow_write,
+            allow_snapshot: self.allow_snapshot,
+            // Every capability but `transactions` carried over: a gate that
+            // changed inside a transaction would be a second, invisible
+            // permission model. That one drops, because Nitrite does not nest.
+            capabilities: AdapterCapabilities {
+                transactions: false,
+                ..self.capabilities.clone()
+            },
+            transaction: Some(transaction.clone()),
+        });
+
+        Ok(Box::new(NitriteAdapterTransaction {
+            scoped,
+            transaction,
+            session,
+        }))
+    }
+
     fn list_stores(&self) -> BridgeResult<Vec<StoreInfo>> {
         let mut stores = Vec::new();
 
@@ -297,22 +382,24 @@ impl BridgeAdapter for NitriteAdapter {
         names.sort();
 
         for name in names {
-            let collection = self
-                .db
-                .collection(&name)
-                .map_err(|error| adapter_error("could not open a collection", error))?;
+            // Through `resolve` rather than off `db` directly, so a count taken
+            // inside a transaction includes the documents staged there —
+            // read-your-own-writes covers `listStores` as much as it covers a
+            // page (§3.1).
+            let collection = self.resolve(&name)?;
             stores.push(StoreInfo::new(name, "collection", size_of(&collection)));
         }
 
         for repository in &self.repositories {
             let name = repository.name();
+            let scoped = self.resolve(&name)?;
             // A keyed repository is stored under `entityName+key`; the key is
             // reported beside the name so the client can label it, while the
             // name stays the one addressable identity `store` carries.
             let key = name
                 .split_once(KEY_OBJ_SEPARATOR)
                 .map(|(_, key)| key.to_string());
-            let mut info = StoreInfo::new(name, "repository", size_of(repository));
+            let mut info = StoreInfo::new(name, "repository", size_of(&scoped));
             if let Some(key) = key {
                 info = info.keyed(key);
             }
@@ -437,9 +524,7 @@ impl BridgeAdapter for NitriteAdapter {
                 let written = collection
                     .update_by_id(&id, &update, false)
                     .map_err(|error| adapter_error("the store refused the update", error))?;
-                Ok(WriteResult::new(
-                    written.affected_nitrite_ids().len() as u64
-                ))
+                Ok(WriteResult::new(written.affected_nitrite_ids().len() as u64))
             }
             WriteOp::Delete => {
                 let id = row_id_of(request)?;
@@ -454,9 +539,7 @@ impl BridgeAdapter for NitriteAdapter {
                 let written = collection
                     .remove_one(&existing)
                     .map_err(|error| adapter_error("the store refused the delete", error))?;
-                Ok(WriteResult::new(
-                    written.affected_nitrite_ids().len() as u64
-                ))
+                Ok(WriteResult::new(written.affected_nitrite_ids().len() as u64))
             }
         }
     }
@@ -489,7 +572,10 @@ impl BridgeAdapter for NitriteAdapter {
                 "\"{}\" is not a binary field",
                 request.column
             ))
-            .with_detail(format!("it is {}", values::type_of(&other).unwrap_or("null")))),
+            .with_detail(format!(
+                "it is {}",
+                values::type_of(&other).unwrap_or("null")
+            ))),
         }
     }
 
@@ -599,4 +685,38 @@ fn wire_event(event: CollectionEvents) -> &'static str {
 /// rather than guessing. A store that cannot answer is that case, not an error.
 fn size_of(collection: &NitriteCollection) -> Option<u64> {
     collection.size().ok()
+}
+
+/// One open Nitrite transaction, and the session that owns it.
+struct NitriteAdapterTransaction {
+    scoped: Arc<NitriteAdapter>,
+    transaction: NitriteTransaction,
+    session: Session,
+}
+
+impl AdapterTransaction for NitriteAdapterTransaction {
+    fn adapter(&self) -> Arc<dyn BridgeAdapter> {
+        self.scoped.clone()
+    }
+
+    fn commit(self: Box<Self>) -> BridgeResult<()> {
+        let outcome = self
+            .transaction
+            .commit()
+            .map_err(|error| adapter_error("the database refused the commit", error));
+        // Closed on both paths: a session that is not closed holds the
+        // transactional maps, and a failed commit is exactly when letting go
+        // matters most.
+        let _ = self.session.close();
+        outcome
+    }
+
+    fn rollback(self: Box<Self>) -> BridgeResult<()> {
+        let outcome = self
+            .transaction
+            .rollback()
+            .map_err(|error| adapter_error("could not roll back", error));
+        let _ = self.session.close();
+        outcome
+    }
 }

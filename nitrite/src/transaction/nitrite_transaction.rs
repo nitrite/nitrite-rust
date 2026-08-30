@@ -156,13 +156,39 @@ impl NitriteTransaction {
     /// Operations on the returned collection are recorded in the transaction journal.
     pub fn collection(&self, name: &str) -> NitriteResult<NitriteCollection> {
         self.check_active()?;
+        if let Some(existing) = self.registered(name) {
+            return Ok(existing);
+        }
+        let primary = self.db.collection(name)?;
+        self.view_of(primary)
+    }
 
-        let mut registry = self.collection_registry.lock();
-        if let Some(tc) = registry.get(name) {
-            return Ok(NitriteCollection::new(tc.clone()));
+    /// A transactional view over a collection the caller already holds.
+    ///
+    /// [`NitriteTransaction::collection`] opens the primary by name, and
+    /// [`Nitrite::collection`] refuses a name a repository owns — so a caller
+    /// holding an [`ObjectRepository`]'s document collection has no way through
+    /// that door, and no type to reach [`NitriteTransaction::repository`] with
+    /// either. `nitrite-bridge` is exactly that caller: it is handed document
+    /// collections and knows nothing about the entity types behind them.
+    ///
+    /// Keyed by the collection's own name, so asking twice returns the same
+    /// transactional collection that [`NitriteTransaction::collection`] would.
+    pub fn view_of(&self, primary: NitriteCollection) -> NitriteResult<NitriteCollection> {
+        self.check_active()?;
+
+        let name = primary.name().to_string();
+        if let Some(existing) = self.registered(&name) {
+            return Ok(existing);
         }
 
-        let primary = self.db.collection(name)?;
+        let mut registry = self.collection_registry.lock();
+        // Checked again under the lock: two callers racing for the same name
+        // must not each build a context over it.
+        if let Some(tc) = registry.get(&name) {
+            return Ok(NitriteCollection::new(tc.clone()));
+        }
+        let name = name.as_str();
         let context = self.get_or_create_context(name.to_string())?;
         let db_store = self.db.store();
         let event_bus = NitriteEventBus::new();
@@ -175,6 +201,13 @@ impl NitriteTransaction {
         let tc = TransactionalCollection::new(primary, context, db_store, operations, event_bus);
         registry.insert(name.to_string(), tc.clone());
         Ok(NitriteCollection::new(tc))
+    }
+
+    fn registered(&self, name: &str) -> Option<NitriteCollection> {
+        self.collection_registry
+            .lock()
+            .get(name)
+            .map(|tc| NitriteCollection::new(tc.clone()))
     }
 
     /// Gets or creates a transactional object repository.

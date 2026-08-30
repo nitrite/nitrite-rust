@@ -499,17 +499,15 @@ fn the_three_writes_round_trip_on_every_engine() {
 #[test]
 fn an_id_is_addressable_in_the_rendering_a_page_carried_and_as_its_bare_number() {
     let (adapter, _fixture) = writable_adapter_over("memory");
-    let rendered = page(&adapter, json!({"store": "users", "pageSize": 1})).rows[0]["_id"].clone();
-    let bare = rendered
-        .as_str()
-        .unwrap()
-        .trim_start_matches('[')
-        .split(']')
-        .next()
-        .unwrap()
-        .to_string();
+    let carried = page(&adapter, json!({"store": "users", "pageSize": 1})).rows[0]["_id"].clone();
 
-    for row_id in [rendered, json!(bare)] {
+    // What a page carries is the number underneath the id, the same shape the
+    // Java and Dart bridges send (`values.rs`). `Display`'s `[<id>]NO₂` is still
+    // accepted because a client holding an older page echoes it back.
+    let bare = carried.as_i64().expect("an _id is a number on the wire");
+    let displayed = format!("[{bare}]NO\u{2082}");
+
+    for row_id in [carried, json!(bare.to_string()), json!(displayed)] {
         let updated = write(
             &adapter,
             "updateRow",

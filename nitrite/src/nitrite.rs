@@ -498,6 +498,27 @@ impl Nitrite {
         Ok(result)
     }
 
+    /// Creates a session whose lifetime the caller owns.
+    ///
+    /// [`Nitrite::with_session`] is the form to reach for: it closes the session
+    /// for you, and a session that is dropped without being closed rolls back
+    /// whatever is still open in it. This one exists for a caller that cannot
+    /// hold the closure — a server that begins a transaction on one request and
+    /// commits it on another, which is how `nitrite-bridge` implements
+    /// `docs/PROTOCOL.md` §3.1 — and it is the same call the Java and Dart APIs
+    /// have always had (`createSession`).
+    ///
+    /// The caller must [`Session::close`] it. Everything still open is rolled
+    /// back when they do.
+    ///
+    /// # Errors
+    ///
+    /// If the database is not open.
+    pub fn create_session(&self) -> NitriteResult<Session> {
+        self.inner.check_opened()?;
+        Ok(Session::new(self.clone(), self.inner.lock_registry.clone()))
+    }
+
     pub(crate) fn initialize(
         &self,
         username: Option<&str>,
