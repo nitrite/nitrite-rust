@@ -1,16 +1,16 @@
 [workspace]
 resolver = "2"
-members = ["nitrite", "nitrite-derive", "nitrite-spatial", "nitrite-tantivy-fts", "nitrite-int-test", "nitrite-fjall-adapter", "nitrite-bench", "nitrite-vector"]
+members = ["nitrite", "nitrite-derive", "nitrite-spatial", "nitrite-tantivy-fts", "nitrite-int-test", "nitrite-fjall-adapter", "nitrite-bench", "nitrite-vector", "nitrite-bridge"]
 
-# `nitrite-bridge` is deliberately not a member. It depends on
-# `dbinspect-bridge`, which is not on crates.io until the dbinspect release, so
-# a reactor build of a clean checkout would fail on it. Build it on its own:
+# `nitrite-bridge` rejoined the workspace when `dbinspect-bridge 0.1.0` reached
+# crates.io; it was excluded only because a build of a clean checkout could not
+# resolve that dependency. Its server and protocol strings are still behind the
+# non-default `bridge` feature, so a plain workspace build compiles none of them:
 #
-#   cargo test --manifest-path nitrite-bridge/Cargo.toml --features bridge
+#   cargo test -p nitrite-bridge --features bridge
 #
-# The same sequencing fact the Dart and JVM adapters are in — see the dbinspect
-# plan's §2.
-exclude = ["nitrite-bridge"]
+# The example stays out — it is a separate binary crate with its own lockfile.
+exclude = ["nitrite-bridge/example"]
 
 [profile.release]
 debug = true

@@ -15,5 +15,5 @@ inspect = ["dep:nitrite-bridge", "dep:dbinspect-bridge", "dep:tokio"]
 [dependencies]
 nitrite = { version = "0.9.0", path = "../../nitrite" }
 nitrite-bridge = { version = "0.1.0", path = "..", features = ["bridge"], optional = true }
-dbinspect-bridge = { version = "0.1", path = "../../../../fanlight/dbinspect/rust/dbinspect-bridge", optional = true }
+dbinspect-bridge = { version = "0.1", optional = true }
 tokio = { version = "1", features = ["rt", "macros", "signal"], optional = true }

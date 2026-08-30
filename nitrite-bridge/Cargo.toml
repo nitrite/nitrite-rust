@@ -35,11 +35,10 @@ serde_json = { version = "1", optional = true }
 # application's logger; the wire gets a kind and a sentence that names no path.
 log = { version = "0.4", optional = true }
 
-# Not on crates.io until the dbinspect release, so this resolves through the
-# sibling checkout until then — which is why this package is deliberately absent
-# from the workspace `members`. `cargo publish` uses the version and drops the
-# path.
-dbinspect-bridge = { version = "0.1", path = "../../../fanlight/dbinspect/rust/dbinspect-bridge", optional = true }
+# On crates.io since the dbinspect 0.1.0 release. It resolved through a sibling
+# checkout until then, which is also why this package was absent from the
+# workspace `members`; both are gone.
+dbinspect-bridge = { version = "0.1", optional = true }
 
 [dev-dependencies]
 nitrite_derive = { version = "0.9.0", path = "../nitrite-derive" }
