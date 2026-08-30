@@ -19,6 +19,19 @@ jobs:
   publish:
     name: Publish Crates
     runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    # The single source of the publish order. Adding a crate to the workspace
+    # means adding it here, and nowhere else.
+    env:
+      PUBLISH_ORDER: >-
+        nitrite_derive
+        nitrite
+        nitrite_fjall_adapter
+        nitrite_spatial
+        nitrite_tantivy_fts
+        nitrite_vector
+        nitrite-bridge
 
     steps:
       - name: Checkout repository
@@ -41,62 +54,41 @@ jobs:
       - name: Verify build
         run: cargo build --release --workspace
 
-      # Publish crates in dependency order
-      - name: Publish nitrite-derive
+      # **One ordered list, used by the publish and by the dry run.** There were
+      # two, and `nitrite-bridge` reached only one of them — the same way
+      # `dbinspect_hive_ce` was left out of dbinspect's release loop and went
+      # unpublished without anything failing. Order is dependency order:
+      # `nitrite_derive` and `nitrite` first, `nitrite-bridge` last.
+      - name: Publish, in dependency order
         if: ${{ github.event.inputs.dry_run != 'true' }}
-        run: cargo publish -p nitrite_derive --token ${{ secrets.CARGO_REGISTRY_TOKEN }}
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+        run: |
+          set -euo pipefail
+          for crate in $PUBLISH_ORDER; do
+            version="$(cargo metadata --no-deps --format-version 1 \
+              | jq -r --arg c "$crate" '.packages[] | select(.name==$c) | .version')"
+            echo "::group::$crate $version"
+            if curl -sfo /dev/null -H 'User-Agent: nitrite-release' \
+                 "https://crates.io/api/v1/crates/$crate/$version"; then
+              # A release that dies half way through has to be resumable: every
+              # crate after `nitrite` resolves it from the registry, so the
+              # second attempt would otherwise fail on the first six.
+              echo "$crate $version is already on crates.io"
+            else
+              cargo publish -p "$crate"
+              # crates.io's index is not immediately consistent, and the next
+              # crate in the list resolves this one from it.
+              sleep 30
+            fi
+            echo "::endgroup::"
+          done
 
-      - name: Wait for crates.io index update
-        if: ${{ github.event.inputs.dry_run != 'true' }}
-        run: sleep 30
-
-      - name: Publish nitrite
-        if: ${{ github.event.inputs.dry_run != 'true' }}
-        run: cargo publish -p nitrite --token ${{ secrets.CARGO_REGISTRY_TOKEN }}
-
-      - name: Wait for crates.io index update
-        if: ${{ github.event.inputs.dry_run != 'true' }}
-        run: sleep 30
-
-      - name: Wait for crates.io index update
-        if: ${{ github.event.inputs.dry_run != 'true' }}
-        run: sleep 30
-
-      - name: Publish nitrite-fjall-adapter
-        if: ${{ github.event.inputs.dry_run != 'true' }}
-        run: cargo publish -p nitrite_fjall_adapter --token ${{ secrets.CARGO_REGISTRY_TOKEN }}
-
-      - name: Publish nitrite-spatial
-        if: ${{ github.event.inputs.dry_run != 'true' }}
-        run: cargo publish -p nitrite_spatial --token ${{ secrets.CARGO_REGISTRY_TOKEN }}
-
-      - name: Publish nitrite-tantivy-fts
-        if: ${{ github.event.inputs.dry_run != 'true' }}
-        run: cargo publish -p nitrite_tantivy_fts --token ${{ secrets.CARGO_REGISTRY_TOKEN }}
-
-      - name: Publish nitrite-vector
-        if: ${{ github.event.inputs.dry_run != 'true' }}
-        run: cargo publish -p nitrite_vector --token ${{ secrets.CARGO_REGISTRY_TOKEN }}
-
-      - name: Wait for crates.io index update
-        if: ${{ github.event.inputs.dry_run != 'true' }}
-        run: sleep 30
-
-      # Last, and only since dbinspect-bridge reached crates.io: until then this
-      # crate was outside the workspace entirely and could not be published at all.
-      - name: Publish nitrite-bridge
-        if: ${{ github.event.inputs.dry_run != 'true' }}
-        run: cargo publish -p nitrite-bridge --token ${{ secrets.CARGO_REGISTRY_TOKEN }}
-
-      # Dry run mode - just verify packages
-      - name: Dry run - Verify packages
+      - name: Dry run - verify every crate that would be published
         if: ${{ github.event.inputs.dry_run == 'true' }}
         run: |
-          echo "Dry run mode - verifying packages..."
-          cargo package -p nitrite_derive --allow-dirty
-          cargo package -p nitrite --allow-dirty
-          cargo package -p nitrite_fjall_adapter --allow-dirty
-          cargo package -p nitrite_spatial --allow-dirty
-          cargo package -p nitrite_tantivy_fts --allow-dirty
-          cargo package -p nitrite_vector --allow-dirty
+          set -euo pipefail
+          for crate in $PUBLISH_ORDER; do
+            cargo package -p "$crate" --allow-dirty
+          done
           echo "All packages verified successfully!"
