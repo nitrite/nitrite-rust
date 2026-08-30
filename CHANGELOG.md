@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.9.0] - 2026-08-30
 
+### Note
+
+- `nitrite-bridge` is published from this release onward, at the same version as
+  every other crate here rather than from 0.1.0 — `nitrite_bridge` on pub.dev and
+  `nitrite-bridge` on Maven Central are both versioned with their core, and a
+  reader should not have to work out which `nitrite` a given bridge pairs with.
+  It could not be published before `dbinspect-bridge` reached crates.io, which is
+  also why it was outside the Cargo workspace until now.
+
 ### Added
 
 - **`nitrite-bridge` — inspect a running Nitrite database from a desktop client.**
