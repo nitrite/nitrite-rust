@@ -5,7 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.11.0] - 2026-09-01
+## [1.0.0] - 2026-09-01
+
+**Why 1.0.0 and not 0.11.0.** The storage engine underneath the adapter changed major version, and
+with it the on-disk format: a database written by any earlier Nitrite for Rust cannot be opened by
+this one. A format break is the loudest thing a release can do to someone already running the
+library, and it should not arrive behind a version number that reads like a routine step. The API
+is also settled enough to say so — this release removes the last knob that existed only to serve
+Fjall 2's garbage collector, and nothing else is waiting to be pulled out.
 
 ### Changed
 
@@ -15,7 +22,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and replaced explicit blob garbage collection with reclamation folded into compaction.
 
   **This changes the on-disk format.** A database written by `0.10.x` or earlier cannot be opened
-  by `0.11.0`; the break is inside the storage engine, below any layer Nitrite could migrate.
+  by `1.0.0`; the break is inside the storage engine, below any layer Nitrite could migrate.
   Recreate the database from your source of truth, or export before upgrading and import after.
 
 - **`FjallModuleBuilder::compaction_strategy(...)` takes `nitrite_fjall_adapter::Strategy`**
@@ -69,7 +76,7 @@ as unmeasurable in this environment.
 The mechanism is visible in the journal. `disk_usage_repro_test` writes 10k messages across five
 partitions and measures the on-disk footprint:
 
-| | 0.10.0 (Fjall 2) | 0.11.0 (Fjall 3) |
+| | 0.10.0 (Fjall 2) | 1.0.0 (Fjall 3) |
 |---|---|---|
 | journal peak, during the bulk write | 1664 MiB | **128 MiB** |
 | journal after `compact()` | 32 MiB | 64 MiB |
@@ -85,7 +92,7 @@ tables are slightly larger. Both are far under the 250 MiB-per-10k-messages gate
 **Creating a keyspace costs roughly twice as much**, and that is the one real regression. Paired
 measurement of the first write to a new collection, which is where the keyspace is created:
 
-| | 0.10.0 | 0.11.0 |
+| | 0.10.0 | 1.0.0 |
 |---|---|---|
 | create a keyspace (SSD) | 40 ms | 97 ms |
 | create a keyspace (external volume) | 91 ms | 148 ms |
