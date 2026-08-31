@@ -4,7 +4,10 @@ use crate::version::fjall_version;
 use crate::wrapper::to_nitrite_error;
 use crossbeam::sync::WaitGroup;
 use dashmap::DashMap;
-use fjall::{GarbageCollection, PersistMode, TxKeyspace, WriteTransaction};
+use fjall::{
+    PersistMode, SingleWriterTxDatabase as TxKeyspace, SingleWriterTxKeyspace as TxPartitionHandle,
+    SingleWriterWriteTx as WriteTransaction,
+};
 use nitrite::common::{
     async_task, NitriteEventBus, NitritePlugin, NitritePluginProvider, SubscriberRef,
     COLLECTION_CATALOG,
@@ -260,6 +263,14 @@ struct FjallStoreInner {
     store_config: FjallConfig,
     nitrite_config: OnceLock<NitriteConfig>,
     map_registry: DashMap<String, FjallMap>,
+    /// The background fsync timer that backs [`crate::config::Durability::Periodic`], and the
+    /// flag that stops it. Fjall 2 ran this itself (`Config::fsync_ms`); fjall 3 dropped it, so
+    /// the adapter owns it — without one, `Periodic` would degrade from "durable within
+    /// `fsync_frequency`" to "durable only on a clean close".
+    fsync_timer: RwLock<Option<std::thread::JoinHandle<()>>>,
+    /// Set + notified to wake the timer out of its wait immediately, so `close()` never pays a
+    /// fraction of `fsync_frequency` waiting to join it.
+    fsync_stop: Arc<(parking_lot::Mutex<bool>, parking_lot::Condvar)>,
 }
 
 impl FjallStoreInner {
@@ -271,6 +282,85 @@ impl FjallStoreInner {
             store_config: config,
             nitrite_config: OnceLock::new(),
             map_registry: DashMap::new(),
+            fsync_timer: RwLock::new(None),
+            fsync_stop: Arc::new((parking_lot::Mutex::new(false), parking_lot::Condvar::new())),
+        }
+    }
+
+    /// Starts the background fsync timer for [`crate::config::Durability::Periodic`].
+    ///
+    /// Does nothing under `Durability::OnCommit` (every commit already fsyncs) or when
+    /// `fsync_frequency` is 0 (the timer is explicitly disabled — a periodic write is then only
+    /// fsynced on a clean close). The thread holds a `TxKeyspace` clone, so it must be joined
+    /// before `close()` takes the keyspace, or the last handle would not drop.
+    fn start_fsync_timer(&self, ks: &TxKeyspace) {
+        let frequency = u64::from(self.store_config.fsync_frequency());
+        if frequency == 0 || self.store_config.durability_on_commit() {
+            return;
+        }
+
+        let mut guard = self.fsync_timer.write().unwrap_or_else(|e| e.into_inner());
+        if guard.is_some() {
+            return;
+        }
+
+        *self.fsync_stop.0.lock() = false;
+        let stop = self.fsync_stop.clone();
+        let ks = ks.clone();
+        let interval = std::time::Duration::from_millis(frequency);
+        let handle = std::thread::Builder::new()
+            .name("nitrite-fjall-fsync".to_string())
+            .spawn(move || {
+                let (lock, cvar) = &*stop;
+                // Waiting to a *deadline* rather than for a duration keeps the window honest: a
+                // spurious wakeup re-waits to the same instant instead of restarting the clock,
+                // so the gap between fsyncs never exceeds `fsync_frequency`.
+                let mut deadline = std::time::Instant::now() + interval;
+                loop {
+                    let mut stopped = lock.lock();
+                    if *stopped {
+                        break;
+                    }
+                    cvar.wait_until(&mut stopped, deadline);
+                    if *stopped {
+                        break;
+                    }
+                    // The fsync must not run under the lock: `stop_fsync_timer` has to be able
+                    // to take it and signal while a sync is in flight.
+                    drop(stopped);
+                    if std::time::Instant::now() >= deadline {
+                        deadline = std::time::Instant::now() + interval;
+                        if let Err(err) = ks.persist(PersistMode::SyncAll) {
+                            log::warn!("Periodic fsync failed: {}", err);
+                        }
+                    }
+                }
+            });
+
+        match handle {
+            Ok(handle) => *guard = Some(handle),
+            Err(err) => log::warn!(
+                "Failed to start the periodic fsync timer, writes stay durable only on close: {}",
+                err
+            ),
+        }
+    }
+
+    /// Signals the fsync timer to stop and waits for it, releasing its keyspace handle.
+    ///
+    /// The signal is a condvar notify, not a flag the thread polls, so the join returns as soon
+    /// as the thread is scheduled rather than after the rest of an `fsync_frequency` window.
+    fn stop_fsync_timer(&self) {
+        {
+            let (lock, cvar) = &*self.fsync_stop;
+            *lock.lock() = true;
+            cvar.notify_all();
+        }
+        let handle = self.fsync_timer.write().unwrap_or_else(|e| e.into_inner()).take();
+        if let Some(handle) = handle {
+            if handle.join().is_err() {
+                log::warn!("Periodic fsync timer panicked");
+            }
         }
     }
 
@@ -309,12 +399,12 @@ impl FjallStoreInner {
         &self,
         ks: &TxKeyspace,
         name: &str,
-        config: &fjall::PartitionCreateOptions,
-    ) -> NitriteResult<fjall::TxPartitionHandle> {
+        config: &fjall::KeyspaceCreateOptions,
+    ) -> NitriteResult<TxPartitionHandle> {
         // Clone config once to avoid multiple clones in retry paths
         let config_clone = config.clone();
         
-        match ks.open_partition(name, config_clone.clone()) {
+        match ks.keyspace(name, || config_clone.clone()) {
             Ok(partition) => Ok(partition),
             Err(err) => {
                 let err_msg = err.to_string();
@@ -326,9 +416,9 @@ impl FjallStoreInner {
                     // Clean up any stale references in the registry
                     self.map_registry.remove(name);
                     
-                    // Fjall's open_partition should create a new partition if it doesn't exist
+                    // Fjall's keyspace() creates a new partition if it doesn't exist.
                     // If it fails, it might be due to file system cleanup in progress, so retry once
-                    match ks.open_partition(name, config_clone.clone()) {
+                    match ks.keyspace(name, || config_clone.clone()) {
                         Ok(partition) => Ok(partition),
                         Err(retry_err) => {
                             // If the retry also fails, wait a moment for file system cleanup
@@ -340,7 +430,7 @@ impl FjallStoreInner {
                             ));
                             
                             // Final attempt
-                            ks.open_partition(name, config_clone)
+                            ks.keyspace(name, || config_clone)
                                 .map_err(|e| {
                                     log::debug!("Failed to recreate partition '{}' after retries: {}", name, e);
                                     to_nitrite_error(e)
@@ -375,13 +465,18 @@ impl FjallStoreInner {
         temp_registry.clear();
         self.map_registry.clear();
 
+        // Stop the periodic fsync timer first: it holds a keyspace clone, so the take below
+        // would not drop the last handle while it is still running.
+        self.stop_fsync_timer();
+
         // Drain background work before returning so that a subsequent open() of the same path
         // observes a settled, fully consistent on-disk state (the close/reopen-under-load fix).
         self.drain()?;
 
-        // Release the keyspace so Fjall terminates its background worker threads (syncer,
-        // monitor, flusher, compactor). The maps were closed above, so their partition handles
-        // are gone and this drops the last `TxKeyspace` reference. This must happen even though
+        // Release the keyspace so Fjall terminates its background worker threads (monitor,
+        // flusher, compactor). The maps were closed above and the fsync timer was joined, so
+        // their partition handles are gone and this drops the last `TxKeyspace` reference. This
+        // must happen even though
         // the surrounding config<->store `Arc` cycle keeps `FjallStoreInner` itself alive —
         // otherwise every opened keyspace leaks its threads and a process that opens many
         // databases (e.g. the test suite) exhausts the OS thread limit and hangs.
@@ -430,7 +525,7 @@ impl FjallStoreInner {
         let config = self.store_config.keyspace_config();
         // Open a transactional keyspace so a logical write can span the data partition and all
         // of its index partitions inside one atomic, cross-partition Fjall transaction.
-        let result = config.open_transactional();
+        let result = TxKeyspace::open(config);
         match result {
             Ok(keyspace) => {
                 // Mirror the previous `get_or_init` semantics: keep the first keyspace if one is
@@ -438,6 +533,11 @@ impl FjallStoreInner {
                 let mut guard = self.keyspace.write().unwrap_or_else(|e| e.into_inner());
                 if guard.is_none() {
                     *guard = Some(keyspace);
+                }
+                let installed = guard.clone();
+                drop(guard);
+                if let Some(ks) = installed {
+                    self.start_fsync_timer(&ks);
                 }
                 Ok(())
             }
@@ -567,7 +667,7 @@ impl FjallStoreInner {
 
     fn compact(&self) -> NitriteResult<()> {
         if let Some(ks) = self.keyspace() {
-            let partitions = ks.list_partitions();
+            let partitions = ks.list_keyspace_names();
             let maps: Vec<String> = partitions
                 .iter()
                 .map(|partition| partition.trim().to_string())
@@ -578,36 +678,24 @@ impl FjallStoreInner {
             // LSM tree, so it MUST run before the memtable flush below: otherwise
             // GC's own writes would re-pin fresh journal segments right after we
             // flushed, defeating the journal reclamation.
+            //
+            // Fjall 3 removed the explicit `gc_scan` / `gc_with_space_amp_target` /
+            // `gc_with_staleness_threshold` passes: blob reclamation is folded into compaction
+            // and driven by the keyspace's `staleness_threshold` (set once, in
+            // `FjallConfig::partition_config`). A major compaction is what forces that pass now,
+            // and it subsumes the segment compaction the old Phase 1 also did.
             let wait_group = WaitGroup::new();
             for map in &maps {
                 let cloned_keyspace = ks.clone();
-                let cloned_options = self.store_config.partition_config().clone();
-                let space_amp_factor = self.store_config.space_amp_factor();
-                let stale_threshold = self.store_config.staleness_threshold();
+                let cloned_options = self.store_config.partition_config();
                 let cloned_map = map.clone();
                 let cloned_wait_group = wait_group.clone();
 
                 async_task(move || {
-                    let partition = cloned_keyspace.open_partition(&cloned_map, cloned_options);
+                    let partition = cloned_keyspace.keyspace(&cloned_map, || cloned_options);
                     match partition {
                         Ok(partition) => {
-                            // Garbage-collection lives on the underlying (non-transactional)
-                            // partition handle, reached via `inner()`.
-                            let partition = partition.inner();
-                            let result = partition.gc_scan();
-                            if let Err(err) = result {
-                                log::warn!("Failed to compact partition: {}", err);
-                                return;
-                            }
-
-                            let result = partition.gc_with_space_amp_target(space_amp_factor);
-                            if let Err(err) = result {
-                                log::warn!("Failed to compact partition: {}", err);
-                                return;
-                            }
-
-                            let result = partition.gc_with_staleness_threshold(stale_threshold);
-                            if let Err(err) = result {
+                            if let Err(err) = partition.inner().major_compact() {
                                 log::warn!("Failed to compact partition: {}", err);
                                 return;
                             }
@@ -644,7 +732,7 @@ impl FjallStoreInner {
             // for a partition whose memtable is already empty.
             let options = self.store_config.partition_config();
             for map in &maps {
-                match ks.open_partition(map, options.clone()) {
+                match ks.keyspace(map, || options.clone()) {
                     Ok(partition) => {
                         if let Err(err) = partition.inner().rotate_memtable_and_wait() {
                             log::warn!(
@@ -672,8 +760,7 @@ impl FjallStoreInner {
     #[inline]
     fn has_map(&self, name: &str) -> NitriteResult<bool> {
         if let Some(ks) = self.keyspace() {
-            let result = ks.partition_exists(name);
-            Ok(result)
+            Ok(ks.keyspace_exists(name))
         } else {
             Ok(false)
         }
@@ -734,9 +821,9 @@ impl FjallStoreInner {
 
         if let Some(ks) = self.keyspace() {
             let options = self.store_config.partition_config();
-            match ks.open_partition(name, options) {
+            match ks.keyspace(name, || options) {
                 Ok(partition) => {
-                    match ks.delete_partition(partition.clone()) {
+                    match ks.inner().delete_keyspace(partition.inner().clone()) {
                         Ok(_) => {
                             // Defensive cleanup: Ensure the map is removed from registry after successful deletion.
                             // This handles the unlikely race condition where the map might be re-opened

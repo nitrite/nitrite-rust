@@ -19,9 +19,10 @@
 //! panic); [`with_active`] hands the active transaction (if any) to a closure.
 //!
 //! In addition to the raw pointer, the scope also tracks an in-memory overlay of writes staged
-//! into the active transaction. Fjall 2.11.2's transactional read helpers do not resolve
-//! KV-separated values, so the adapter reconstructs read-your-writes semantics itself by reading
-//! committed partition state directly and layering the active transaction's inserts/removes on top.
+//! into the active transaction. Fjall 3's `WriteTransaction` exposes no read helpers at all (and
+//! fjall 2's did not resolve KV-separated values), so the adapter reconstructs read-your-writes
+//! semantics itself by reading committed keyspace state directly and layering the active
+//! transaction's inserts/removes on top.
 //!
 //! # Safety invariants
 //! The single `unsafe` deref in [`with_active`] is sound because:
@@ -37,7 +38,7 @@
 //! 3. **No escape** — `with_active` only lends the reference to a closure that runs to
 //!    completion before the borrow ends; no reference outlives the call.
 
-use fjall::WriteTransaction;
+use fjall::SingleWriterWriteTx as WriteTransaction;
 use std::cell::{Cell, RefCell};
 use std::collections::{BTreeMap, HashMap};
 use std::sync::Arc;

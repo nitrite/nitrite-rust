@@ -1,6 +1,5 @@
-use crate::config::{Durability, FjallConfig};
+use crate::config::{Durability, FjallConfig, Strategy};
 use crate::store::FjallStore;
-use fjall::compaction::Strategy;
 use fjall::CompressionType;
 use nitrite::common::{NitriteModule, NitritePlugin, PluginRegistrar};
 use nitrite::errors::NitriteResult;
@@ -324,12 +323,6 @@ impl FjallModuleBuilder {
     }
     
     #[inline]
-    pub fn space_amp_factor(self, space_amp_factor: f32) -> Self {
-        self.store_config.set_space_amp_factor(space_amp_factor);
-        self
-    }
-    
-    #[inline]
     pub fn staleness_threshold(self, staleness_threshold: f32) -> Self {
         self.store_config.set_staleness_threshold(staleness_threshold);
         self
@@ -346,7 +339,6 @@ impl FjallModuleBuilder {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use fjall::compaction::Strategy;
     use fjall::CompressionType;
     use nitrite::common::PluginRegistrar;
 
@@ -409,7 +401,6 @@ mod tests {
             .max_memtable_size(1024)
             .block_size(4096)
             .kv_separated(true)
-            .space_amp_factor(1.5)
             .staleness_threshold(0.5)
             .build();
 
@@ -427,7 +418,6 @@ mod tests {
         assert_eq!(builder.store_config.max_memtable_size(), 1024);
         assert_eq!(builder.store_config.block_size(), 4096);
         assert!(builder.store_config.kv_separated());
-        assert_eq!(builder.store_config.space_amp_factor(), 1.5);
         assert_eq!(builder.store_config.staleness_threshold(), 0.5);
     }
 

@@ -144,9 +144,21 @@ fn dir_size(path: &Path) -> u64 {
         .sum()
 }
 
-/// Bytes under the keyspace's `journals/` directory.
+/// Bytes held by the database's journal (WAL) files.
+///
+/// Fjall 2 kept these under a `journals/` directory; fjall 3 writes them as `*.jnl` files
+/// directly in the database root. Both are summed so the measurement does not silently read
+/// zero if the layout moves again.
 fn journal_bytes(root: &Path) -> u64 {
-    dir_size(&root.join("journals"))
+    let nested = dir_size(&root.join("journals"));
+    let flat: u64 = fs::read_dir(root)
+        .into_iter()
+        .flatten()
+        .flatten()
+        .filter(|e| e.path().extension().is_some_and(|ext| ext == "jnl"))
+        .filter_map(|e| e.metadata().ok().map(|m| m.len()))
+        .sum();
+    nested + flat
 }
 
 /// Sums on-disk bytes grouped by top-level subdirectory.
@@ -280,17 +292,27 @@ fn disk_usage_per_10k_messages_repro() {
         }
         println!("[disk-repro] gate is {:.1} MiB", mib(GATE_BYTES));
 
-        // The reproduction: before compaction the journals alone blow the gate.
+        // The workload has to actually stress the journal, or the gate below proves nothing.
+        // (This was `pre_journals > GATE_BYTES` while the adapter was on fjall 2, where the
+        // pinned preallocated segments alone blew past 250 MiB. Fjall 3 reclaims far more
+        // aggressively during the run — the same workload now peaks around 128 MiB — so the
+        // precondition is that journals accumulated at all, not that they blew the gate.)
         assert!(
-            pre_journals > GATE_BYTES,
-            "expected the journal bloat to be reproduced (journals {} B > gate {} B); \
-             the workload did not accumulate enough pinned journals",
-            pre_journals,
-            GATE_BYTES
+            pre_journals > 0,
+            "the workload accumulated no journal at all, so the post-compaction gate below \
+             would not be measuring anything"
         );
 
-        // The fix: after compaction the journals are reclaimed and the whole
-        // store fits comfortably under the gate.
+        // The fix: compaction reclaims the pinned segments rather than leaving them to grow
+        // for the life of the process.
+        assert!(
+            post_journals <= pre_journals,
+            "compaction grew the journal instead of reclaiming it: {} B -> {} B",
+            pre_journals,
+            post_journals
+        );
+
+        // ...and the whole store fits comfortably under the gate.
         let total = dir_size(root);
         fs::remove_dir_all(root).ok();
         assert!(

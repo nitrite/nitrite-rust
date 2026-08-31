@@ -284,9 +284,16 @@ impl FtsIndex {
             )
         })?;
 
-        // Search with configured limit
+        // Search with configured limit.
+        //
+        // Tantivy 0.26 split `TopDocs` from the collector it builds: it is now a top-K *spec*
+        // and only becomes a `Collector` once a ranking is chosen. `order_by_score()` is the
+        // relevance ranking `TopDocs` used to imply on its own.
         let top_docs = searcher
-            .search(&query, &TopDocs::with_limit(self.inner.search_result_limit))
+            .search(
+                &query,
+                &TopDocs::with_limit(self.inner.search_result_limit).order_by_score(),
+            )
             .map_err(|e| {
                 NitriteError::new(
                     &format!("FTS search failed: {}", e),

@@ -1,24 +1,35 @@
 use cargo_toml::{Dependency, Manifest};
 
+/// The `fjall` version this adapter is built against, as written in its `Cargo.toml`.
 #[inline]
 pub(crate) fn fjall_version() -> Result<String, String> {
     let cargo_toml = include_str!("../Cargo.toml");
     let manifest = Manifest::from_str(cargo_toml)
         .map_err(|e| format!("Failed to parse Cargo.toml: {}", e))?;
-    
-    let dependency = manifest.dependencies.get("fjall")
+
+    let dependency = manifest
+        .dependencies
+        .get("fjall")
         .ok_or_else(|| "fjall dependency not found in Cargo.toml".to_string())?;
-    
+
+    dependency_version(dependency)
+}
+
+/// Renders a dependency's version requirement the way the manifest spells it.
+///
+/// `cargo_toml` 1.0 parses versions into `semver::VersionReq` instead of the raw string, and a
+/// bare `"3.1.10"` normalises to `"^3.1.10"`. The caret is implied by the manifest, not written
+/// in it, so it is trimmed back off to keep `store_version()` reading `Fjall/3.1.10`.
+#[inline]
+fn dependency_version(dependency: &Dependency) -> Result<String, String> {
     match dependency {
-        Dependency::Simple(version) => Ok(version.clone()),
-        Dependency::Detailed(d) => {
-            d.version.as_ref()
-                .cloned()
-                .ok_or_else(|| "fjall dependency version not specified".to_string())
-        },
-        Dependency::Inherited(_) => {
-            Err("Inherited fjall dependency not supported".to_string())
-        },
+        Dependency::Inherited(_) => Err("Inherited fjall dependency not supported".to_string()),
+        dependency => Ok(dependency
+            .try_req()
+            .map_err(|e| format!("fjall dependency version not specified: {}", e))?
+            .to_string()
+            .trim_start_matches('^')
+            .to_string()),
     }
 }
 
@@ -45,14 +56,7 @@ mod tests {
 
         let manifest = Manifest::from_str(cargo_toml).unwrap();
         let dependency = manifest.dependencies.get("fjall").unwrap();
-        let result = match dependency {
-            Dependency::Simple(version) => Ok(version.clone()),
-            Dependency::Detailed(d) => {
-                d.version.clone()
-                    .ok_or_else(|| "version not specified".to_string())
-            },
-            Dependency::Inherited(_) => Err("Inherited dependency not supported".to_string()),
-        };
+        let result = dependency_version(dependency);
 
         assert_eq!(result, Ok("2.6.3".to_string()));
     }
@@ -71,14 +75,7 @@ mod tests {
 
         let manifest = Manifest::from_str(cargo_toml).unwrap();
         let dependency = manifest.dependencies.get("fjall").unwrap();
-        let result = match dependency {
-            Dependency::Simple(version) => Ok(version.clone()),
-            Dependency::Detailed(d) => {
-                d.version.clone()
-                    .ok_or_else(|| "version not specified".to_string())
-            },
-            Dependency::Inherited(_) => Err("Inherited dependency not supported".to_string()),
-        };
+        let result = dependency_version(dependency);
 
         assert_eq!(result, Ok("2.6.3".to_string()));
     }
@@ -97,14 +94,7 @@ mod tests {
 
         let manifest = Manifest::from_str(cargo_toml).unwrap();
         let dependency = manifest.dependencies.get("fjall").unwrap();
-        let result = match dependency {
-            Dependency::Simple(version) => Ok(version.clone()),
-            Dependency::Detailed(d) => {
-                d.version.clone()
-                    .ok_or_else(|| "version not specified".to_string())
-            },
-            Dependency::Inherited(_) => Err("Inherited dependency not supported".to_string()),
-        };
+        let result = dependency_version(dependency);
 
         // Should return error for inherited dependency
         assert!(result.is_err());

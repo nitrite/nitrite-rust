@@ -5,6 +5,130 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.11.0] - 2026-08-31
+
+### Changed
+
+- **`nitrite-fjall-adapter` now builds on Fjall 3** (`3.1.10`, up from `2.6.3`). Fjall 3 renamed
+  its whole vocabulary — a *partition* is now a *keyspace* and a *keyspace* is now a *database* —
+  reshaped per-partition settings into per-level policies, made iteration lazy behind a `Guard`,
+  and replaced explicit blob garbage collection with reclamation folded into compaction.
+
+  **This changes the on-disk format.** A database written by `0.10.x` or earlier cannot be opened
+  by `0.11.0`; the break is inside the storage engine, below any layer Nitrite could migrate.
+  Recreate the database from your source of truth, or export before upgrading and import after.
+
+- **`FjallModuleBuilder::compaction_strategy(...)` takes `nitrite_fjall_adapter::Strategy`**
+  (`Leveled`, the default, or `Fifo`) instead of `fjall::compaction::Strategy`. Fjall 3 replaced
+  that enum with a boxed trait object and dropped size-tiered compaction, so `SizeTiered` is gone.
+  Keeping the knob a plain `Copy` value also keeps it storable in the adapter's atomic config.
+
+- **`staleness_threshold(...)` moved from per-call to per-keyspace.** It is still the ratio that
+  drives blob reclamation, but Fjall 3 takes it when the keyspace is created rather than as an
+  argument to a garbage-collection call. It still only has an effect under `kv_separated(true)`.
+
+- **`compact()` and `NitriteMap::collect_garbage()` now run a major compaction.** Fjall 2 needed an
+  explicit `gc_scan` → `gc_with_space_amp_target` → `gc_with_staleness_threshold` sequence; Fjall 3
+  reclaims blob space during ordinary compaction, and a major compaction is what forces that pass.
+
+- **`flush_workers(...)` and `compaction_workers(...)` feed one shared pool.** Fjall 3 has a single
+  worker pool instead of two, so the adapter sizes it at the larger of the two counts. Both setters
+  are still accepted, so existing configuration keeps working.
+
+- **`max_journaling_size(...)` has a 64 MiB floor** (Fjall 2's was 24 MiB); Fjall panics below it.
+  The default is 512 MiB, so this only matters if you set it explicitly and set it small.
+
+- **`tantivy` 0.25.0 → 0.26.1.** `TopDocs` is no longer a `Collector` on its own — it is a top-K
+  *spec* that becomes one when a ranking is chosen — so the FTS search now asks for
+  `TopDocs::with_limit(n).order_by_score()`. That is the relevance ranking `TopDocs` used to imply,
+  so results are unchanged. 0.26 also brings lazy scorers, `DocSet::cost()`-ordered intersections,
+  and faster unions.
+
+- **`cargo_toml` 0.22 → 1.0**, **`rand` 0.8.5 → 0.8.8**, **`thiserror` 2.0.17 → 2.0.20**,
+  **`tempfile` 3.23 → 3.27** (the open Dependabot updates). `cargo_toml` 1.0 parses versions into
+  `semver::VersionReq`, so `store_version()` renders the requirement back without the caret semver
+  adds — it still reads `Fjall/3.1.10`.
+
+### Performance
+
+Measured on the criterion suite (`nitrite-bench`), 0.10.0 as the baseline, two independent runs
+per side on the same machine. The in-memory store is untouched by this release and acts as a
+control: its median reported change is −0.8%, which is where the noise floor sits. The
+`Spatial/*/inmemory` family disagreed between runs by up to 196 percentage points and is excluded
+as unmeasurable in this environment.
+
+| fjall-backed workload | median change |
+|---|---|
+| CRUD writes (insert single + batch) | **−94%** |
+| Indexed and non-indexed search | **−77% to −95%** |
+| Spatial index build and queries | **−80% to −93%** |
+| Full-text index build and search | **−14% to −59%** |
+| Concurrent insert (2/4/8 threads) | **−42% to −54%** |
+| **All 34 fjall benchmarks** | **−80%** |
+
+The mechanism is visible in the journal. `disk_usage_repro_test` writes 10k messages across five
+partitions and measures the on-disk footprint:
+
+| | 0.10.0 (Fjall 2) | 0.11.0 (Fjall 3) |
+|---|---|---|
+| journal peak, during the bulk write | 1664 MiB | **128 MiB** |
+| journal after `compact()` | 32 MiB | 64 MiB |
+| data | 8.7 MiB | 12.1 MiB |
+| total after `compact()` | 40.7 MiB | 76.1 MiB |
+
+Fjall 2 wrote 1.6 GiB of journal for a workload holding 8 MiB of data — pinned, preallocated
+32 MiB segments that no partition had flushed past. Fjall 3 writes 128 MiB for the same work, and
+that missing I/O is most of the speedup above. The settled footprint goes the other way: 40.7 MiB
+becomes 76.1 MiB, because Fjall 3 retains two journal segments where Fjall 2 kept one and its
+tables are slightly larger. Both are far under the 250 MiB-per-10k-messages gate.
+
+**Creating a keyspace costs roughly twice as much**, and that is the one real regression. Paired
+measurement of the first write to a new collection, which is where the keyspace is created:
+
+| | 0.10.0 | 0.11.0 |
+|---|---|---|
+| create a keyspace (SSD) | 40 ms | 97 ms |
+| create a keyspace (external volume) | 91 ms | 148 ms |
+| steady-state transaction (5 inserts + commit) | 94–124 µs | 86–113 µs |
+
+This is a one-time cost per collection and per index, not a per-operation one — a database with
+40 keyspaces pays a few seconds more on the open that first creates them, and nothing afterwards.
+It is also what makes `Transaction/*` in the criterion suite read +151%: that benchmark creates a
+fresh database *and* first touches its collection inside the timed region, so every iteration pays
+one keyspace creation. Transaction throughput itself is unchanged to slightly better.
+
+### Added
+
+- **The adapter now runs the periodic-fsync timer itself.** Fjall 3 dropped `Config::fsync_ms` and
+  the background thread behind it. Left alone, that would have silently downgraded the default
+  `Durability::Periodic` from "durable within `fsync_frequency`" to "durable only on a clean
+  close" — a power-loss window that grows without bound. `FjallStore` now owns the timer, joins it
+  in `close()` before releasing the keyspace, and honours `fsync_frequency(0)` as "no timer" exactly
+  as before. `Durability::OnCommit` is unaffected: every commit already fsyncs.
+
+### Fixed
+
+- **A map handle no longer keeps its database open after `close()`.** A Fjall 3 keyspace handle
+  carries a clone of the database it belongs to, and Fjall 3 holds an exclusive lock file over the
+  database directory. Since Nitrite's core holds a `NitriteMap` for every collection and index,
+  those handles outlived `store.close()` and a reopen of the same path failed with `Locked`.
+  `FjallMap` now releases its handle in `close()`/`dispose()`. Fjall 2 had no lock file, so the
+  same over-long handle lifetime was invisible there.
+
+### Note
+
+- **`space_amp_factor(...)` was removed** from `FjallModuleBuilder` and `FjallConfig`. It existed
+  only to feed Fjall 2's `gc_with_space_amp_target`, and Fjall 3 has no space-amplification target
+  to aim at — there was nothing left for the setting to do.
+
+- **`disk_usage_repro_test` measures the journal where Fjall 3 puts it.** Fjall 2 kept journals in a
+  `journals/` directory; Fjall 3 writes `*.jnl` files in the database root, so the old helper read
+  zero. The test's precondition also changed: it used to require the PERF-014 bloat to reproduce
+  (pinned journals > 250 MiB), which Fjall 3 no longer produces — the same 10k-message workload now
+  peaks at 128 MiB of journal and settles at 64 MiB after compaction, against a 250 MiB gate. It
+  now asserts that journals accumulated at all and that compaction reclaims them, which is what the
+  regression gate needs to stay meaningful.
+
 ## [0.10.0] - 2026-08-31
 
 ### Changed

@@ -1,12 +1,33 @@
-use fjall::compaction::Strategy;
-use fjall::{CompressionType, Config, KvSeparationOptions, PartitionCreateOptions};
+use fjall::config::{
+    BlockSizePolicy, BloomConstructionPolicy, CompressionPolicy, FilterPolicy, FilterPolicyEntry,
+};
+use fjall::{
+    Config, CompressionType, KeyspaceCreateOptions, KvSeparationOptions, SingleWriterTxDatabase,
+};
 use nitrite::common::{atomic, Atomic, ReadExecutor, WriteExecutor};
 use nitrite::store::{StoreConfigProvider, StoreEventListener};
 use std::any::Any;
+use std::path::Path;
 use std::sync::atomic::{
     AtomicBool, AtomicI8, AtomicU16, AtomicU32, AtomicU64, AtomicUsize, Ordering,
 };
 use std::sync::{Arc, OnceLock};
+
+/// Which compaction strategy a partition uses.
+///
+/// Fjall 3 dropped the `fjall::compaction::Strategy` enum for a boxed
+/// `Arc<dyn CompactionStrategy>`, and dropped size-tiered compaction altogether. This enum keeps
+/// the adapter's configuration surface a plain, comparable value (it lives in an `Atomic<T>`)
+/// and names only the strategies fjall 3 still ships.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum Strategy {
+    /// Leveled compaction — fjall's default; balanced read and space amplification.
+    #[default]
+    Leveled,
+    /// FIFO compaction — drops the oldest tables once the keyspace exceeds its size limit.
+    /// Only appropriate for data that may be discarded wholesale (caches, time-series windows).
+    Fifo,
+}
 
 /// Controls when a committed write is made durable (fsynced) to stable storage.
 ///
@@ -102,21 +123,29 @@ impl FjallConfig {
     /// journal persistence behavior.
     ///
     /// Returns: A configured `fjall::Config` ready for keyspace initialization
+    ///
+    /// Fjall 3 replaced the separate flush/compaction worker pools with one shared pool, so the
+    /// two counts collapse into `worker_threads` at their maximum: the pool has to be able to
+    /// serve whichever role the caller sized larger. It also dropped the background fsync timer
+    /// (`fsync_ms`) — [`crate::store::FjallStore`] runs that timer itself so
+    /// [`Durability::Periodic`] keeps its bounded power-loss window.
     #[inline]
     pub(crate) fn keyspace_config(&self) -> Config {
-        let mut config = Config::new(self.inner.db_path());
-        config = config
+        let worker_threads = self
+            .inner
+            .flush_workers()
+            .max(self.inner.compaction_workers())
+            .max(1);
+
+        #[allow(deprecated)] // fjall 3 marks `max_write_buffer_size` deprecated but ships no
+                             // replacement yet; it is still the only write-buffer cap.
+        SingleWriterTxDatabase::builder(Path::new(self.inner.db_path()))
             .manual_journal_persist(self.inner.manual_journal_persist())
-            .flush_workers(self.inner.flush_workers())
-            .compaction_workers(self.inner.compaction_workers())
+            .worker_threads(worker_threads)
             .cache_size(self.inner.block_cache_capacity() + self.inner.blob_cache_capacity())
             .max_journaling_size(self.inner.max_journaling_size())
-            .max_write_buffer_size(self.inner.max_write_buffer_size());
-
-        if self.inner.fsync_frequency() > 0 {
-            config = config.fsync_ms(Some(self.inner.fsync_frequency()));
-        }
-        config
+            .max_write_buffer_size(Some(self.inner.max_write_buffer_size()))
+            .into_config()
     }
 
     /// Builds a Fjall Partition configuration from this config.
@@ -125,23 +154,46 @@ impl FjallConfig {
     /// memtable sizing, block size, and optional key-value separation for handling
     /// large values efficiently.
     ///
-    /// Returns: A configured `PartitionCreateOptions` for partition creation
+    /// Returns: A configured `KeyspaceCreateOptions` for partition creation
+    ///
+    /// Fjall 3 turned the flat per-partition knobs into per-level *policies*. Each one is
+    /// applied uniformly across levels (`::all`), which reproduces the single-value fjall 2
+    /// behaviour these settings were written against.
     #[inline]
-    pub(crate) fn partition_config(&self) -> PartitionCreateOptions {
-        let mut config = PartitionCreateOptions::default();
-        config = config
-            .bloom_filter_bits(if self.inner.bloom_filter_bits() == -1 {
-                None
-            } else {
-                Some(self.inner.bloom_filter_bits() as u8)
-            })
-            .compression(self.inner.compression_type())
-            .compaction_strategy(self.inner.compaction_strategy())
-            .max_memtable_size(self.inner.max_memtable_size())
-            .block_size(self.inner.block_size());
+    pub(crate) fn partition_config(&self) -> KeyspaceCreateOptions {
+        let bits = self.inner.bloom_filter_bits();
+        let filter_policy = if bits <= 0 {
+            FilterPolicy::disabled()
+        } else {
+            FilterPolicy::all(FilterPolicyEntry::Bloom(
+                BloomConstructionPolicy::BitsPerKey(f32::from(bits)),
+            ))
+        };
+
+        let mut config = KeyspaceCreateOptions::default()
+            .filter_policy(filter_policy)
+            .data_block_compression_policy(CompressionPolicy::all(self.inner.compression_type()))
+            .max_memtable_size(u64::from(self.inner.max_memtable_size()))
+            .data_block_size_policy(BlockSizePolicy::all(self.inner.block_size()));
+
+        config = match self.inner.compaction_strategy() {
+            Strategy::Leveled => {
+                config.compaction_strategy(Arc::new(fjall::compaction::Leveled::default()))
+            }
+            Strategy::Fifo => config.compaction_strategy(Arc::new(fjall::compaction::Fifo::new(
+                self.inner.max_journaling_size(),
+                None,
+            ))),
+        };
 
         if self.inner.kv_separated() {
-            config = config.with_kv_separation(KvSeparationOptions::default());
+            // Fjall 3 reclaims blob space during ordinary compaction instead of through the
+            // explicit `gc_*` calls fjall 2 needed, and takes the staleness ratio that drives it
+            // from here rather than from a per-call argument.
+            config = config.with_kv_separation(Some(
+                KvSeparationOptions::default()
+                    .staleness_threshold(self.inner.staleness_threshold()),
+            ));
         }
         config
     }
@@ -382,18 +434,6 @@ impl FjallConfig {
         self.inner.set_kv_separated(v)
     }
 
-    /// Returns space amplification factor.
-    #[inline]
-    pub fn space_amp_factor(&self) -> f32 {
-        self.inner.space_amp_factor()
-    }
-
-    /// Sets space amplification factor.
-    #[inline]
-    pub(crate) fn set_space_amp_factor(&self, f: f32) {
-        self.inner.set_space_amp_factor(f)
-    }
-
     /// Returns staleness threshold.
     #[inline]
     pub fn staleness_threshold(&self) -> f32 {
@@ -473,7 +513,6 @@ struct FjallConfigInner {
     max_memtable_size: AtomicU32,
     block_size: AtomicU32,
     kv_separated: AtomicBool,
-    space_amp_factor: Atomic<f32>,
     staleness_threshold: Atomic<f32>,
 }
 
@@ -537,7 +576,6 @@ impl FjallConfigInner {
             max_memtable_size: AtomicU32::new(Self::DEFAULT_MEMTABLE_MB * 1_024 * 1_024),
             block_size: AtomicU32::new(4 * 1_024),
             kv_separated: AtomicBool::new(false),
-            space_amp_factor: atomic(1.5),
             staleness_threshold: atomic(0.8),
         }
     }
@@ -698,7 +736,7 @@ impl FjallConfigInner {
 
     #[inline]
     pub fn compaction_strategy(&self) -> Strategy {
-        self.compaction_strategy.read_with(|it| it.clone())
+        self.compaction_strategy.read_with(|it| *it)
     }
 
     #[inline]
@@ -738,16 +776,6 @@ impl FjallConfigInner {
         self.kv_separated.store(kv_separated, Ordering::Relaxed)
     }
 
-    #[inline]
-    pub fn space_amp_factor(&self) -> f32 {
-        self.space_amp_factor.read_with(|it| *it)
-    }
-
-    #[inline]
-    pub(crate) fn set_space_amp_factor(&self, space_amp_factor: f32) {
-        self.space_amp_factor
-            .write_with(|it| *it = space_amp_factor)
-    }
 
     #[inline]
     pub fn staleness_threshold(&self) -> f32 {
@@ -808,7 +836,6 @@ mod tests {
         assert_eq!(config.max_memtable_size(), 32 * 1_024 * 1_024);
         assert_eq!(config.block_size(), 4 * 1_024);
         assert!(!config.kv_separated());
-        assert_eq!(config.space_amp_factor(), 1.5);
         assert_eq!(config.staleness_threshold(), 0.8);
     }
 
@@ -864,8 +891,6 @@ mod tests {
         config.set_kv_separated(false);
         assert!(!config.kv_separated());
 
-        config.set_space_amp_factor(2.0);
-        assert_eq!(config.space_amp_factor(), 2.0);
 
         config.set_staleness_threshold(0.9);
         assert_eq!(config.staleness_threshold(), 0.9);
