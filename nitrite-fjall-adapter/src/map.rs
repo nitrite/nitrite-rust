@@ -306,6 +306,19 @@ impl NitriteMapProvider for FjallMap {
     /// Returns an iterator over all entries in this map.
     ///
     /// Returns: An `EntryIterator` for iteration
+    /// Steps the partition's key iterator, which reads keys without their values.
+    ///
+    /// The walk this replaces asks the LSM tree for the next key from scratch each time - a
+    /// range seek per row - and it is paid again from zero on every page. Stepping one key
+    /// iterator is a move within the block it is already positioned on.
+    ///
+    /// Declined while a transaction is in scope: the keys there have to include the scope's
+    /// own uncommitted inserts and exclude its tombstones, which is what `visible_entry_raw`
+    /// merges. A count over the committed partition alone would land on the wrong row.
+    fn skip_keys_from_start(&self, count: u64) -> NitriteResult<Option<(u64, Option<Key>)>> {
+        self.inner.skip_keys_from_start(count)
+    }
+
     fn entries(&self) -> NitriteResult<EntryIterator> {
         let provider = SingleMapEntryProvider::new(NitriteMap::new(self.clone()));
         Ok(EntryIterator::new(provider))
@@ -541,6 +554,33 @@ impl FjallMapInner {
                 .map(Self::decode_bytes)
                 .transpose()
         })
+    }
+
+    fn skip_keys_from_start(&self, count: u64) -> NitriteResult<Option<(u64, Option<Key>)>> {
+        self.check_opened()?;
+        if crate::tx_scope::in_scope() {
+            return Ok(None);
+        }
+
+        let mut keys = self.partition.inner().keys();
+        let mut skipped = 0u64;
+        let mut landed: Option<Vec<u8>> = None;
+        while skipped < count {
+            match keys.next() {
+                Some(Ok(key)) => {
+                    landed = Some(key.to_vec());
+                    skipped += 1;
+                }
+                Some(Err(err)) => return Err(Self::backend_err("skip keys in", err)),
+                None => break,
+            }
+        }
+
+        // Only the key it stopped on is decoded - the ones stepped over never become Keys.
+        let landed = landed
+            .map(|key| Self::decode_value(FjallValue::from(key)))
+            .transpose()?;
+        Ok(Some((skipped, landed)))
     }
 
     fn committed_entry_raw(

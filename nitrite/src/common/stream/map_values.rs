@@ -51,6 +51,15 @@ impl MapValues {
     /// rows is what made a late page cost more than an early one. Walking the keys alone is
     /// what a skip actually needs.
     pub fn skip_documents(&mut self, count: u64) -> u64 {
+        // Only from the start, which is where a page offset is applied. `current` is None
+        // there; anything else has already begun walking and must carry on walking.
+        if self.current.is_none() {
+            if let Ok(Some((skipped, landed))) = self.entries.skip_keys_from_start(count) {
+                self.current = landed;
+                return skipped;
+            }
+        }
+
         let mut skipped = 0;
         while skipped < count {
             match self.higher_key() {
