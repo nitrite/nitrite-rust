@@ -14,7 +14,7 @@ nitrite = { version = "0.10.0", path = "../nitrite" }
 fjall = { version = "2.6.3", features = ["bytes"] }
 bincode = { version = "2.0.1", features = ["serde"] }
 log = "0.4.14"
-cargo_toml = "0.22.1"
+cargo_toml = "1.0.0"
 dashmap = "6.1.0"
 crossbeam = "0.8.4"
 lru = "0.18.1"
