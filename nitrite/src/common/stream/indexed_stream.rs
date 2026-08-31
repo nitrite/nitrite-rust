@@ -21,6 +21,19 @@ impl IndexedStream {
     }
 }
 
+impl IndexedStream {
+    /// Advances past at most `count` ids without fetching the documents behind them.
+    ///
+    /// Walking the id set is a cursor bump; fetching a document is a map lookup and a decode.
+    /// A skipped id needs only the first.
+    pub fn skip_documents(&mut self, count: u64) -> u64 {
+        let remaining = self.id_set.len().saturating_sub(self.current) as u64;
+        let skipped = count.min(remaining);
+        self.current += skipped as usize;
+        skipped
+    }
+}
+
 impl Iterator for IndexedStream {
     type Item = NitriteResult<Document>;
 

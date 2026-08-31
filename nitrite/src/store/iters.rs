@@ -34,6 +34,25 @@ pub trait EntryIteratorProvider: Send + Sync {
 
     /// Get the previous entry (for bidirectional iteration)
     fn prev_entry(&mut self) -> Option<NitriteResult<(Key, Value)>>;
+
+    /// Advance past at most `count` entries, returning how many were actually passed.
+    ///
+    /// A return smaller than `count` means the iterator ran out, which is the ordinary answer
+    /// for a page beyond the end rather than an error. Entries passed this way are never
+    /// returned by a later [`Self::next_entry`], exactly as if it had been called and the
+    /// result dropped.
+    ///
+    /// The default does call `next_entry`, so a provider that has no cheaper way to move is
+    /// correct without doing anything. Every provider that *can* move without materializing
+    /// the value should override this: `next_entry` fetches and decodes the value, and for a
+    /// skipped entry that whole cost is spent on a row the caller asked not to see.
+    fn skip_entries(&mut self, count: u64) -> u64 {
+        let mut skipped = 0;
+        while skipped < count && self.next_entry().is_some() {
+            skipped += 1;
+        }
+        skipped
+    }
 }
 
 /// Trait for implementing key iteration.
@@ -140,6 +159,15 @@ impl EntryIterator {
         EntryIterator {
             provider: Arc::new(parking_lot::Mutex::new(Box::new(provider))),
         }
+    }
+}
+
+impl EntryIterator {
+    /// Advances past at most `count` entries as cheaply as the provider allows, and returns
+    /// how many it actually passed. See [`EntryIteratorProvider::skip_entries`].
+    pub fn skip_entries(&mut self, count: u64) -> u64 {
+        let mut provider = self.provider.lock();
+        provider.skip_entries(count)
     }
 }
 
@@ -417,6 +445,27 @@ impl EntryIteratorProvider for SingleMapEntryProvider {
         let map = self.inner_map.clone();
         let next_key = self.higher_key(map.clone());
         self.set_current(map, next_key)
+    }
+
+    fn skip_entries(&mut self, count: u64) -> u64 {
+        // Walking the keys is the whole of what a skip needs. `next_entry` also does a
+        // `map.get` per entry, which is the fetch and the decode of a document the caller
+        // asked to pass over - on a store that keeps values off-heap that is the entire cost
+        // of the skip, and it is why paging used to get slower with every page.
+        let map = self.inner_map.clone();
+        let mut skipped = 0;
+        while skipped < count {
+            match self.higher_key(map.clone()) {
+                Ok(Some(key)) => {
+                    self.current = Some(key);
+                    skipped += 1;
+                }
+                // Exhausted, or the store failed. A failure here is reported by the next
+                // `next_entry`, which repeats the lookup from the position reached so far.
+                _ => break,
+            }
+        }
+        skipped
     }
 
     fn prev_entry(&mut self) -> Option<NitriteResult<(Key, Value)>> {
