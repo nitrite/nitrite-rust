@@ -263,6 +263,21 @@ pub trait NitriteMapProvider: AttributeAware + Send + Sync {
     /// # Returns
     /// * `Ok(EntryIterator)` with an iterator over all entries
     /// * `Err(NitriteError)` if the operation fails
+    /// Steps past the first `count` keys from the beginning of the map without reading the
+    /// values behind them, returning how many were passed and the key it landed on.
+    ///
+    /// The default returns `None`, meaning "I have no cheaper way to do this" - the caller then
+    /// walks `first_key`/`higher_key`, which is correct and costs a seek per key. A store whose
+    /// keys can be iterated without touching values should implement this: paging re-walks the
+    /// offset on every page, so that seek is paid once per skipped row per page.
+    ///
+    /// Only supported from the start of the map, which is what a page offset needs. A store
+    /// that cannot honour an open transaction's uncommitted writes here must return `None`
+    /// rather than a position that disagrees with `get`.
+    fn skip_keys_from_start(&self, _count: u64) -> NitriteResult<Option<(u64, Option<Key>)>> {
+        Ok(None)
+    }
+
     fn entries(&self) -> NitriteResult<EntryIterator>;
 
     /// Retrieves a reverse iterator over all key-value entries in the map.
