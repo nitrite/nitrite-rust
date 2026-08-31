@@ -42,6 +42,30 @@ impl MapValues {
         }
     }
 
+    /// Advances past at most `count` documents without fetching any of them, returning how
+    /// many were actually passed.
+    ///
+    /// `next` costs a key lookup *and* a `get` - the fetch and decode of the document. For a
+    /// row the caller asked to skip, that decode is the whole cost and all of it is wasted:
+    /// paging a collection walks the offset again on every page, so the decode of the skipped
+    /// rows is what made a late page cost more than an early one. Walking the keys alone is
+    /// what a skip actually needs.
+    pub fn skip_documents(&mut self, count: u64) -> u64 {
+        let mut skipped = 0;
+        while skipped < count {
+            match self.higher_key() {
+                Ok(Some(key)) => {
+                    self.current = Some(key);
+                    skipped += 1;
+                }
+                // Exhausted, or the store failed - a short skip either way. A failure is
+                // reported by the next `next()`, which repeats the lookup from here.
+                _ => break,
+            }
+        }
+        skipped
+    }
+
     fn higher_key(&self) -> NitriteResult<Option<Key>> {
         match &self.current {
             Some(current_key) => self.entries.higher_key(current_key),

@@ -186,7 +186,7 @@ impl ReadOperationsInner {
             && find_plan.sub_plans().is_none_or(|p| p.is_empty())
         {
             // Direct map iteration with no filters
-            let iter = Box::new(MapValues::new(self.nitrite_map.clone()));
+            let mut values = MapValues::new(self.nitrite_map.clone());
 
             // Apply limit/skip if needed. With neither, the whole collection matches, so the
             // count is the map size — answerable without iterating any document.
@@ -197,11 +197,15 @@ impl ReadOperationsInner {
             };
             let iter: Box<dyn Iterator<Item = NitriteResult<Document>>> =
                 if find_plan.skip().is_some() || find_plan.limit().is_some() {
+                    // Nothing filters or reorders on this path - it is the whole map in map
+                    // order - so the offset means the same thing at the source as it does at
+                    // the page, and the source can reach it without fetching a document.
                     let skip = find_plan.skip().unwrap_or(0);
                     let limit = find_plan.limit().unwrap_or(u64::MAX);
-                    Box::new(iter.skip(skip as usize).take(limit as usize))
+                    values.skip_documents(skip);
+                    Box::new(values.take(limit as usize))
                 } else {
-                    iter
+                    Box::new(values)
                 };
 
             return Ok((iter, covered_count));
@@ -324,6 +328,14 @@ impl ReadOperationsInner {
         indexed_id_count: &mut Option<usize>,
     ) -> NitriteResult<Box<dyn Iterator<Item = NitriteResult<Document>>>> {
         let mut raw_stream: Box<dyn Iterator<Item = NitriteResult<Document>>>;
+
+        // The offset can be taken at the source, before a single document is fetched, but only
+        // where nothing between the source and the page drops or reorders rows: a post-filter
+        // or a blocking sort would make the source's Nth row a different row from the page's,
+        // and an OR plan unions its sub-plans. Those keep the pipeline skip, which is correct
+        // and merely pays for what it passes over.
+        let requested_skip = find_plan.skip().unwrap_or(0);
+        let mut skip_taken_at_source = false;
 
         // The sort may be answerable from an index. Decide before building the stream: when
         // it is, the ordered ids replace the full scan and no blocking sort runs at all.
@@ -467,14 +479,23 @@ impl ReadOperationsInner {
                     // The index supplied the exact matching id set; record its size so a
                     // count()/size() with no row-dropping step downstream can answer from it.
                     *indexed_id_count = Some(nitrite_ids.len());
-                    raw_stream =
-                        Box::new(IndexedStream::new(self.nitrite_map.clone(), nitrite_ids));
+                    let mut indexed = IndexedStream::new(self.nitrite_map.clone(), nitrite_ids);
+                    if requested_skip > 0 && find_plan.full_scan_filter().is_none() && collator.is_none() {
+                        indexed.skip_documents(requested_skip);
+                        skip_taken_at_source = true;
+                    }
+                    raw_stream = Box::new(indexed);
                 } else if let Some(nitrite_ids) = sorted_ids.take() {
                     index_sorted = true;
                     raw_stream =
                         Box::new(IndexedStream::new(self.nitrite_map.clone(), nitrite_ids));
                 } else {
-                    raw_stream = Box::new(MapValues::new(self.nitrite_map.clone()));
+                    let mut values = MapValues::new(self.nitrite_map.clone());
+                    if requested_skip > 0 && find_plan.full_scan_filter().is_none() && collator.is_none() {
+                        values.skip_documents(requested_skip);
+                        skip_taken_at_source = true;
+                    }
+                    raw_stream = Box::new(values);
                 }
             }
 
@@ -492,10 +513,17 @@ impl ReadOperationsInner {
         if !index_sorted && collator.is_some() {
             let sort_order = find_plan.blocking_sort_order().unwrap();
             raw_stream = Box::new(SortedStream::new(raw_stream, sort_order, collator));
+            // The sort reorders everything behind it, so an offset already taken at the source
+            // is an offset into the wrong order. Nothing here can undo it, so the push-down is
+            // declined for a blocking sort in the first place; this asserts that pairing.
+            debug_assert!(
+                !skip_taken_at_source,
+                "a source-level skip must not be paired with a blocking sort"
+            );
         }
 
         if find_plan.skip().is_some() || find_plan.limit().is_some() {
-            let skip = find_plan.skip().unwrap_or(0);
+            let skip = if skip_taken_at_source { 0 } else { requested_skip };
             let limit = find_plan.limit().unwrap_or(u64::MAX);
             raw_stream = Box::new(raw_stream.skip(skip as usize).take(limit as usize));
         }
