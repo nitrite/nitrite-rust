@@ -5,6 +5,43 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.10.0] - 2026-08-31
+
+### Changed
+
+- **Paging a collection no longer costs a seek per skipped row.** `skip` was applied by pulling
+  and discarding, and each discarded row was a key lookup *and* a `get` — the fetch and decode of
+  a document the caller had asked to pass over. The offset is now taken at the source, and reached
+  by stepping fjall's key iterator, which reads keys without the values behind them.
+
+  Measured over 20k rows of ~1KB, 400 to a page, against a full scan that is drained rather than
+  counted:
+
+  | | paged walk over the whole collection | vs one full scan |
+  |---|---|---|
+  | 0.9.0 | 1.089s | 18.6x |
+  | 0.10.0 | **0.093s** | **1.6x** |
+
+  The push-down is declined where anything between the source and the page drops or reorders rows
+  — a scanned filter, a blocking sort, an `or` plan — and those keep the pipeline skip, which is
+  correct and merely pays for what it passes over.
+
+### Added
+
+- `NitriteMapProvider::skip_keys_from_start`, defaulted to `None` so every backend outside this
+  repository keeps working unchanged. A store that can iterate keys without reading values should
+  implement it. The fjall implementation declines while a transaction is in scope, because the
+  keys visible there include the scope's uncommitted inserts and exclude its tombstones, and a
+  count over the committed partition alone would land on the wrong row.
+- `EntryIteratorProvider::skip_entries`, same shape, for providers that iterate entries.
+
+### Note
+
+- The paging figures published in [#24](https://github.com/nitrite/nitrite-rust/pull/24) — "68.8x
+  to 40.4x" — were measured against `find(all()).count()`, and an unfiltered `count()` is answered
+  from the map size without reading a single document. The absolute times were right; the
+  denominator was not. Read as 18.6x to 9.8x, with this release taking it to 1.6x.
+
 ## [0.9.0] - 2026-08-30
 
 ### Note

@@ -1,6 +1,6 @@
 [package]
 name = "nitrite-bridge"
-version = "0.9.0"
+version = "0.10.0"
 edition = "2021"
 rust-version = "1.75"
 license = "Apache-2.0"
@@ -24,7 +24,7 @@ default = []
 bridge = ["dep:dbinspect-bridge", "dep:serde_json", "dep:log"]
 
 [dependencies]
-nitrite = { version = "0.9.0", path = "../nitrite" }
+nitrite = { version = "0.10.0", path = "../nitrite" }
 
 # A JSON tree, not a binder: a filter arrives from a paired but untrusted client
 # and is read as `Value` rather than into a type. Same crate the core parses
@@ -41,8 +41,8 @@ log = { version = "0.4", optional = true }
 dbinspect-bridge = { version = "0.1", optional = true }
 
 [dev-dependencies]
-nitrite_derive = { version = "0.9.0", path = "../nitrite-derive" }
-nitrite_fjall_adapter = { version = "0.9.0", path = "../nitrite-fjall-adapter" }
+nitrite_derive = { version = "0.10.0", path = "../nitrite-derive" }
+nitrite_fjall_adapter = { version = "0.10.0", path = "../nitrite-fjall-adapter" }
 base64 = "0.22"
 serde_json = "1"
 tempfile = "3"
