@@ -2,6 +2,7 @@ use super::index_operations::IndexOperations;
 use crate::{
     collection::Document,
     errors::NitriteResult,
+    Fields,
     get_document_values,
     index::{IndexDescriptor, NitriteIndexer, NitriteIndexerProvider},
     is_affected_by_update,
@@ -157,6 +158,16 @@ impl DocumentIndexWriterInner {
             let fields = index_descriptor.index_fields();
 
             if is_affected_by_update(&fields, updated_fields) {
+                // "affected" only means the update carries the field. An update that writes
+                // the whole document back, the common upsert shape, carries every indexed
+                // field with its old value, and rewriting those entries is pure cost. A
+                // dirty index still has to be rebuilt, so that case is not skipped.
+                if !self.index_operation.should_rebuild_index(&fields)?
+                    && self.same_indexed_values(old_document, new_document, &fields)?
+                {
+                    continue;
+                }
+
                 let index_type = index_descriptor.index_type();
                 let mut indexer = self.nitrite_config.find_indexer(&index_type)?;
 
@@ -165,6 +176,20 @@ impl DocumentIndexWriterInner {
             }
         }
         Ok(())
+    }
+
+    /// Whether the two documents hold the same values for every field of the index.
+    /// `Value` compares structurally, so arrays and embedded documents count as equal
+    /// when their contents are.
+    fn same_indexed_values(
+        &self,
+        old_document: &mut Document,
+        new_document: &mut Document,
+        fields: &Fields,
+    ) -> NitriteResult<bool> {
+        let before = get_document_values(old_document, fields)?;
+        let after = get_document_values(new_document, fields)?;
+        Ok(before.values() == after.values())
     }
 
     fn write_index_entry_internal(
