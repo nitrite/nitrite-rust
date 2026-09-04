@@ -164,10 +164,16 @@ impl SimpleIndexInner {
         nitrite_ids: &mut Vec<Value>,
         field_values: &FieldValues,
     ) -> NitriteResult<Vec<Value>> {
-        if self.is_unique() && nitrite_ids.len() == 1 {
-            // if key is already exists for unique type, throw error
-            log::debug!("Unique constraint violated for {:?}", field_values);
-            return Err(UNIQUE_CONSTRAINT_ERROR.clone());
+        if self.is_unique() && !nitrite_ids.is_empty() {
+            // Another document already holds this key: a violation. The same document
+            // again is not - a unique index over an array field visits a repeated element
+            // once per occurrence, and a rebuild or a replayed write reaches the key it
+            // already owns.
+            let own_id = Value::NitriteId(*field_values.nitrite_id());
+            if nitrite_ids.iter().any(|id| id != &own_id) {
+                log::debug!("Unique constraint violated for {:?}", field_values);
+                return Err(UNIQUE_CONSTRAINT_ERROR.clone());
+            }
         }
 
         // index always are in ascending format
@@ -491,19 +497,49 @@ mod tests {
         let simple_index = SimpleIndex::new(index_descriptor, nitrite_store);
 
         let index_map = simple_index.find_index_map().unwrap();
-        let field_values = create_test_field_values();
+        // two different documents under the same key: that is the violation
+        let first = create_test_field_values();
+        let second = create_test_field_values();
         let value = Value::String("test_value".to_string());
 
-        // Add the same element twice to trigger unique constraint violation
         simple_index
-            .add_index_element(&index_map, &field_values, &value)
+            .add_index_element(&index_map, &first, &value)
             .unwrap();
-        let result = simple_index.add_index_element(&index_map, &field_values, &value);
+        let result = simple_index.add_index_element(&index_map, &second, &value);
 
         assert!(result.is_err());
         assert_eq!(
             result.unwrap_err().kind(),
             &ErrorKind::UniqueConstraintViolation
+        );
+    }
+
+    #[test]
+    fn test_simple_index_add_index_element_same_document_twice_is_not_a_violation() {
+        // A unique index over an array field visits a repeated element once per
+        // occurrence, and a rebuild reaches keys the document already owns. Writing the
+        // key a document already holds is a no-op, not a constraint violation.
+        let index_descriptor = create_test_index_descriptor();
+        let nitrite_store = NitriteStore::default();
+        let simple_index = SimpleIndex::new(index_descriptor, nitrite_store);
+
+        let index_map = simple_index.find_index_map().unwrap();
+        let field_values = create_test_field_values();
+        let value = Value::String("test_value".to_string());
+
+        simple_index
+            .add_index_element(&index_map, &field_values, &value)
+            .unwrap();
+        simple_index
+            .add_index_element(&index_map, &field_values, &value)
+            .expect("rewriting the same document under the same key must not violate");
+
+        // and the key still resolves to exactly that one document
+        let stored = index_map.get(&value).unwrap().unwrap();
+        assert_eq!(
+            stored.as_array().map(|a| a.len()),
+            Some(1),
+            "the key must hold one id, not a duplicate"
         );
     }
 

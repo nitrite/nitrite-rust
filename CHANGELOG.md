@@ -5,6 +5,30 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+Ported from the corresponding fixes in `nitrite-java`, where each was found.
+
+### Fixed
+
+- **A unique index no longer rejects a document over a key that document already holds.**
+  `add_nitrite_ids` treated *any* existing id under the key as a violation, so it counted the
+  writer's own id against it. That bites a unique index over an array field with a repeated
+  element — `["a", "b", "a"]` visits `a` twice, and the second visit collided with the entry the
+  first had just written — and any path that reaches a key the document already owns, such as an
+  index rebuild or a replayed write. Another document under the key is still a violation.
+  (nitrite/nitrite-java#1295)
+
+### Changed
+
+- **An update that leaves an indexed value unchanged no longer rewrites the index.**
+  `update_index_entry` treated an index as affected whenever the update document carried the
+  indexed field, and then removed and rewrote the entry. An update that writes the whole document
+  back — the common upsert shape — carries every indexed field with its old value, so every index
+  was rebuilt on every update for nothing. The old and new values are now compared, and the index
+  is left alone when they match. A dirty index is still rebuilt, since that has to happen on the
+  first write regardless. (nitrite/nitrite-java#1297)
+
 ## [1.0.0] - 2026-09-01
 
 **Why 1.0.0 and not 0.11.0.** The storage engine underneath the adapter changed major version, and
