@@ -43,7 +43,7 @@ dbinspect-bridge = { version = "0.1", optional = true }
 [dev-dependencies]
 nitrite_derive = { version = "1.0.0", path = "../nitrite-derive" }
 nitrite_fjall_adapter = { version = "1.0.0", path = "../nitrite-fjall-adapter" }
-base64 = "0.22"
+base64 = "0.23"
 serde_json = "1"
 tempfile = "3"
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "time"] }
