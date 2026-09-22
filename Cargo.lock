@@ -2165,7 +2165,7 @@ dependencies = [
 name = "nitrite-bridge"
 version = "1.0.0"
 dependencies = [
- "base64 0.22.1",
+ "base64 0.23.1",
  "dbinspect-bridge",
  "futures-util",
  "log",
