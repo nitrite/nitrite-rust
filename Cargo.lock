@@ -2014,9 +2014,9 @@ checksum = "f9f8bd3e56ce4dfc153cf470fffbfa98c7620958b312ca5c3a4b8d5181fd13c6"
 
 [[package]]
 name = "lru"
-version = "0.16.3"
+version = "0.16.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a1dc47f592c06f33f8e3aea9591776ec7c9f9e4124778ff8a3c3b87159f7e593"
+checksum = "7f66e8d5d03f609abc3a39e6f08e4164ebf1447a732906d39eb9b99b7919ef39"
 dependencies = [
  "hashbrown 0.16.1",
 ]
@@ -2148,7 +2148,7 @@ dependencies = [
  "indexmap",
  "itertools 0.15.0",
  "log",
- "lru 0.16.3",
+ "lru 0.18.1",
  "once_cell",
  "parking_lot 0.12.5",
  "rand 0.8.8",
@@ -3266,7 +3266,7 @@ dependencies = [
  "itertools 0.14.0",
  "levenshtein_automata",
  "log",
- "lru 0.16.3",
+ "lru 0.16.4",
  "lz4_flex",
  "measure_time",
  "memmap2",
