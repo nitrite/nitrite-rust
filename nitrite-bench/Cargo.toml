@@ -36,7 +36,7 @@ num_cpus = "1.16"
 
 # Comparison database dependencies (optional)
 rusqlite = { version = "0.37", features = ["bundled"], optional = true }
-redb = { version = "3.1", optional = true }
+redb = { version = "4.3", optional = true }
 sled = { version = "0.34", optional = true }
 
 [dev-dependencies]
