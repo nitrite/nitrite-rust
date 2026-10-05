@@ -843,7 +843,7 @@ mod tests {
 
     // Setup only one time throughout the project.
     // It will take effect during test, project wide
-    #[ctor::ctor]
+    #[ctor::ctor(unsafe)]
     fn init() {
         colog::init();
     }

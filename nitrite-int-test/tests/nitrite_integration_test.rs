@@ -8,7 +8,7 @@ mod transaction;
 
 pub use repository::*;
 
-#[ctor::ctor]
+#[ctor::ctor(unsafe)]
 fn init() {
     colog::init();
 }

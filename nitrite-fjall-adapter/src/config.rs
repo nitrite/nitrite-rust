@@ -795,7 +795,7 @@ mod tests {
     use fjall::CompressionType;
     use nitrite::store::StoreEventListener;
 
-    #[ctor::ctor]
+    #[ctor::ctor(unsafe)]
     fn init() {
         colog::init();
     }
