@@ -34,8 +34,9 @@ Ported from the corresponding fixes in `nitrite-java`, where each was found.
 - `base64` 0.22 → 0.23, and lockfile updates to `tokio`, `uuid`, `serde`, `syn`, `dashmap`,
   `indexmap`, `anyhow`, `thiserror`, `tempfile`, `log`, `rustc-hash`, `futures-util`,
   `crossbeam-channel` and `fake`. No API or on-disk format change.
-- `redb` 3.1 → 4.3 (the optional redb adapter used by the integration tests), `lru` 0.16 → 0.18,
-  `smallvec` 1.15 → 1.16, and `ctor` 0.6 → 1.0 (test-only; test initializers now declare
+- `redb` 3.1 → 4.3 (benchmark comparison only), `lru` 0.16 → 0.18,
+  `smallvec` 1.15 → 1.16, `xxhash-rust` → 0.8.19 and `rand` 0.9 → 0.9.5 (clearing two low-severity
+  advisories), and `ctor` 0.6 → 1.0 (test-only; test initializers now declare
   `#[ctor(unsafe)]`).
 
 ## [1.0.0] - 2026-09-01
