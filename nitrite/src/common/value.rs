@@ -1,7 +1,6 @@
 use crate::collection::Document;
 use crate::collection::NitriteId;
 use crate::errors::{ErrorKind, NitriteError, NitriteResult};
-use argon2::password_hash::Decimal;
 use std::any::{Any, TypeId};
 use std::collections::BTreeMap;
 use std::fmt::{Debug, Display, Formatter};

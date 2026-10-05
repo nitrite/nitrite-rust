@@ -1,5 +1,4 @@
-use argon2::{password_hash::SaltString, Argon2, PasswordHash, PasswordHasher, PasswordVerifier};
-use rand::rngs::OsRng;
+use argon2::{Argon2, PasswordHash, PasswordHasher, PasswordVerifier};
 use std::sync::Arc;
 
 use crate::{
@@ -138,9 +137,9 @@ impl AuthServiceInner {
         let user_map = self.store.open_map(USER_MAP)?;
         let password = password.as_bytes();
 
-        let salt = SaltString::generate(&mut OsRng);
+        // argon2 0.6 draws a 16-byte salt from the OS RNG itself, as SaltString::generate did
         let argon2 = Argon2::default();
-        let hash = argon2.hash_password(password, &salt);
+        let hash = argon2.hash_password(password);
 
         match hash {
             Ok(hash) => {
@@ -258,9 +257,8 @@ impl AuthServiceInner {
                 let result = Argon2::default().verify_password(old_password, &parsed_hash);
                 match result {
                     Ok(_) => {
-                        let salt = SaltString::generate(&mut OsRng);
                         let argon2 = Argon2::default();
-                        let hash = argon2.hash_password(new_password, &salt);
+                        let hash = argon2.hash_password(new_password);
 
                         match hash {
                             Ok(hash) => {
@@ -315,6 +313,25 @@ mod tests {
     
     fn setup_auth_service() -> AuthService {
         AuthService::new(setup_nitrite_store())
+    }
+
+    // Written by argon2 0.5.3 for "s3cret-pass"; a database created before the 0.6 upgrade
+    // stores hashes exactly like this one, and its users must still be able to sign in.
+    const ARGON2_0_5_HASH: &str = "$argon2id$v=19$m=19456,t=2,p=1$XaNRu+vYtNOrqfloChHpJw$++Fv4U2J2zaq7MicxfEN6s5AnPxyq9m/QTK0bjMEB1w";
+
+    #[test]
+    fn test_hash_from_argon2_0_5_still_verifies() {
+        let hash = PasswordHash::new(ARGON2_0_5_HASH).unwrap();
+        assert!(Argon2::default().verify_password(b"s3cret-pass", &hash).is_ok());
+        assert!(Argon2::default().verify_password(b"wrong-pass", &hash).is_err());
+    }
+
+    #[test]
+    fn test_new_hash_keeps_parameters_and_salts_each_time() {
+        let first = Argon2::default().hash_password(b"s3cret-pass").unwrap().to_string();
+        let second = Argon2::default().hash_password(b"s3cret-pass").unwrap().to_string();
+        assert!(first.starts_with("$argon2id$v=19$m=19456,t=2,p=1$"));
+        assert_ne!(first, second);
     }
 
     #[test]

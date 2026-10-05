@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Dependencies
+
+- `argon2` 0.5 → 0.6. Hashing still uses Argon2id v19 with m=19456, t=2, p=1, a 32-byte output and
+  a 16-byte salt from the OS RNG. Argon2 0.6 now generates that salt itself, where nitrite did it
+  through `SaltString` before. Stored user hashes keep the same format and still verify. A test
+  checks a hash written by 0.5.3.
+
 ## [1.0.1] - 2026-10-05
 
 Ported from the corresponding fixes in `nitrite-java`, where each was found.
