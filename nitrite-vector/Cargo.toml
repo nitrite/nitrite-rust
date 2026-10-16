@@ -31,7 +31,7 @@ memmap2 = "0.9"
 
 # Portable SIMD (f32x8) for the distance kernels — pure Rust, no C dependency,
 # cross-compiles cleanly to mobile targets (ARM NEON) unlike simsimd.
-wide = "0.7"
+wide = "1.7"
 
 # Fast non-cryptographic hasher for internal integer keys on the query hot path
 # (SipHash, the std default, is ~5–10× slower for these lookups).
