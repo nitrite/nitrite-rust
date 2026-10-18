@@ -1340,8 +1340,6 @@ version = "0.17.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ed5909b6e89a2db4456e54cd5f673791d7eca6732202bbf2a9cc504fe2f9b84a"
 dependencies = [
- "allocator-api2",
- "equivalent",
  "foldhash 0.2.0",
 ]
 
@@ -2073,9 +2071,9 @@ dependencies = [
 
 [[package]]
 name = "lru"
-version = "0.18.1"
+version = "0.18.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0b6180140927ee907000b0aa540091f6ea512ead4447c92b8fc35bc72788a5a6"
+checksum = "ef9ac18847474e638e3702b76c65d4eb93428471a74778ef0f1be711717f89b5"
 dependencies = [
  "hashbrown 0.17.1",
 ]
@@ -2198,7 +2196,7 @@ dependencies = [
  "indexmap",
  "itertools 0.15.0",
  "log",
- "lru 0.18.1",
+ "lru 0.18.5",
  "once_cell",
  "parking_lot 0.12.5",
  "rand 0.8.8",
@@ -2274,7 +2272,7 @@ dependencies = [
  "dashmap",
  "fjall",
  "log",
- "lru 0.18.1",
+ "lru 0.18.5",
  "nitrite",
  "parking_lot 0.12.5",
  "thiserror",
