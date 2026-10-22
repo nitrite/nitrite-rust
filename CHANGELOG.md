@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **Embedded-field lookup now descends into `Value::Map` values.** `get("address.city")`, and so
+  filters and indexes on nested fields, only descended into `Value::Document`, so a nested map
+  never matched. Map entries are looked up by `Value::String` key. (nitrite/nitrite-java#1335)
+
 ### Dependencies
 
 - `argon2` 0.5 → 0.6. Hashing still uses Argon2id v19 with m=19456, t=2, p=1, a 32-byte output and

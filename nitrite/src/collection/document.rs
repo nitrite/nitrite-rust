@@ -973,6 +973,10 @@ impl Document {
                 // if the current level value is document, scan to the next level with remaining keys
                 self.recursive_get(obj.data.get(key), &splits[1..])
             }
+            Value::Map(map) => {
+                // a plain map value is scanned like a document using a string key
+                self.recursive_get(map.get(&Value::String(key.to_string())), &splits[1..])
+            }
             Value::Array(arr) => {
                 // if the current level value is an iterable
                 let first = key;
@@ -1181,6 +1185,16 @@ mod tests {
     use crate::collection::Document;
     use crate::common::Value::Null;
     use crate::{create_document, document_from_map, empty_document};
+
+    #[test]
+    fn test_get_embedded_field_in_map_value() {
+        // issue nitrite-java#1335: nested plain maps must be reachable via embedded keys
+        let mut address = BTreeMap::new();
+        address.insert(Value::String("city".to_string()), Value::String("bangalore".to_string()));
+        let mut doc = empty_document();
+        doc.put("address", Value::Map(address)).unwrap();
+        assert_eq!(doc.get("address.city").unwrap(), Value::String("bangalore".to_string()));
+    }
 
     fn set_up() -> Document {
         doc!{
