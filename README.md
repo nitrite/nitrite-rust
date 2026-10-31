@@ -2,6 +2,7 @@
 
 [![Rust](https://github.com/nitrite/nitrite-rust/actions/workflows/rust.yml/badge.svg)](https://github.com/nitrite/nitrite-rust/actions/workflows/rust.yml)
 [![codecov](https://codecov.io/gh/nitrite/nitrite-rust/graph/badge.svg?token=cAta7fAFpR)](https://codecov.io/gh/nitrite/nitrite-rust)
+[![Discord](https://img.shields.io/discord/1565965879177519118?logo=discord&logoColor=white&label=Discord&color=5865F2)](https://discord.dizitart.com)
 
 **Nitrite** is an embedded NoSQL document database for Rust. It stores data as documents in collections and supports indexing, querying, and full ACID transactions.
 
