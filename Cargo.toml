@@ -16,4 +16,4 @@ exclude = ["nitrite-bridge/example"]
 debug = true
 
 [workspace.dependencies]
-parking_lot = "0.12.3"
+parking_lot = "0.13.0"
