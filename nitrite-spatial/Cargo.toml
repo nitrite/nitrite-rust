@@ -14,7 +14,7 @@ categories = ["database", "science::geo"]
 nitrite = { version = "1.0.3", path = "../nitrite" }
 
 # Spatial indexing
-rstar = { version = "0.12", features = ["serde"] }
+rstar = { version = "0.14", features = ["serde"] }
 
 # Serialization
 serde = { version = "1.0", features = ["derive"] }
